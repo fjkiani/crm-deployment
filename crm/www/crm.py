@@ -5,7 +5,11 @@ import subprocess
 
 import frappe
 from frappe import safe_decode
-from frappe.integrations.frappe_providers.frappecloud_billing import is_fc_site
+try:
+    from frappe.integrations.frappe_providers.frappecloud_billing import is_fc_site
+except Exception:  # pragma: no cover
+    def is_fc_site():
+        return False
 from frappe.utils import cint, get_system_timezone
 from frappe.utils.telemetry import capture
 
