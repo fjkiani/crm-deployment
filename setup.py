@@ -1,7 +1,10 @@
 from setuptools import setup, find_packages
 
-with open("requirements.txt") as f:
-    install_requires = f.read().strip().split("\n")
+try:
+    with open("requirements.txt") as f:
+        install_requires = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+except FileNotFoundError:
+    install_requires = []
 
 setup(
     name="crm",
