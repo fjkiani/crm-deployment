@@ -1,8 +1,0 @@
-{
-  "frappe": {
-    "branch": "version-15"
-  },
-  "crm": {
-    "branch": "main"
-  }
-}
