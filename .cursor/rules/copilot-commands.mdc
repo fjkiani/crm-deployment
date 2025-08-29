@@ -1,0 +1,27 @@
+---
+alwaysApply: false
+description: Command schema for co-pilot and how commands map to tools
+---
+
+# Co‑Pilot Command Schema
+
+```json
+{
+  "intent": "create_lead | add_note | reach_out | create_deal | call_contact | update_status | schedule_task",
+  "entities": { "lead": {}, "deal": {}, "organization": {}, "contact": {} },
+  "inputs": { /* freeform slots like name, email, phone, message, status */ },
+  "constraints": { "sla_by": "2025-09-30", "owner": "user@example.com" },
+  "strategy": { "channel": "email|whatsapp|call", "followups": 2 },
+  "dry_run": false
+}
+```
+
+## Mapping Examples
+- create_lead → `frappe.call("crm.api.doc.insert", {...})` or specific Lead API
+- add_note → `crm.api.comment.add_comment` on target doc
+- reach_out → `crm.api.whatsapp.*` or email helpers
+- update_status → set Deal/Lead status via `crm.api.doc.set_value`
+- call_contact → Twilio/Exotel APIs
+
+## Orchestration
+- Orchestrator decomposes compound commands, routes to agents/tools, verifies results, and posts activity logs.

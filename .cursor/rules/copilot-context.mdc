@@ -1,0 +1,18 @@
+---
+alwaysApply: false
+description: How the co-pilot grounds itself in CRM context (user/site/data)
+---
+
+# Co‑Pilot Context Grounding
+
+## Session & Boot
+- Get site, user, defaults via [crm/www/crm.py](mdc:crm/www/crm.py) (get_boot)
+- Use [crm/api/session.py](mdc:crm/api/session.py) for CSRF and session ops
+
+## Domain Model
+- Parse DocType JSONs under `crm/fcrm/doctype/*/*.json` to build entity graph
+- Use links in: Deal→Organization/Lead/Status/SLA; Contacts (child)→Contact
+
+## Permissions & Hooks
+- Respect `doc_events` in [crm/hooks.py](mdc:crm/hooks.py)
+- Use whitelisted methods only; guest endpoints for webhooks only
