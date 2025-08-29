@@ -7,19 +7,22 @@ try:
 	from frappe.utils.modules import get_modules_from_all_apps_for_user
 except Exception:  # pragma: no cover - compatibility for newer/older Frappe versions
 	try:
-		from frappe.modules.utils import get_modules_from_all_apps_for_user  # type: ignore
+		from frappe.config import get_modules_from_all_apps_for_user  # type: ignore
 	except Exception:
-		# Minimal fallback: derive available modules from Module Def
-		def get_modules_from_all_apps_for_user():
-			modules = []
-			try:
-				module_defs = frappe.get_all("Module Def", fields=["module_name"])
-				for row in module_defs:
-					if row.get("module_name"):
-						modules.append({"module_name": row["module_name"]})
-			except Exception:
-				pass
-			return modules
+		try:
+			from frappe.modules.utils import get_modules_from_all_apps_for_user  # type: ignore
+		except Exception:
+			# Minimal fallback: derive available modules from Module Def
+			def get_modules_from_all_apps_for_user():
+				modules = []
+				try:
+					module_defs = frappe.get_all("Module Def", fields=["module_name"])
+					for row in module_defs:
+						if row.get("module_name"):
+							modules.append({"module_name": row["module_name"]})
+				except Exception:
+					pass
+				return modules
 from frappe.utils.telemetry import POSTHOG_HOST_FIELD, POSTHOG_PROJECT_FIELD
 
 
