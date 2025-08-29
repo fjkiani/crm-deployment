@@ -1,0 +1,58 @@
+---
+alwaysApply: false
+description: Frappe Cloud deployment doctrine for the crm-deployment repository
+---
+
+# Frappe Cloud Deployment Doctrine (crm-deployment)
+
+This rule explains how this repository is structured and deployed to Frappe Cloud as a single Frappe app.
+
+## Repo shape (single-app)
+- Root contains the app packaging files required by Bench/Frappe Cloud:
+  - [setup.py](mdc:setup.py)
+  - [pyproject.toml](mdc:pyproject.toml)
+  - [MANIFEST.in](mdc:MANIFEST.in)
+  - [requirements.txt](mdc:requirements.txt)
+- The actual app code lives under the `crm/` package directory.
+- We do NOT vendor the `frappe/` framework in this repo. Frappe Cloud provides it.
+
+## Why this shape
+- Bench expects an app repo to be pip-installable with packaging files at the repo root.
+- Frappe Cloud runs `bench get-app` and then `pip install -e app_dir` internally.
+- The previous error “Not a valid Frappe App! Files setup.py or setup.cfg or pyproject.toml do not exist in app directory” happens when packaging files are not at the repo root.
+
+## Key files and purpose
+- [setup.py](mdc:setup.py): classic setup; tolerates missing `requirements.txt` by falling back to empty deps to avoid build flakiness.
+- [pyproject.toml](mdc:pyproject.toml): modern PEP 621 metadata, build backend config.
+- [requirements.txt](mdc:requirements.txt): runtime Python deps (minimal; currently includes Twilio for WhatsApp integration).
+- [MANIFEST.in](mdc:MANIFEST.in): includes static assets/templates so `pip install -e` ships them.
+
+## Deployment flow on Frappe Cloud
+1) Create site → Deploy from Git → select `fjkiani/crm-deployment` (branch `main`).
+2) Frappe Cloud internally:
+   - Clones repo
+   - Runs `bench get-app` (install app into bench)
+   - Runs `pip install -e apps/crm`
+   - Provisions DB/Redis → installs app on the site
+
+## Updating the app
+- Push commits to `main`; use Frappe Cloud “Pull Changes” or redeploy the build.
+- If you add Python deps:
+  - Append to [requirements.txt](mdc:requirements.txt)
+  - If you add build-system metadata, also reflect in [pyproject.toml](mdc:pyproject.toml)
+
+## Local development notes (optional)
+- For local bench, create a site and install app:
+  - `bench get-app crm path/to/crm-deployment`
+  - `bench new-site your.site`
+  - `bench --site your.site install-app crm`
+
+## Gotchas we fixed
+- Invalid app error → fixed by moving `setup.py`/`pyproject.toml` to repo root and removing the vendored `frappe/` folder.
+- Pip editable install requiring `requirements.txt` → added root [requirements.txt](mdc:requirements.txt) and made [setup.py](mdc:setup.py) resilient.
+
+## Quick checklist before deploy
+- Root has `setup.py` or `pyproject.toml` (we have both).
+- Root `requirements.txt` present.
+- `MANIFEST.in` includes assets/templates.
+- App code under `crm/` with `__init__.py`.
