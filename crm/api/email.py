@@ -5,7 +5,7 @@ from frappe import publish_realtime
 
 
 @frappe.whitelist()
-def get_inbox(doctype: str | None = None, docname: str | None = None, limit: int = 20):
+def get_inbox(doctype: str | None = None, docname: str | None = None, status: str | None = None, limit: int = 20):
 	"""Return recent Communications linked to a doc or globally for CRM Lead/Contact/Organization.
 
 	Args:
@@ -19,6 +19,8 @@ def get_inbox(doctype: str | None = None, docname: str | None = None, limit: int
 	else:
 		filters.update({"reference_doctype": ["in", ["CRM Lead", "Contact", "CRM Organization"]]})
 
+	if status:
+		filters["status"] = status
 	rows = frappe.get_all(
 		"Communication",
 		filters=filters,

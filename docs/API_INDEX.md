@@ -22,6 +22,17 @@ Entry points are available via `frappe.call({ method: "<path>", ... })` or REST 
 - crm.api.whatsapp: WhatsApp actions
 - crm.api.activities, comment, settings, demo (some allow_guest)
 
+### Email
+- crm.api.email.get_inbox(reference filters?)
+- crm.api.email.thread_context(communication|doctype+docname)
+- crm.api.email.save_draft(reference_doctype, reference_name, to, subject, html, cc?, bcc?, provider_thread_id?)
+- crm.api.email.send(communication_name)
+- crm.api.email.link_provider_ids(communication_name, provider?, provider_message_id?, provider_thread_id?)
+
+### Agent Router
+- crm.api.agent.run(command, params)
+  - email.draft / email.send / email.link_provider_ids
+
 ## Integrations
 - crm.integrations.twilio.api (some allow_guest webhooks)
 - crm.integrations.exotel.handler (allow_guest webhook)
