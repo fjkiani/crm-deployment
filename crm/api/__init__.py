@@ -24,6 +24,7 @@ except Exception:  # pragma: no cover - compatibility for newer/older Frappe ver
 					pass
 				return modules
 from frappe.utils.telemetry import POSTHOG_HOST_FIELD, POSTHOG_PROJECT_FIELD
+from . import email as email_api
 
 
 @frappe.whitelist(allow_guest=True)
