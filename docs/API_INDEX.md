@@ -1,52 +1,154 @@
 # CRM API Index
 
-Entry points are available via `frappe.call({ method: "<path>", ... })` or REST `POST /api/method/<path>`.
+## Core APIs
 
-## Core APIs (crm/api)
-- crm.api.__init__
-  - get_translations (allow_guest)
-  - get_user_signature
-  - get_posthog_settings
-  - accept_invitation (allow_guest)
-  - invite_by_email
-  - get_file_uploader_defaults
-- crm.api.auth: authentication helpers (allow_guest)
-- crm.api.session: session and boot APIs
-- crm.api.doc: list/filter/group/linked docs/property setters
-- crm.api.dashboard: dashboard data and widgets
-- crm.api.contact: contact helpers
-- crm.api.notifications: notifications
-- crm.api.onboarding: onboarding data
-- crm.api.user: user info and prefs
-- crm.api.views: saved views
-- crm.api.whatsapp: WhatsApp actions
-- crm.api.activities, comment, settings, demo (some allow_guest)
+### Authentication
+- `crm.api.auth.login` - User login
+- `crm.api.auth.logout` - User logout
+- `crm.api.auth.get_user_info` - Get current user info
 
-### Email
-- crm.api.email.get_inbox(reference filters?)
-- crm.api.email.thread_context(communication|doctype+docname)
-- crm.api.email.save_draft(reference_doctype, reference_name, to, subject, html, cc?, bcc?, provider_thread_id?)
-- crm.api.email.send(communication_name)
-- crm.api.email.link_provider_ids(communication_name, provider?, provider_message_id?, provider_thread_id?)
+### Leads & Contacts
+- `crm.api.contact.get_contacts` - List contacts
+- `crm.api.contact.create_contact` - Create new contact
+- `crm.api.contact.update_contact` - Update contact
+- `crm.api.contact.delete_contact` - Delete contact
 
-### Agent Router
-- crm.api.agent.run(command, params)
-  - email.draft / email.send / email.link_provider_ids
+### Organizations
+- `crm.api.contact.get_organizations` - List organizations
+- `crm.api.contact.create_organization` - Create organization
+- `crm.api.contact.update_organization` - Update organization
 
-## Integrations
-- crm.integrations.twilio.api (some allow_guest webhooks)
-- crm.integrations.exotel.handler (allow_guest webhook)
-- crm.integrations.api (helpers)
+### Activities & Tasks
+- `crm.api.activities.get_activities` - List activities
+- `crm.api.activities.create_activity` - Create activity
+- `crm.api.activities.update_activity` - Update activity
+- `crm.api.todo.get_todos` - List todos
+- `crm.api.todo.create_todo` - Create todo
 
-## DocType-bound (@frappe.whitelist)
-- crm.fcrm.doctype.crm_deal.crm_deal: multiple actions (create/update/status)
-- crm.fcrm.doctype.crm_lead.crm_lead: conversion helpers
-- crm.fcrm.doctype.crm_call_log.crm_call_log: call log creation
-- crm.fcrm.doctype.crm_fields_layout.crm_fields_layout: layout CRUD
-- crm.fcrm.doctype.crm_view_settings.crm_view_settings: view config
-- crm.fcrm.doctype.erpnext_crm_settings.erpnext_crm_settings: ERPNext linkage
-- crm.fcrm.doctype.fcrm_settings.fcrm_settings: settings
+### Comments & Notes
+- `crm.api.comment.get_comments` - List comments
+- `crm.api.comment.add_comment` - Add comment
 
-## Web controller
-- crm.www.crm.get_context_for_dev (POST, allow_guest) – dev-only
-  Route `/crm` is served by `crm/www/crm.py` using boot context.
+## Email & Communication APIs
+
+### Basic Email Operations
+- `crm.api.email.get_inbox` - Get recent communications
+- `crm.api.email.thread_context` - Get email thread context
+- `crm.api.email.save_draft` - Create email draft
+- `crm.api.email.send` - Send email
+- `crm.api.email.link_provider_ids` - Link external provider IDs
+
+### 🤖 AI-Powered Email Features (NEW)
+- `crm.api.email.triage_email` - AI email triage and classification
+- `crm.api.email.draft_ai_response` - AI-powered email response drafting
+
+## Agent Command Router
+
+### `crm.api.agent.run`
+Central command router for agentic operations. Supported commands:
+
+#### Email Commands
+- `email.triage` - AI-powered email triage
+  ```json
+  {
+    "command": "email.triage",
+    "params": {
+      "communication_name": "COMM-2025-00001"
+    }
+  }
+  ```
+
+- `email.draft_ai` - AI-powered response drafting
+  ```json
+  {
+    "command": "email.draft_ai", 
+    "params": {
+      "communication_name": "COMM-2025-00001",
+      "tone": "professional",
+      "include_context": true
+    }
+  }
+  ```
+
+- `email.draft` - Create manual draft
+  ```json
+  {
+    "command": "email.draft",
+    "params": {
+      "reference_doctype": "CRM Lead",
+      "reference_name": "CRM-LEAD-2025-00001", 
+      "to": "client@example.com",
+      "subject": "Follow up",
+      "html": "<p>Email content</p>"
+    }
+  }
+  ```
+
+- `email.send` - Send email
+  ```json
+  {
+    "command": "email.send",
+    "params": {
+      "communication_name": "COMM-2025-00001"
+    }
+  }
+  ```
+
+- `email.link_provider_ids` - Link external IDs
+  ```json
+  {
+    "command": "email.link_provider_ids",
+    "params": {
+      "communication_name": "COMM-2025-00001",
+      "provider": "gmail",
+      "provider_message_id": "msg_123",
+      "provider_thread_id": "thread_456"
+    }
+  }
+  ```
+
+## Settings & Configuration
+- `crm.api.settings.create_email_account` - Create email account
+- `crm.api.settings.get_settings` - Get app settings
+- `crm.api.settings.update_settings` - Update settings
+
+## Notifications
+- `crm.api.notifications.get_notifications` - Get user notifications
+- `crm.api.notifications.mark_read` - Mark notification as read
+
+## Session Management
+- `crm.api.session.get_session_info` - Get session details
+- `crm.api.session.refresh_session` - Refresh session
+
+## Views & UI
+- `crm.api.views.get_dashboard_data` - Get dashboard data
+- `crm.api.views.get_kanban_data` - Get kanban board data
+
+## Demo & Testing
+- `crm.api.demo.create_sample_data` - Create demo data
+- `crm.api.demo.clear_sample_data` - Clear demo data
+
+## WhatsApp Integration
+- `crm.api.whatsapp.send_message` - Send WhatsApp message
+- `crm.api.whatsapp.get_messages` - Get WhatsApp messages
+
+## Authentication
+All API calls require authentication via:
+- API Key + Secret in Authorization header: `Authorization: token KEY:SECRET`
+- Or session-based auth for web interface
+
+## Error Handling
+- 401: Unauthorized (invalid credentials)
+- 403: Forbidden (insufficient permissions)  
+- 404: Not found
+- 422: Validation error
+- 500: Internal server error
+
+## Rate Limiting
+- 100 requests per minute per API key
+- 1000 requests per hour per user
+
+## Webhooks
+- `crm_email_draft_created` - Fired when AI draft is created
+- `crm_lead_status_changed` - Fired when lead status changes
+- `crm_activity_created` - Fired when activity is created
