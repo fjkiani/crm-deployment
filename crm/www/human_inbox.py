@@ -3,56 +3,30 @@ from frappe import _
 
 
 def get_context(context):
-	"""Get context for Human Inbox page."""
 	context.title = _("Human Inbox - AI Drafts")
 	context.no_cache = 1
-	
-	# Get recent communications that need review
+
 	drafts = frappe.get_all(
 		"Communication",
 		filters={
-			"status": ["like", "%Triage%"],
+			"status": ["in", ["Draft"]],
 			"communication_type": "Communication",
-			"communication_medium": "Email"
+			"communication_medium": "Email",
 		},
 		fields=[
 			"name",
 			"subject",
-			"sender",
-			"recipients", 
-			"content",
-			"status",
-			"reference_doctype",
-			"reference_name",
-			"creation"
-		],
-		order_by="creation desc",
-		limit=50
-	)
-	
-	# Get AI-generated drafts
-	ai_drafts = frappe.get_all(
-		"Communication",
-		filters={
-			"status": "Draft",
-			"communication_type": "Communication",
-			"communication_medium": "Email"
-		},
-		fields=[
-			"name",
-			"subject", 
 			"sender",
 			"recipients",
 			"content",
 			"status",
 			"reference_doctype",
 			"reference_name",
-			"creation"
+			"creation",
 		],
 		order_by="creation desc",
-		limit=50
+		limit=50,
 	)
-	
-	context.drafts = drafts
-	context.ai_drafts = ai_drafts
-	context.total_drafts = len(drafts) + len(ai_drafts)
+
+	context.ai_drafts = drafts
+	context.total_drafts = len(drafts)
