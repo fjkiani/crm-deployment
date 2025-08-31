@@ -205,6 +205,46 @@
               window["{{ key }}"] = {{ boot[key] | tojson }};
               {% endfor %}
           </script>
+
+          <!-- Lightweight AI widget overlay -->
+          <style>
+            #ai-widget{position:fixed;right:16px;bottom:16px;z-index:9999;background:#111827;color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;}
+            #ai-widget a{color:#93c5fd;text-decoration:none}
+            #ai-widget .counts{display:flex;gap:12px;margin-top:6px;font-size:12px}
+            #ai-widget .counts div{background:#1f2937;padding:6px 8px;border-radius:8px}
+            #ai-widget .title{font-weight:600;font-size:13px}
+          </style>
+          <div id="ai-widget" style="display:none">
+            <div class="title">AI Assistant</div>
+            <div class="counts">
+              <div id="ai-drafts">Drafts: --</div>
+              <div id="ai-sent">Sent Today: --</div>
+              <div id="ai-recent">Recent: --</div>
+            </div>
+            <div style="margin-top:8px;font-size:12px">
+              <a href="/human_inbox" target="_blank">Open Human Inbox →</a>
+            </div>
+          </div>
+          <script>
+            (function(){
+              const w = document.getElementById('ai-widget');
+              function update(data){
+                w.style.display = 'block';
+                document.getElementById('ai-drafts').textContent = 'Drafts: ' + (data.drafts||0);
+                document.getElementById('ai-sent').textContent = 'Sent Today: ' + (data.sent_today||0);
+                document.getElementById('ai-recent').textContent = 'Recent: ' + (data.recent_total||0);
+              }
+              function fetchCounts(){
+                fetch('/api/method/crm.api.ai.get_counts', { credentials: 'include' })
+                  .then(r => r.ok ? r.json() : Promise.reject(r))
+                  .then(j => update(j.message || j))
+                  .catch(()=>{});
+              }
+              // initial and periodic refresh
+              fetchCounts();
+              setInterval(fetchCounts, 30000);
+            })();
+          </script>
           </body>
           
 </html>
