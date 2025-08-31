@@ -135,6 +135,33 @@ def save_draft(reference_doctype: str, reference_name: str, to: str, subject: st
 
 
 @frappe.whitelist()
+def save_draft_with_provider(reference_doctype: str, reference_name: str, to: str, subject: str, html: str, provider: str | None = None, provider_message_id: str | None = None, provider_thread_id: str | None = None, cc: str | None = None, bcc: str | None = None):
+	"""Create a draft and link provider IDs in one call (EAIA convenience).
+
+	Returns: { "communication_name": str }
+	"""
+	name = save_draft(
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
+		to=to,
+		subject=subject,
+		html=html,
+		cc=cc,
+		bcc=bcc,
+		provider_thread_id=provider_thread_id,
+	)
+	# Link provider IDs if provided
+	if provider or provider_message_id or provider_thread_id:
+		link_provider_ids(
+			communication_name=name,
+			provider=provider,
+			provider_message_id=provider_message_id,
+			provider_thread_id=provider_thread_id,
+		)
+	return {"communication_name": name}
+
+
+@frappe.whitelist()
 def send(communication_name: str):
 	"""Send a Communication via email using configured Email Account."""
 	comm = frappe.get_doc("Communication", communication_name)

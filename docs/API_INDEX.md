@@ -35,77 +35,77 @@
 - `crm.api.email.get_inbox` - Get recent communications
 - `crm.api.email.thread_context` - Get email thread context
 - `crm.api.email.save_draft` - Create email draft
+- `crm.api.email.save_draft_with_provider` - Create draft and link provider IDs
 - `crm.api.email.send` - Send email
 - `crm.api.email.link_provider_ids` - Link external provider IDs
-
-### 🤖 AI-Powered Email Features (NEW)
-- `crm.api.email.triage_email` - AI email triage and classification
-- `crm.api.email.draft_ai_response` - AI-powered email response drafting
 
 ## Agent Command Router
 
 ### `crm.api.agent.run`
-Central command router for agentic operations. Supported commands:
+Supported commands:
 
-#### Email Commands
-- `email.triage` - AI-powered email triage
-  ```json
-  {
-    "command": "email.triage",
-    "params": {
-      "communication_name": "COMM-2025-00001"
-    }
-  }
-  ```
-
-- `email.draft_ai` - AI-powered response drafting
-  ```json
-  {
-    "command": "email.draft_ai", 
-    "params": {
-      "communication_name": "COMM-2025-00001",
-      "tone": "professional",
-      "include_context": true
-    }
-  }
-  ```
-
-- `email.draft` - Create manual draft
+- `email.draft`
   ```json
   {
     "command": "email.draft",
     "params": {
-      "reference_doctype": "CRM Lead",
-      "reference_name": "CRM-LEAD-2025-00001", 
+      "reference_doctype": "Contact",
+      "reference_name": "Fahad",
       "to": "client@example.com",
       "subject": "Follow up",
-      "html": "<p>Email content</p>"
+      "html": "<p>Email content</p>",
+      "cc": null,
+      "bcc": null,
+      "provider_thread_id": null
     }
   }
   ```
 
-- `email.send` - Send email
+- `email.draft_with_provider`
+  ```json
+  {
+    "command": "email.draft_with_provider",
+    "params": {
+      "reference_doctype": "Contact",
+      "reference_name": "Fahad",
+      "to": "client@example.com",
+      "subject": "Follow up",
+      "html": "<p>Email content</p>",
+      "provider": "gmail",
+      "provider_message_id": "msg_123",
+      "provider_thread_id": "thread_456",
+      "cc": null,
+      "bcc": null
+    }
+  }
+  ```
+
+- `email.send`
   ```json
   {
     "command": "email.send",
     "params": {
-      "communication_name": "COMM-2025-00001"
+      "communication_name": "rX123"
     }
   }
   ```
 
-- `email.link_provider_ids` - Link external IDs
+- `email.link_provider_ids`
   ```json
   {
     "command": "email.link_provider_ids",
     "params": {
-      "communication_name": "COMM-2025-00001",
+      "communication_name": "rX123",
       "provider": "gmail",
       "provider_message_id": "msg_123",
-      "provider_thread_id": "thread_456"
+      "provider_thread_id": "th_456"
     }
   }
   ```
+
+## Views & UI
+- Human Inbox (web): `/human_inbox`
+  - Query params: `doctype`, `docname`, `only_drafts`, `limit`
 
 ## Settings & Configuration
 - `crm.api.settings.create_email_account` - Create email account
@@ -120,14 +120,6 @@ Central command router for agentic operations. Supported commands:
 - `crm.api.session.get_session_info` - Get session details
 - `crm.api.session.refresh_session` - Refresh session
 
-## Views & UI
-- `crm.api.views.get_dashboard_data` - Get dashboard data
-- `crm.api.views.get_kanban_data` - Get kanban board data
-
-## Demo & Testing
-- `crm.api.demo.create_sample_data` - Create demo data
-- `crm.api.demo.clear_sample_data` - Clear demo data
-
 ## WhatsApp Integration
 - `crm.api.whatsapp.send_message` - Send WhatsApp message
 - `crm.api.whatsapp.get_messages` - Get WhatsApp messages
@@ -139,7 +131,7 @@ All API calls require authentication via:
 
 ## Error Handling
 - 401: Unauthorized (invalid credentials)
-- 403: Forbidden (insufficient permissions)  
+- 403: Forbidden (insufficient permissions)
 - 404: Not found
 - 422: Validation error
 - 500: Internal server error
@@ -149,6 +141,4 @@ All API calls require authentication via:
 - 1000 requests per hour per user
 
 ## Webhooks
-- `crm_email_draft_created` - Fired when AI draft is created
-- `crm_lead_status_changed` - Fired when lead status changes
-- `crm_activity_created` - Fired when activity is created
+- `crm_email_draft_created` - Fired when a draft is created
