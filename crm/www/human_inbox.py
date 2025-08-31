@@ -6,10 +6,10 @@ def get_context(context):
 	context.title = _("Human Inbox - AI Drafts")
 	context.no_cache = 1
 
+	# Show recent email communications for review (regardless of status)
 	drafts = frappe.get_all(
 		"Communication",
 		filters={
-			"status": ["in", ["Draft"]],
 			"communication_type": "Communication",
 			"communication_medium": "Email",
 		},
