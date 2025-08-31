@@ -101,7 +101,7 @@ def save_draft(reference_doctype: str, reference_name: str, to: str, subject: st
 			"doctype": "Communication",
 			"communication_medium": "Email",
 			"communication_type": "Communication",
-			"status": "Draft",
+			# don't force non-standard status; let defaults apply
 			"subject": subject,
 			"content": html,
 			"recipients": to,
@@ -129,8 +129,6 @@ def send(communication_name: str):
 	Records provider IDs if returned by mailer (if available via hooks).
 	"""
 	comm = frappe.get_doc("Communication", communication_name)
-	if comm.status != "Draft":
-		raise_frappe("Communication must be Draft to send")
 	if not comm.recipients:
 		raise_frappe("Recipients are required")
 	frappe.sendmail(
