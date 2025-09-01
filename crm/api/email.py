@@ -4,6 +4,36 @@ from frappe.utils import cstr
 from frappe import publish_realtime
 
 
+def _notify_on_draft(reference_doctype: str, reference_name: str, communication_name: str, subject: str):
+	"""Notify the referenced doc owner about the new draft (best-effort)."""
+	try:
+		owner = frappe.db.get_value(reference_doctype, reference_name, "owner")
+		if not owner or owner == "Guest":
+			return
+		# Use Notification Log if available
+		try:
+			from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
+			enqueue_create_notification(
+				{
+					"type": "Alert",
+					"document_type": "Communication",
+					"document_name": communication_name,
+					"subject": _(f"AI Draft Ready: {subject}"),
+					"for_user": owner,
+				}
+			)
+		except Exception:
+			# Fallback: simple realtime event to user channel
+			publish_realtime(
+				"crm_email_draft_created_notify",
+				{"communication_name": communication_name, "subject": subject},
+				user=owner,
+			)
+	except Exception:
+		# best-effort; ignore errors
+		pass
+
+
 @frappe.whitelist()
 def get_inbox(doctype: str | None = None, docname: str | None = None, status: str | None = None, limit: int = 20):
 	"""Return recent Communications linked to a doc or globally for CRM entities.
@@ -130,6 +160,9 @@ def save_draft(reference_doctype: str, reference_name: str, to: str, subject: st
 		},
 		user=frappe.session.user,
 	)
+
+	# Notify referenced doc owner (best-effort)
+	_notify_on_draft(reference_doctype, reference_name, comm.name, subject)
 
 	return comm.name
 
