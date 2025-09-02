@@ -193,7 +193,7 @@
       href="/assets/crm/manifest/apple-splash-1136-640.jpg"
       media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"
     />
-    <script type="module" crossorigin src="/assets/crm/frontend/assets/index-907bf49f.js"></script>
+    <script type="module" crossorigin src="/assets/crm/frontend/assets/index-6bb6ee33.js"></script>
     <link rel="stylesheet" href="/assets/crm/frontend/assets/index-fd8fe6a1.css">
   <link rel="manifest" href="/assets/crm/frontend/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/assets/crm/frontend/registerSW.js"></script></head>
   <body class="sm:overscroll-y-none no-scrollbar">
@@ -204,48 +204,6 @@
               {% for key in boot %}
               window["{{ key }}"] = {{ boot[key] | tojson }};
               {% endfor %}
-          </script>
-
-          <!-- Lightweight AI widget overlay -->
-          <style>
-            #ai-widget{position:fixed;right:16px;bottom:16px;z-index:9999;background:#111827;color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;}
-            #ai-widget a{color:#93c5fd;text-decoration:none}
-            #ai-widget .counts{display:flex;gap:12px;margin-top:6px;font-size:12px}
-            #ai-widget .counts div{background:#1f2937;padding:6px 8px;border-radius:8px}
-            #ai-widget .title{font-weight:600;font-size:13px}
-          </style>
-          <div id="ai-widget" style="display:none">
-            <div class="title">AI Assistant</div>
-            <div class="counts">
-              <div id="ai-drafts">Drafts: --</div>
-              <div id="ai-sent">Sent Today: --</div>
-              <div id="ai-recent">Recent: --</div>
-            </div>
-            <div id="ai-last" style="margin-top:6px;font-size:11px;color:#9ca3af">Last EAIA run: --</div>
-            <div style="margin-top:8px;font-size:12px">
-              <a href="/human_inbox" target="_blank">Open Human Inbox →</a>
-            </div>
-          </div>
-          <script>
-            (function(){
-              const w = document.getElementById('ai-widget');
-              function update(data){
-                w.style.display = 'block';
-                document.getElementById('ai-drafts').textContent = 'Drafts: ' + (data.drafts||0);
-                document.getElementById('ai-sent').textContent = 'Sent Today: ' + (data.sent_today||0);
-                document.getElementById('ai-recent').textContent = 'Recent: ' + (data.recent_total||0);
-                document.getElementById('ai-last').textContent = 'Last EAIA run: ' + (data.last_eaia_run || '--');
-              }
-              function fetchCounts(){
-                fetch('/api/method/crm.api.ai.get_counts', { credentials: 'include' })
-                  .then(r => r.ok ? r.json() : Promise.reject(r))
-                  .then(j => update(j.message || j))
-                  .catch(()=>{});
-              }
-              // initial and periodic refresh
-              fetchCounts();
-              setInterval(fetchCounts, 30000);
-            })();
           </script>
           </body>
           
