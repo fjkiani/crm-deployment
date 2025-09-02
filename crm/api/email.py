@@ -5,30 +5,46 @@ from frappe import publish_realtime
 
 
 def _notify_on_draft(reference_doctype: str, reference_name: str, communication_name: str, subject: str):
-	"""Notify the referenced doc owner about the new draft (best-effort)."""
+	"""Notify the referenced doc owner and assignees about the new draft (best-effort)."""
 	try:
+		# Collect recipients: owner + assignees (ToDo allocated_to)
+		recipients: set[str] = set()
 		owner = frappe.db.get_value(reference_doctype, reference_name, "owner")
-		if not owner or owner == "Guest":
+		if owner and owner != "Guest":
+			recipients.add(owner)
+		for row in frappe.get_all(
+			"ToDo",
+			filters={
+				"reference_type": reference_doctype,
+				"reference_name": reference_name,
+				"status": ["in", ["Open", "Pending"]],
+			},
+			fields=["allocated_to"],
+		):
+			user = row.get("allocated_to")
+			if user and user != "Guest":
+				recipients.add(user)
+		if not recipients:
 			return
-		# Use Notification Log if available
-		try:
-			from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
-			enqueue_create_notification(
-				{
-					"type": "Alert",
-					"document_type": "Communication",
-					"document_name": communication_name,
-					"subject": _(f"AI Draft Ready: {subject}"),
-					"for_user": owner,
-				}
-			)
-		except Exception:
-			# Fallback: simple realtime event to user channel
-			publish_realtime(
-				"crm_email_draft_created_notify",
-				{"communication_name": communication_name, "subject": subject},
-				user=owner,
-			)
+		# Use Notification Log if available; fallback to realtime per user
+		for user in recipients:
+			try:
+				from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
+				enqueue_create_notification(
+					{
+						"type": "Alert",
+						"document_type": "Communication",
+						"document_name": communication_name,
+						"subject": _(f"AI Draft Ready: {subject}"),
+						"for_user": user,
+					}
+				)
+			except Exception:
+				publish_realtime(
+					"crm_email_draft_created_notify",
+					{"communication_name": communication_name, "subject": subject},
+					user=user,
+				)
 	except Exception:
 		# best-effort; ignore errors
 		pass
