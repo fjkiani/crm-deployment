@@ -9,6 +9,7 @@ def get_counts(days: int = 7):
 	- drafts: Email Communications in Draft status
 	- sent_today: Email Communications sent today
 	- recent_total: total Email Communications in last N days
+	- last_eaia_run: last EAIA ping timestamp if recorded
 	"""
 	now = frappe.utils.now_datetime()
 	start_day = (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
@@ -47,9 +48,20 @@ def get_counts(days: int = 7):
 		(start_day,), as_dict=False
 	)[0][0]
 
+	last_run = frappe.cache().get_value("eaia:last_run") or frappe.conf.get("eaia_last_run")
+
 	return {
 		"drafts": drafts,
 		"sent_today": int(sent_today or 0),
 		"recent_total": int(recent_total or 0),
 		"window_days": days,
+		"last_eaia_run": last_run,
 	}
+
+
+@frappe.whitelist()
+def ping_eaia():
+	"""Record EAIA last-run timestamp for display on the dashboard widget."""
+	ts = frappe.utils.now()
+	frappe.cache().set_value("eaia:last_run", ts)
+	return {"ok": True, "ts": ts}

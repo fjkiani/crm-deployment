@@ -221,8 +221,9 @@
               <div id="ai-sent">Sent Today: --</div>
               <div id="ai-recent">Recent: --</div>
             </div>
+            <div id="ai-last" style="margin-top:6px;font-size:11px;color:#9ca3af">Last EAIA run: --</div>
             <div style="margin-top:8px;font-size:12px">
-              <a href="/crm/human_inbox" target="_blank">Open Human Inbox →</a>
+              <a href="/human_inbox" target="_blank">Open Human Inbox →</a>
             </div>
           </div>
           <script>
@@ -233,6 +234,7 @@
                 document.getElementById('ai-drafts').textContent = 'Drafts: ' + (data.drafts||0);
                 document.getElementById('ai-sent').textContent = 'Sent Today: ' + (data.sent_today||0);
                 document.getElementById('ai-recent').textContent = 'Recent: ' + (data.recent_total||0);
+                document.getElementById('ai-last').textContent = 'Last EAIA run: ' + (data.last_eaia_run || '--');
               }
               function fetchCounts(){
                 fetch('/api/method/crm.api.ai.get_counts', { credentials: 'include' })
