@@ -150,6 +150,10 @@ def process_job(job_name: str, options: dict | None = None):
     try:
         job.db_set("status", "Running")
 
+        dry_run = False
+        if isinstance(options, dict):
+            dry_run = bool(options.get("dry_run"))
+
         # Fetch data & optionally import
         total_rows = 0
         headers: list[str] = []
@@ -196,9 +200,10 @@ def process_job(job_name: str, options: dict | None = None):
 
         # Apply mapping and upsert (minimal CRM Lead support)
         processed = 0
+        failures: list[tuple[int, str]] = []
         if total_rows and job.mapping_profile:
             try:
-                processed = _apply_mapping_and_upsert(job, headers, data_rows)
+                processed, failures = _apply_mapping_and_upsert(job, headers, data_rows, dry_run=dry_run)
             except Exception as imp_e:
                 job.db_set("status", "Failed")
                 job.db_set("log", f"Import error: {type(imp_e).__name__}: {imp_e}")
@@ -206,8 +211,29 @@ def process_job(job_name: str, options: dict | None = None):
                 raise
 
         job.db_set("processed_rows", processed)
+        # Write error CSV if failures exist
+        if failures:
+            try:
+                err_csv = io.StringIO()
+                w = csv.writer(err_csv)
+                w.writerow(["row_index", "error"])
+                for idx, msg in failures:
+                    w.writerow([idx, msg])
+                file_doc = frappe.get_doc(
+                    {
+                        "doctype": "File",
+                        "file_name": f"etl_errors_{job.name}.csv",
+                        "content": err_csv.getvalue(),
+                        "is_private": 1,
+                        "attached_to_doctype": job.doctype,
+                        "attached_to_name": job.name,
+                    }
+                ).insert()
+                job.db_set("error_file", file_doc.file_url)
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), title="ETL Error CSV write failed")
         if job.status != "Failed":
-            job.db_set("status", "Completed")
+            job.db_set("status", "Completed" if not dry_run else "Completed (Dry Run)")
     except Exception as e:
         job.db_set("status", "Failed")
         job.db_set("log", f"{type(e).__name__}: {e}")
@@ -230,7 +256,7 @@ def _load_mapping(profile_name: str) -> list[dict]:
     return items
 
 
-def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]]) -> int:
+def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dry_run: bool = False) -> tuple[int, list[tuple[int, str]]]:
     header_to_idx = {h: i for i, h in enumerate([_normalize_header(h) for h in headers])}
     mapping = _load_mapping(job.mapping_profile)
     # Support only CRM Lead for MVP
@@ -246,7 +272,8 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]]) ->
             field_from_header[m["target_field"]] = header_to_idx[src]
 
     processed = 0
-    for r in rows:
+    failures: list[tuple[int, str]] = []
+    for idx_row, r in enumerate(rows, start=1):
         try:
             lead_data: dict = {"doctype": "CRM Lead"}
             for target_field, idx in field_from_header.items():
@@ -262,17 +289,19 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]]) ->
             if not existing_name and phone:
                 existing_name = frappe.db.get_value("CRM Lead", {"phone": phone}, "name")
 
-            if existing_name:
-                # update minimal fields present
-                frappe.db.set_value("CRM Lead", existing_name, {k: v for k, v in lead_data.items() if k not in ("doctype",) and v})
-            else:
-                doc = frappe.get_doc(lead_data)
-                doc.insert()
+            if not dry_run:
+                if existing_name:
+                    # update minimal fields present
+                    frappe.db.set_value("CRM Lead", existing_name, {k: v for k, v in lead_data.items() if k not in ("doctype",) and v})
+                else:
+                    doc = frappe.get_doc(lead_data)
+                    doc.insert()
             processed += 1
         except Exception:
             # Collecting row-level errors can be added (write error_file)
             frappe.log_error(frappe.get_traceback(), title="ETL Row Error")
+            failures.append((idx_row, str(frappe.get_traceback(limit=1))))
             continue
-    return processed
+    return processed, failures
 
 
