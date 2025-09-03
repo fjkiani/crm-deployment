@@ -170,9 +170,19 @@ def process_job(job_name: str, options: dict | None = None):
                     continue  # header
                 total_rows += 1
         elif job.source_type == "GOOGLE_SHEETS" and job.sheet_id:
-            # Placeholder: Sheets connector to be implemented
-            # For now, mark unknown rowcount
-            total_rows = 0
+            # Basic Sheets connector via CSV export (first sheet if no gid)
+            export_url = f"https://docs.google.com/spreadsheets/d/{job.sheet_id}/export?format=csv"
+            # Note: range-based export via A1 requires Google API; unsupported here without credentials
+            import requests
+
+            r = requests.get(export_url, timeout=30)
+            r.raise_for_status()
+            buf = io.StringIO(r.text)
+            reader = csv.reader(buf, delimiter=",")
+            for i, _ in enumerate(reader):
+                if i == 0:
+                    continue  # header
+                total_rows += 1
         else:
             pass
 
