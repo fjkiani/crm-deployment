@@ -1,0 +1,16 @@
+{
+ "doctype": "DocType",
+ "name": "CRM Import Column Map Item",
+ "istable": 1,
+ "module": "FCRM",
+ "engine": "InnoDB",
+ "field_order": ["source_header", "target_doctype", "target_field", "transform"],
+ "fields": [
+  {"fieldname": "source_header", "label": "Source Header", "fieldtype": "Data", "reqd": 1},
+  {"fieldname": "target_doctype", "label": "Target DocType", "fieldtype": "Data", "reqd": 1},
+  {"fieldname": "target_field", "label": "Target Field", "fieldtype": "Data", "reqd": 1},
+  {"fieldname": "transform", "label": "Transform (Jinja/Python expr)", "fieldtype": "Small Text"}
+ ]
+}
+
+
