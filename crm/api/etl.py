@@ -150,8 +150,10 @@ def process_job(job_name: str, options: dict | None = None):
     try:
         job.db_set("status", "Running")
 
-        # Fetch data
+        # Fetch data & optionally import
         total_rows = 0
+        headers: list[str] = []
+        data_rows: list[list[str]] = []
         if job.source_type == "CSV" and job.file_url:
             import requests
 
@@ -165,10 +167,12 @@ def process_job(job_name: str, options: dict | None = None):
             except Exception:
                 buf.seek(0)
             reader = csv.reader(buf, delimiter=(sniff.delimiter if sniff else ","))
-            for i, _ in enumerate(reader):
+            for i, row in enumerate(reader):
                 if i == 0:
-                    continue  # header
-                total_rows += 1
+                    headers = [str(c) for c in row]
+                    continue
+                data_rows.append([str(c) for c in row])
+            total_rows = len(data_rows)
         elif job.source_type == "GOOGLE_SHEETS" and job.sheet_id:
             # Basic Sheets connector via CSV export (first sheet if no gid)
             export_url = f"https://docs.google.com/spreadsheets/d/{job.sheet_id}/export?format=csv"
@@ -179,20 +183,96 @@ def process_job(job_name: str, options: dict | None = None):
             r.raise_for_status()
             buf = io.StringIO(r.text)
             reader = csv.reader(buf, delimiter=",")
-            for i, _ in enumerate(reader):
+            for i, row in enumerate(reader):
                 if i == 0:
-                    continue  # header
-                total_rows += 1
+                    headers = [str(c) for c in row]
+                    continue
+                data_rows.append([str(c) for c in row])
+            total_rows = len(data_rows)
         else:
             pass
 
         job.db_set("total_rows", total_rows)
-        job.db_set("processed_rows", 0)
-        job.db_set("status", "Completed")
+
+        # Apply mapping and upsert (minimal CRM Lead support)
+        processed = 0
+        if total_rows and job.mapping_profile:
+            try:
+                processed = _apply_mapping_and_upsert(job, headers, data_rows)
+            except Exception as imp_e:
+                job.db_set("status", "Failed")
+                job.db_set("log", f"Import error: {type(imp_e).__name__}: {imp_e}")
+                frappe.log_error(message=frappe.get_traceback(), title=f"ETL Import Failed: {job.name}")
+                raise
+
+        job.db_set("processed_rows", processed)
+        if job.status != "Failed":
+            job.db_set("status", "Completed")
     except Exception as e:
         job.db_set("status", "Failed")
         job.db_set("log", f"{type(e).__name__}: {e}")
         frappe.log_error(message=frappe.get_traceback(), title=f"ETL Job Failed: {job.name}")
         raise
+
+
+def _load_mapping(profile_name: str) -> list[dict]:
+    doc = frappe.get_doc("CRM Import Column Map", profile_name)
+    items = []
+    for row in doc.get("columns") or []:
+        items.append(
+            {
+                "source_header": (row.get("source_header") or "").strip(),
+                "target_doctype": (row.get("target_doctype") or "").strip(),
+                "target_field": (row.get("target_field") or "").strip(),
+                "transform": row.get("transform") or None,
+            }
+        )
+    return items
+
+
+def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]]) -> int:
+    header_to_idx = {h: i for i, h in enumerate([_normalize_header(h) for h in headers])}
+    mapping = _load_mapping(job.mapping_profile)
+    # Support only CRM Lead for MVP
+    lead_maps = [m for m in mapping if m["target_doctype"] in ("CRM Lead", "Lead", "crm lead")]
+    if not lead_maps:
+        return 0
+
+    # Build target field index map
+    field_from_header: dict[str, int] = {}
+    for m in lead_maps:
+        src = _normalize_header(m["source_header"])
+        if src in header_to_idx:
+            field_from_header[m["target_field"]] = header_to_idx[src]
+
+    processed = 0
+    for r in rows:
+        try:
+            lead_data: dict = {"doctype": "CRM Lead"}
+            for target_field, idx in field_from_header.items():
+                if idx < len(r):
+                    lead_data[target_field] = r[idx]
+
+            # Dedup: by email or phone/mobile_no
+            existing_name = None
+            email = (lead_data.get("email") or "").strip()
+            phone = (lead_data.get("phone") or lead_data.get("mobile_no") or "").strip()
+            if email:
+                existing_name = frappe.db.get_value("CRM Lead", {"email": email}, "name")
+            if not existing_name and phone:
+                existing_name = frappe.db.get_value("CRM Lead", {"phone": phone}, "name")
+
+            if existing_name:
+                # update minimal fields present
+                frappe.db.set_value("CRM Lead", existing_name, {k: v for k, v in lead_data.items() if k not in ("doctype",) and v})
+            else:
+                doc = frappe.get_doc(lead_data)
+                doc.insert()
+            processed += 1
+        except Exception:
+            # Collecting row-level errors can be added (write error_file)
+            frappe.log_error(frappe.get_traceback(), title="ETL Row Error")
+            continue
+    return processed
 
 
