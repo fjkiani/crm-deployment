@@ -103,6 +103,86 @@ def import_rows(payload: str) -> dict:
         data = json.loads(payload or "{}")
     except Exception:
         frappe.throw(_("Invalid JSON payload"))
-    return {"accepted": True, "job_id": frappe.generate_hash(length=12), "echo": data}
+
+    source_type = (data.get("source_type") or "CSV").upper()
+    if source_type not in ("CSV", "GOOGLE_SHEETS"):
+        frappe.throw(_(f"Unsupported source_type: {source_type}"))
+
+    # Create Import Job Doc
+    job = frappe.get_doc(
+        {
+            "doctype": "CRM Import Job",
+            "title": data.get("title") or _(f"Import {source_type}"),
+            "source_type": source_type,
+            "file_url": data.get("file_url"),
+            "sheet_id": data.get("sheet_id"),
+            "sheet_range": data.get("sheet_range"),
+            "mapping_profile": data.get("mapping_profile"),
+            "dedupe": 1 if data.get("dedupe", True) else 0,
+            "create_custom_fields": 1 if data.get("create_custom_fields") else 0,
+            "link_organization": 1 if data.get("link_organization", True) else 0,
+            "status": "Queued",
+        }
+    )
+    job.insert()
+
+    kwargs = {"job_name": job.name, "options": data}
+    frappe.enqueue(
+        method="crm.api.etl.process_job",
+        queue="long",
+        job_name=f"etl_import_{job.name}",
+        timeout=60 * 30,
+        now=frappe.flags.in_test,  # run synchronously during tests
+        **{"kwargs": kwargs},
+    )
+
+    return {"accepted": True, "job_id": job.name}
+
+
+@frappe.whitelist(allow_guest=False)
+def process_job(job_name: str, options: dict | None = None):
+    """Background worker entrypoint.
+
+    Reads job doc, fetches data (CSV or Sheets), performs basic counting, and marks status.
+    The real import logic (validation, mapping, upsert) will be added in next iterations.
+    """
+    job = frappe.get_doc("CRM Import Job", job_name)
+    try:
+        job.db_set("status", "Running")
+
+        # Fetch data
+        total_rows = 0
+        if job.source_type == "CSV" and job.file_url:
+            import requests
+
+            r = requests.get(job.file_url, timeout=30)
+            r.raise_for_status()
+            buf = io.StringIO(r.text)
+            sniff = None
+            try:
+                sniff = csv.Sniffer().sniff(buf.read(2048))
+                buf.seek(0)
+            except Exception:
+                buf.seek(0)
+            reader = csv.reader(buf, delimiter=(sniff.delimiter if sniff else ","))
+            for i, _ in enumerate(reader):
+                if i == 0:
+                    continue  # header
+                total_rows += 1
+        elif job.source_type == "GOOGLE_SHEETS" and job.sheet_id:
+            # Placeholder: Sheets connector to be implemented
+            # For now, mark unknown rowcount
+            total_rows = 0
+        else:
+            pass
+
+        job.db_set("total_rows", total_rows)
+        job.db_set("processed_rows", 0)
+        job.db_set("status", "Completed")
+    except Exception as e:
+        job.db_set("status", "Failed")
+        job.db_set("log", f"{type(e).__name__}: {e}")
+        frappe.log_error(message=frappe.get_traceback(), title=f"ETL Job Failed: {job.name}")
+        raise
 
 
