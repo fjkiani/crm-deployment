@@ -305,3 +305,34 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
     return processed, failures
 
 
+@frappe.whitelist()
+def run_scheduled_imports():
+    """Find CRM Import Jobs marked scheduled and run them if interval elapsed."""
+    now = frappe.utils.now_datetime()
+    jobs = frappe.get_all(
+        "CRM Import Job",
+        filters={"scheduled": 1},
+        fields=["name", "interval_minutes", "last_run"],
+    )
+    for j in jobs:
+        interval = int(j.interval_minutes or 60)
+        last = j.last_run
+        should_run = False
+        if not last:
+            should_run = True
+        else:
+            delta = now - frappe.utils.get_datetime(last)
+            if delta.total_seconds() >= interval * 60:
+                should_run = True
+        if should_run:
+            frappe.enqueue(
+                method="crm.api.etl.process_job",
+                queue="long",
+                job_name=f"etl_sched_{j.name}",
+                timeout=60 * 30,
+                now=frappe.flags.in_test,
+                kwargs={"job_name": j.name, "options": {}},
+            )
+            frappe.db.set_value("CRM Import Job", j.name, "last_run", now)
+
+

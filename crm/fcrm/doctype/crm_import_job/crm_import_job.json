@@ -22,7 +22,11 @@
   "total_rows",
   "processed_rows",
   "error_file",
-  "log"
+  "log",
+  "schedule_section",
+  "scheduled",
+  "interval_minutes",
+  "last_run"
  ],
  "fields": [
   {"fieldname": "title", "label": "Title", "fieldtype": "Data"},
@@ -41,6 +45,11 @@
   {"fieldname": "processed_rows", "label": "Processed Rows", "fieldtype": "Int", "read_only": 1},
   {"fieldname": "error_file", "label": "Error CSV", "fieldtype": "Attach", "read_only": 1},
   {"fieldname": "log", "label": "Log", "fieldtype": "Small Text", "read_only": 1}
+  ,
+  {"fieldname": "schedule_section", "fieldtype": "Section Break", "label": "Schedule"},
+  {"fieldname": "scheduled", "label": "Scheduled", "fieldtype": "Check", "default": "0"},
+  {"fieldname": "interval_minutes", "label": "Interval (minutes)", "fieldtype": "Int", "default": "60"},
+  {"fieldname": "last_run", "label": "Last Run", "fieldtype": "Datetime", "read_only": 1}
  ],
  "permissions": [
   {"role": "System Manager", "create": 1, "read": 1, "write": 1, "delete": 1, "export": 1, "report": 1, "print": 1, "share": 1}
