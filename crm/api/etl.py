@@ -259,43 +259,59 @@ def _load_mapping(profile_name: str) -> list[dict]:
 def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dry_run: bool = False) -> tuple[int, list[tuple[int, str]]]:
     header_to_idx = {h: i for i, h in enumerate([_normalize_header(h) for h in headers])}
     mapping = _load_mapping(job.mapping_profile)
-    # Support only CRM Lead for MVP
-    lead_maps = [m for m in mapping if m["target_doctype"] in ("CRM Lead", "Lead", "crm lead")]
-    if not lead_maps:
-        return 0
+    # Split mapping by target doctype
+    lead_maps = [m for m in mapping if m["target_doctype"].strip().lower() in ("crm lead", "lead")]
+    contact_maps = [m for m in mapping if m["target_doctype"].strip().lower() == "contact"]
+    org_maps = [m for m in mapping if m["target_doctype"].strip().lower() in ("crm organization", "organization")] 
 
-    # Build target field index map
-    field_from_header: dict[str, int] = {}
-    for m in lead_maps:
-        src = _normalize_header(m["source_header"])
-        if src in header_to_idx:
-            field_from_header[m["target_field"]] = header_to_idx[src]
+    # Build per-doctype field index maps
+    def build_index(maps: list[dict]) -> dict[str, int]:
+        idx_map: dict[str, int] = {}
+        for mm in maps:
+            src = _normalize_header(mm["source_header"])
+            if src in header_to_idx:
+                idx_map[mm["target_field"]] = header_to_idx[src]
+        return idx_map
+
+    lead_idx = build_index(lead_maps)
+    contact_idx = build_index(contact_maps)
+    org_idx = build_index(org_maps)
 
     processed = 0
     failures: list[tuple[int, str]] = []
     for idx_row, r in enumerate(rows, start=1):
         try:
-            lead_data: dict = {"doctype": "CRM Lead"}
-            for target_field, idx in field_from_header.items():
-                if idx < len(r):
-                    lead_data[target_field] = r[idx]
+            # Build candidate payloads
+            lead_data: dict | None = None
+            if lead_idx:
+                lead_data = {"doctype": "CRM Lead"}
+                for target_field, col_idx in lead_idx.items():
+                    if col_idx < len(r):
+                        lead_data[target_field] = r[col_idx]
 
-            # Dedup: by email or phone/mobile_no
-            existing_name = None
-            email = (lead_data.get("email") or "").strip()
-            phone = (lead_data.get("phone") or lead_data.get("mobile_no") or "").strip()
-            if email:
-                existing_name = frappe.db.get_value("CRM Lead", {"email": email}, "name")
-            if not existing_name and phone:
-                existing_name = frappe.db.get_value("CRM Lead", {"phone": phone}, "name")
+            org_name = None
+            if org_idx:
+                org_data: dict = {}
+                for target_field, col_idx in org_idx.items():
+                    if col_idx < len(r):
+                        org_data[target_field] = r[col_idx]
+                if org_data:
+                    org_name = _upsert_org(org_data, dry_run=dry_run)
 
-            if not dry_run:
-                if existing_name:
-                    # update minimal fields present
-                    frappe.db.set_value("CRM Lead", existing_name, {k: v for k, v in lead_data.items() if k not in ("doctype",) and v})
-                else:
-                    doc = frappe.get_doc(lead_data)
-                    doc.insert()
+            if lead_data and org_name and not lead_data.get("organization"):
+                lead_data["organization"] = org_name
+
+            if lead_data:
+                _upsert_lead(lead_data, dry_run=dry_run)
+
+            if contact_idx:
+                contact_data: dict = {"doctype": "Contact"}
+                for target_field, col_idx in contact_idx.items():
+                    if col_idx < len(r):
+                        contact_data[target_field] = r[col_idx]
+                if org_name:
+                    contact_data["_link_org_name"] = org_name
+                _upsert_contact(contact_data, dry_run=dry_run)
             processed += 1
         except Exception:
             # Collecting row-level errors can be added (write error_file)
@@ -303,6 +319,119 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
             failures.append((idx_row, str(frappe.get_traceback(limit=1))))
             continue
     return processed, failures
+
+
+def _upsert_lead(lead_data: dict, dry_run: bool = False) -> str | None:
+    email = (lead_data.get("email") or "").strip()
+    phone = (lead_data.get("phone") or lead_data.get("mobile_no") or "").strip()
+    existing_name = None
+    if email:
+        existing_name = frappe.db.get_value("CRM Lead", {"email": email}, "name")
+    if not existing_name and phone:
+        existing_name = frappe.db.get_value("CRM Lead", {"phone": phone}, "name")
+    if dry_run:
+        return existing_name
+    if existing_name:
+        frappe.db.set_value("CRM Lead", existing_name, {k: v for k, v in lead_data.items() if k not in ("doctype",) and v})
+        return existing_name
+    doc = frappe.get_doc(lead_data)
+    doc.insert()
+    return doc.name
+
+
+def _upsert_org(org_data: dict, dry_run: bool = False) -> str | None:
+    name = (org_data.get("organization") or org_data.get("name") or "").strip()
+    website = (org_data.get("website") or "").strip()
+    existing_name = None
+    if website:
+        existing_name = frappe.db.get_value("CRM Organization", {"website": website}, "name")
+    if not existing_name and name:
+        existing_name = frappe.db.get_value("CRM Organization", {"organization_name": name}, "name")
+    if dry_run:
+        return existing_name or name or None
+    if existing_name:
+        # update basic fields
+        updates = {k: v for k, v in org_data.items() if v}
+        if updates:
+            frappe.db.set_value("CRM Organization", existing_name, updates)
+        return existing_name
+    # Insert with minimum required fields
+    payload = {"doctype": "CRM Organization"}
+    if name:
+        payload["organization_name"] = name
+    payload.update({k: v for k, v in org_data.items() if k not in ("doctype",) and v})
+    doc = frappe.get_doc(payload)
+    doc.insert()
+    return doc.name
+
+
+def _upsert_contact(contact_data: dict, dry_run: bool = False) -> str | None:
+    # Contact core fields
+    email = (contact_data.get("email_id") or contact_data.get("email") or "").strip()
+    phone = (contact_data.get("phone") or contact_data.get("mobile_no") or "").strip()
+    first_name = contact_data.get("first_name") or ""
+    last_name = contact_data.get("last_name") or ""
+    existing_name = None
+    if email:
+        existing_name = frappe.db.get_value("Contact", {"email_id": email}, "name")
+    if not existing_name and phone:
+        existing_name = frappe.db.get_value("Contact", {"phone": phone}, "name")
+
+    if dry_run:
+        return existing_name
+
+    if existing_name:
+        updates = {k: v for k, v in {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email_id": email or None,
+            "phone": phone or None,
+            "mobile_no": contact_data.get("mobile_no") or None,
+        }.items() if v}
+        if updates:
+            frappe.db.set_value("Contact", existing_name, updates)
+        # Link to organization if provided
+        org_name = contact_data.get("_link_org_name")
+        if org_name:
+            _ensure_contact_link(existing_name, "CRM Organization", org_name)
+        return existing_name
+
+    payload = {
+        "doctype": "Contact",
+        "first_name": first_name,
+        "last_name": last_name,
+        "email_id": email or None,
+        "phone": phone or None,
+        "mobile_no": contact_data.get("mobile_no") or None,
+    }
+    doc = frappe.get_doc(payload)
+    doc.insert()
+    org_name = contact_data.get("_link_org_name")
+    if org_name:
+        _ensure_contact_link(doc.name, "CRM Organization", org_name)
+    return doc.name
+
+
+def _ensure_contact_link(contact_name: str, link_doctype: str, link_name: str):
+    # Contact has child table 'links' (Dynamic Link)
+    try:
+        links = frappe.get_all(
+            "Dynamic Link",
+            filters={
+                "parenttype": "Contact",
+                "parent": contact_name,
+                "link_doctype": link_doctype,
+                "link_name": link_name,
+            },
+            limit=1,
+        )
+        if links:
+            return
+        contact = frappe.get_doc("Contact", contact_name)
+        contact.append("links", {"link_doctype": link_doctype, "link_name": link_name})
+        contact.save()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), title="Contact link failed")
 
 
 @frappe.whitelist()
