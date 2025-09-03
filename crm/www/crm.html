@@ -205,6 +205,58 @@
               window["{{ key }}"] = {{ boot[key] | tojson }};
               {% endfor %}
           </script>
+          <style>
+            #ai-widget-toast { position: fixed; right: 16px; bottom: 16px; z-index: 9999; display: none; }
+            #ai-widget-toast .card { background: #111827; color: #e5e7eb; border-radius: 8px; padding: 12px 14px; box-shadow: 0 10px 20px rgba(0,0,0,.25); min-width: 220px; }
+            #ai-widget-toast a { color: #93c5fd; text-decoration: none; }
+          </style>
+          <div id="ai-widget-toast">
+            <div class="card">
+              <div id="ai-widget-title" style="font-weight:600; margin-bottom:6px;">AI Assistant</div>
+              <div id="ai-widget-counts" style="font-size:13px; opacity:.9;">Loading…</div>
+              <div style="margin-top:8px; font-size:13px;"><a href="/crm/human_inbox">Open Human Inbox</a></div>
+            </div>
+          </div>
+          <script>
+            (function(){
+              const toast = document.getElementById('ai-widget-toast');
+              const countsEl = document.getElementById('ai-widget-counts');
+              let hideTimer;
+              function showToast(message){
+                if (message) {
+                  document.getElementById('ai-widget-title').textContent = message;
+                } else {
+                  document.getElementById('ai-widget-title').textContent = 'AI Assistant';
+                }
+                toast.style.display = 'block';
+                clearTimeout(hideTimer);
+                hideTimer = setTimeout(()=>{ toast.style.display = 'none'; }, 6000);
+              }
+              async function fetchCounts(){
+                try {
+                  const r = await fetch('/api/method/crm.api.ai.get_counts');
+                  const j = await r.json();
+                  const m = j.message || {};
+                  countsEl.textContent = `Drafts: ${m.drafts||0} · Sent today: ${m.sent_today||0} · Recent: ${m.recent_total||0}`;
+                } catch(e){ /* ignore */ }
+              }
+              function onRealtime(){
+                try {
+                  if (window.frappe && frappe.realtime && typeof frappe.realtime.on === 'function'){
+                    frappe.realtime.on('crm_email_draft_created', function(data){
+                      fetchCounts();
+                      showToast('New AI Draft Ready');
+                    });
+                  }
+                } catch(e){ /* ignore */ }
+              }
+              // initial
+              fetchCounts();
+              onRealtime();
+              // poll fallback
+              setInterval(fetchCounts, 60000);
+            })();
+          </script>
           </body>
           
 </html>
