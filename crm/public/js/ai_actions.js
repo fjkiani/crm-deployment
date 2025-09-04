@@ -67,3 +67,4 @@ frappe.ui.form.on(cur_frm.doctype, {
 		}, 'AI');
 	}
 });
+

@@ -60,3 +60,4 @@ Notes:
 - Use the actual mailbox as sender (avoid `Administrator <alias@other-domain>`).
 - Configure a default signature; keep it simple during warm-up.
 - If external provider sends (EAIA via Gmail), sync Message-ID/Thread-ID to `Communication`.
+

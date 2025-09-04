@@ -44,3 +44,4 @@ def add_custom_field(dt: str, fieldname: str, label: str, fieldtype: str, help: 
 	frappe.clear_cache(doctype=dt)
 
 
+
