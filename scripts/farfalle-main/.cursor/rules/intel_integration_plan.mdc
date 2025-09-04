@@ -1,0 +1,102 @@
+---
+alwaysApply: false
+description: Semantic Intelligence integration plan for Farfalle backend, current state vs. enhancements
+---
+
+### Scope
+This rule documents how the Semantic Intelligence capability integrates into Farfalle, what is implemented now, and a concrete roadmap for enhancements. It avoids hallucinations and only labels as “planned” what is not yet implemented.
+
+### Current State (Implemented)
+- **Backend framework**: FastAPI app in `src/backend/main.py` with existing routes `POST /chat`, `GET /history`, `GET /thread/{thread_id}`.
+- **Search providers**: Farfalle includes `TavilySearchProvider` in `src/backend/search/providers/tavily.py` (sync SDK usage).
+- **New intel module (added)**:
+  - `src/backend/intel/__init__.py`
+  - `src/backend/intel/services.py`: Minimal HTTP clients and service
+    - `TavilySimple`: `POST https://api.tavily.com/search` via `requests`
+    - `DiffbotSimple`: `GET https://api.diffbot.com/v3/analyze`
+    - `LinkedInSimple`: RapidAPI host `linkedin-data-api.p.rapidapi.com`
+    - `IntelligenceService.analyze(company, questions, domain?, max_results=5)` returns merged results; may include `extracted_people` when found
+  - `src/backend/intel/router.py`: FastAPI router with `POST /intel/analyze`
+- **App wiring**: `main.py` includes the router: `app.include_router(intel_router)`.
+- **Environment**: `.env-template` updated with keys:
+  - `TAVILY_API_KEY`
+  - `DIFFBOT_TOKEN`
+  - `LINKEDIN_RAPIDAPI_KEY`
+  - `LINKEDIN_RAPIDAPI_HOST=linkedin-data-api.p.rapidapi.com`
+
+### API Contract (Implemented)
+- **POST** `/intel/analyze`
+  - Request body:
+    - `company: string`
+    - `domain?: string` (used for LinkedIn company lookup)
+    - `questions?: string[]` (defaults to decision-makers, investments, gaps)
+    - `max_results?: number` (default 5)
+  - Response shape:
+    - `company: string`
+    - `questions: string[]`
+    - `total_sources: number`
+    - `results: Array<{ question: string; answer: string; sources: any[]; extracted_people?: Array<{ name: string; title: string; linkedin_url?: string; source_url?: string }> }>`
+
+### How to Run (Backend)
+- Ensure `.env` contains provider keys (copy from `.env-template`).
+- Start server (poetry example):
+  - `poetry install`
+  - `poetry run uvicorn backend.main:app --reload --port 8000`
+- Quick test:
+  ```bash
+  curl -X POST http://localhost:8000/intel/analyze \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "company": "Abbey Capital",
+      "domain": "abbeycapital.com",
+      "questions": [
+        "Who are the decision-makers?",
+        "What have they invested in recently?",
+        "What are their strategic gaps?"
+      ]
+    }'
+  ```
+
+### Enhancement Plan (Planned)
+- **A. Provider foundations**
+  - Convert intel clients to async (`httpx.AsyncClient`) for concurrency under FastAPI.
+  - Unify Tavily usage by adapting intel service to re-use Farfalle’s `SearchProvider` base where sensible.
+  - Centralize retries/backoff and rate limiting (e.g., exponential backoff, 429 handling).
+  - Add simple in-memory and optional Redis caching keyed by `(company, domain, question)`.
+
+- **B. Answer-quality guardrails**
+  - Detect generic/definition-like answers; escalate to Diffbot/LinkedIn as needed.
+  - Merge entities across sources with deduplication and confidence scoring.
+
+- **C. Scoring and structure**
+  - Add meeting-readiness scoring (fit, access, need, timing) to the response root.
+  - Provide structured sections: executive summary, decision-makers, investments, gaps, action ideas.
+
+- **D. Frontend integration**
+  - Add a minimal Next.js page to call `/intel/analyze` with form fields for company/domain/questions.
+  - Render results with sources, extracted people, and scores.
+  - Optional: integrate into existing chat UX (route special queries to `/intel/analyze`).
+
+- **E. Observability & DX**
+  - Structured logging and metrics around provider calls (latency, hit/miss, retries).
+  - Error transparency in responses for partial failures (non-blocking fail-soft).
+  - Unit tests for the intel service and router; record/replay fixtures for providers.
+
+- **F. Security**
+  - Ensure secrets are read from env/secret manager only (no hard-coded keys).
+  - Validate and sanitize inputs; enforce domain whitelist/blacklist as configured.
+
+### What’s Implemented vs Planned
+- Implemented now:
+  - `POST /intel/analyze` endpoint
+  - Basic Tavily/Diffbot/LinkedIn enrichment via `requests` (sync)
+  - Env keys in `.env-template` and router inclusion
+- Planned (not implemented yet):
+  - Async clients, retries/backoff, caching
+  - Guardrails, scoring, richer structured output
+  - Frontend page and chat integration
+  - Test suite and metrics
+
+### Notes
+- Existing Farfalle chat/search flows remain unchanged. The intel module is additive and can be composed later into those flows.
+- For RapidAPI LinkedIn responses, field shapes vary by plan; code remains defensive to avoid hard failures.

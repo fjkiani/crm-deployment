@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  crm-intelligence:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile
+    environment:
+      - CRM_ENV=production
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=crm_intelligence
+      - POSTGRES_USER=crm_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

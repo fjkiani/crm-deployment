@@ -1,0 +1,15 @@
+{
+  "environment": "development",
+  "log_level": "DEBUG",
+  "components": {
+    "company_intelligence": {
+      "enabled": true,
+      "rate_limit": 0.5,
+      "search_depth": "basic"
+    },
+    "executive_intelligence": {
+      "enabled": true,
+      "max_executives": 5
+    }
+  }
+}

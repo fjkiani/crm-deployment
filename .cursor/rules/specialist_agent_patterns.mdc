@@ -1,0 +1,408 @@
+---
+globs: components/specialist_agents/*.py,components/question_processing/*.py,components/llm_integration/*.py
+description: Patterns and standards for specialist agent development
+---
+
+# Specialist Agent Development Patterns
+
+## Agent Design Principles
+
+### 1. Single Expertise Domain
+Each agent must focus on ONE specific domain of intelligence:
+```python
+class ExecutiveIntelligenceAgent(SpecialistAgent):
+    """ONLY handles executive/leadership intelligence"""
+    expertise = ["executives", "leadership", "decision_makers", "board_members"]
+    
+    # ✅ GOOD: Focused on executive intelligence
+    async def find_decision_makers(self, company: str) -> List[Executive]:
+    
+    # ❌ BAD: Don't mix with investment intelligence
+    async def find_recent_investments(self, company: str):  # Wrong domain!
+```
+
+### 2. Structured Response Format
+All agents must return structured, consistent responses:
+```python
+@dataclass
+class StructuredAnswer:
+    """Standard response format for all specialist agents"""
+    agent_type: str
+    question: str
+    company: str
+    confidence_score: float  # 0.0 to 1.0
+    data: Dict[str, Any]
+    sources: List[str]
+    timestamp: str
+    recommendations: List[str]
+
+class SpecialistAgent:
+    async def answer_question(self, question: str, company: str) -> StructuredAnswer:
+        """All agents must implement this interface"""
+        pass
+```
+
+### 3. Question-Response Mapping
+Agents must clearly define what questions they can answer:
+```python
+class SectorInvestmentAgent(SpecialistAgent):
+    """Investment analysis by sector/industry"""
+    
+    answerable_questions = [
+        "sector investments",
+        "industry focus",
+        "portfolio breakdown",
+        "sector preferences",
+        "investment themes"
+    ]
+    
+    def can_answer(self, question: str) -> bool:
+        """Determine if this agent can handle the question"""
+        return any(keyword in question.lower() for keyword in self.answerable_questions)
+```
+
+## Specialist Agent Types
+
+### Intelligence Gathering Agents
+
+#### ExecutiveIntelligenceAgent
+```python
+class ExecutiveIntelligenceAgent(SpecialistAgent):
+    """Expert in executive and leadership intelligence"""
+    
+    expertise = ["executives", "leadership", "decision_makers", "board_members"]
+    
+    async def find_decision_makers(self, company: str, criteria: Dict = None) -> StructuredAnswer:
+        """Find decision makers with optional filtering criteria"""
+        # criteria = {"sector_focus": "healthcare", "role_level": "senior"}
+        
+    async def analyze_executive_background(self, executive_name: str, company: str) -> StructuredAnswer:
+        """Deep dive on specific executive"""
+        
+    async def map_decision_hierarchy(self, company: str) -> StructuredAnswer:
+        """Map decision-making structure and influence"""
+```
+
+#### InvestmentIntelligenceAgent
+```python
+class InvestmentIntelligenceAgent(SpecialistAgent):
+    """Expert in investment activity and portfolio analysis"""
+    
+    expertise = ["investments", "portfolio", "funding", "deals"]
+    
+    async def get_recent_investments(self, company: str, timeframe: str = "12_months") -> StructuredAnswer:
+        """Retrieve recent investment activity"""
+        
+    async def analyze_investment_patterns(self, company: str) -> StructuredAnswer:
+        """Identify investment strategies and preferences"""
+        
+    async def find_portfolio_companies(self, company: str, filters: Dict = None) -> StructuredAnswer:
+        """Get portfolio companies with optional filtering"""
+```
+
+#### SectorExpertiseAgent
+```python
+class SectorExpertiseAgent(SpecialistAgent):
+    """Expert in sector-specific intelligence"""
+    
+    def __init__(self, sector: str):
+        self.sector = sector  # "healthcare", "fintech", "enterprise_software"
+        self.expertise = [f"{sector}_investments", f"{sector}_trends", f"{sector}_companies"]
+    
+    async def get_sector_investments(self, company: str) -> StructuredAnswer:
+        """Get investments specific to this sector"""
+        
+    async def analyze_sector_strategy(self, company: str) -> StructuredAnswer:
+        """Analyze company's strategy in this sector"""
+```
+
+### Analysis Agents
+
+#### GapAnalysisAgent
+```python
+class GapAnalysisAgent(SpecialistAgent):
+    """Expert in identifying strategic gaps and opportunities"""
+    
+    expertise = ["gaps", "opportunities", "missing_investments", "strategy_analysis"]
+    
+    async def identify_portfolio_gaps(self, company: str, benchmark_data: Dict) -> StructuredAnswer:
+        """Identify gaps in investment portfolio"""
+        
+    async def suggest_opportunities(self, company: str, market_data: Dict) -> StructuredAnswer:
+        """Suggest investment opportunities based on gaps"""
+        
+    async def analyze_competitive_positioning(self, company: str, competitors: List[str]) -> StructuredAnswer:
+        """Compare positioning vs competitors"""
+```
+
+#### TrendAnalysisAgent
+```python
+class TrendAnalysisAgent(SpecialistAgent):
+    """Expert in market trends and timing analysis"""
+    
+    expertise = ["trends", "market_timing", "investment_cycles", "emerging_themes"]
+    
+    async def identify_investment_trends(self, company: str) -> StructuredAnswer:
+        """Identify trends in company's investment behavior"""
+        
+    async def predict_next_moves(self, company: str, market_context: Dict) -> StructuredAnswer:
+        """Predict likely next investment moves"""
+```
+
+### Contact Intelligence Agents
+
+#### ContactDiscoveryAgent
+```python
+class ContactDiscoveryAgent(SpecialistAgent):
+    """Expert in finding and validating contact information"""
+    
+    expertise = ["contact_info", "emails", "phone_numbers", "social_profiles"]
+    
+    async def find_contact_details(self, person_name: str, company: str) -> StructuredAnswer:
+        """Find contact information for specific person"""
+        
+    async def validate_contact_info(self, contact_data: Dict) -> StructuredAnswer:
+        """Validate and enrich existing contact information"""
+```
+
+#### RelationshipMappingAgent
+```python
+class RelationshipMappingAgent(SpecialistAgent):
+    """Expert in mapping professional relationships and networks"""
+    
+    expertise = ["relationships", "networks", "connections", "introductions"]
+    
+    async def map_professional_network(self, executive: str, company: str) -> StructuredAnswer:
+        """Map professional relationships and potential introductions"""
+        
+    async def find_mutual_connections(self, target_exec: str, your_network: List[str]) -> StructuredAnswer:
+        """Find mutual connections for warm introductions"""
+```
+
+## LLM Integration Patterns
+
+### Question Processing
+```python
+class QuestionDecomposer:
+    """LLM-powered question decomposition"""
+    
+    async def decompose_complex_question(self, question: str, company: str) -> List[SubQuestion]:
+        """Break complex questions into answerable sub-questions"""
+        prompt = f"""
+        Question: "{question}"
+        Company: "{company}"
+        
+        Break this into specific, answerable sub-questions that can be routed to specialist agents.
+        Each sub-question should target a specific domain of intelligence.
+        
+        Available agent types:
+        - ExecutiveIntelligenceAgent: decision makers, leadership
+        - InvestmentIntelligenceAgent: investments, deals, portfolio
+        - SectorExpertiseAgent: sector-specific analysis
+        - GapAnalysisAgent: opportunities, strategic gaps
+        - ContactDiscoveryAgent: contact information
+        
+        Return as structured JSON.
+        """
+        
+        # Use LLM to decompose question
+        response = await self.llm_client.generate(prompt)
+        return self._parse_subquestions(response)
+```
+
+### Intelligence Synthesis
+```python
+class IntelligenceSynthesizer:
+    """LLM-powered synthesis of agent responses"""
+    
+    async def synthesize_final_answer(self, original_question: str, agent_responses: List[StructuredAnswer]) -> FinalAnswer:
+        """Combine specialist responses into coherent answer"""
+        prompt = f"""
+        Original Question: "{original_question}"
+        
+        Agent Responses:
+        {json.dumps([response.to_dict() for response in agent_responses], indent=2)}
+        
+        Synthesize these responses into a coherent, actionable answer that:
+        1. Directly answers the original question
+        2. Provides specific recommendations
+        3. Highlights key insights and patterns
+        4. Identifies next steps and follow-up actions
+        5. Includes confidence levels and data sources
+        
+        Format as structured JSON with clear sections.
+        """
+        
+        # Use LLM to synthesize
+        response = await self.llm_client.generate(prompt)
+        return self._parse_final_answer(response)
+```
+
+## Data Quality Standards
+
+### Confidence Scoring
+```python
+class ConfidenceCalculator:
+    """Calculate confidence scores for agent responses"""
+    
+    def calculate_confidence(self, response_data: Dict, sources: List[str]) -> float:
+        """Calculate confidence score based on multiple factors"""
+        factors = {
+            "source_quality": self._score_source_quality(sources),
+            "data_completeness": self._score_completeness(response_data),
+            "cross_validation": self._score_cross_validation(response_data),
+            "recency": self._score_data_recency(response_data)
+        }
+        
+        # Weighted average
+        weights = {"source_quality": 0.3, "data_completeness": 0.3, "cross_validation": 0.3, "recency": 0.1}
+        return sum(factors[key] * weights[key] for key in factors)
+```
+
+### Source Tracking
+```python
+class SourceTracker:
+    """Track and validate intelligence sources"""
+    
+    def __init__(self):
+        self.source_reliability = {
+            "company_website": 0.9,
+            "press_releases": 0.8,
+            "linkedin": 0.7,
+            "news_articles": 0.6,
+            "social_media": 0.4
+        }
+    
+    def validate_source(self, url: str, content: str) -> Dict[str, Any]:
+        """Validate source reliability and relevance"""
+        return {
+            "url": url,
+            "type": self._classify_source(url),
+            "reliability_score": self._get_reliability(url),
+            "relevance_score": self._calculate_relevance(content),
+            "last_updated": self._get_last_modified(url)
+        }
+```
+
+## Agent Registration and Routing
+
+### Agent Registry
+```python
+class SpecialistAgentRegistry:
+    """Registry for all specialist agents"""
+    
+    def __init__(self):
+        self.agents = {}
+        self.capabilities_map = {}
+    
+    def register_agent(self, agent: SpecialistAgent):
+        """Register a specialist agent"""
+        self.agents[agent.name] = agent
+        for capability in agent.expertise:
+            if capability not in self.capabilities_map:
+                self.capabilities_map[capability] = []
+            self.capabilities_map[capability].append(agent.name)
+    
+    def find_agents_for_question(self, question: str) -> List[str]:
+        """Find agents capable of answering a question"""
+        question_lower = question.lower()
+        relevant_agents = set()
+        
+        for capability, agents in self.capabilities_map.items():
+            if capability in question_lower:
+                relevant_agents.update(agents)
+        
+        return list(relevant_agents)
+```
+
+### Smart Routing
+```python
+class IntelligentRouter:
+    """Route questions to optimal combination of agents"""
+    
+    def route_question(self, sub_question: SubQuestion) -> RoutingPlan:
+        """Create optimal routing plan for sub-question"""
+        # Analyze question complexity
+        complexity = self._analyze_question_complexity(sub_question)
+        
+        # Find primary and secondary agents
+        primary_agents = self.registry.find_agents_for_question(sub_question.question)
+        secondary_agents = self._find_supporting_agents(sub_question, primary_agents)
+        
+        return RoutingPlan(
+            primary_agents=primary_agents,
+            secondary_agents=secondary_agents,
+            parallel_execution=complexity["can_parallelize"],
+            timeout=complexity["estimated_time"]
+        )
+```
+
+## Testing Patterns
+
+### Agent Testing
+```python
+class AgentTestCase(unittest.IsolatedAsyncioTestCase):
+    """Base test case for specialist agents"""
+    
+    def setUp(self):
+        self.mock_data_sources = self._create_mock_sources()
+        self.test_company = "Test Corporation"
+    
+    async def test_agent_response_structure(self):
+        """Test that agent returns properly structured response"""
+        agent = self.create_test_agent()
+        response = await agent.answer_question("test question", self.test_company)
+        
+        self.assertIsInstance(response, StructuredAnswer)
+        self.assertGreaterEqual(response.confidence_score, 0.0)
+        self.assertLessEqual(response.confidence_score, 1.0)
+        self.assertIsInstance(response.sources, list)
+        self.assertIsInstance(response.recommendations, list)
+    
+    async def test_agent_can_answer_logic(self):
+        """Test agent's ability to determine if it can answer a question"""
+        agent = self.create_test_agent()
+        
+        # Test positive cases
+        for question in agent.expertise:
+            self.assertTrue(agent.can_answer(f"What are the {question} for {self.test_company}?"))
+        
+        # Test negative cases
+        unrelated_question = "What is the weather like?"
+        self.assertFalse(agent.can_answer(unrelated_question))
+```
+
+### Integration Testing
+```python
+class QuestionAnswerWorkflowTest(unittest.IsolatedAsyncioTestCase):
+    """Test complete question-answer workflow"""
+    
+    async def test_complex_question_decomposition(self):
+        """Test decomposition of complex multi-part questions"""
+        question = "For Abbey Capital, find healthcare decision makers and recent investments"
+        
+        decomposer = QuestionDecomposer()
+        sub_questions = await decomposer.decompose_question(question, "Abbey Capital")
+        
+        self.assertGreater(len(sub_questions), 1)
+        self.assertTrue(any("decision makers" in sq.question for sq in sub_questions))
+        self.assertTrue(any("investments" in sq.question for sq in sub_questions))
+    
+    async def test_end_to_end_qa_workflow(self):
+        """Test complete question to answer workflow"""
+        workflow = IntelligentQAWorkflow()
+        question = "Who are the key decision makers at Abbey Capital?"
+        
+        answer = await workflow.answer_question(question, "Abbey Capital")
+        
+        self.assertIsInstance(answer, FinalAnswer)
+        self.assertIn("decision_makers", answer.data)
+        self.assertGreater(answer.confidence_score, 0.5)
+```
+
+This pattern ensures specialist agents are:
+- **Focused**: Single domain expertise
+- **Consistent**: Standardized interfaces and responses
+- **Testable**: Clear testing patterns and expectations
+- **Scalable**: Easy to add new specialists
+- **Intelligent**: LLM-enhanced processing and synthesis

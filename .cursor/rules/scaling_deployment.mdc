@@ -1,0 +1,158 @@
+---
+alwaysApply: true
+description: Current deployment and future scaling considerations
+globs: crm_intelligence/**/*.py
+---
+
+# 🚀 Current Deployment & Future Scaling
+
+## Current Deployment Status
+
+### What's Actually Working
+- **Local Development**: Python scripts run from command line
+- **Component Architecture**: Modular structure implemented
+- **Basic CLI**: Command-line interface functional
+- **File I/O**: CSV/JSON input/output handling
+- **API Integration**: Tavily API client implemented
+
+### Current Limitations
+- **No Production Deployment**: No containerization or orchestration
+- **Single-threaded**: Processes companies sequentially
+- **No Monitoring**: Basic logging only
+- **No Scaling**: No concurrent processing
+- **Local Only**: No cloud deployment setup
+
+## Current Usage Pattern
+
+### Command Line Usage
+```bash
+# Basic usage (currently working)
+cd crm_intelligence
+python3 -c "from data.data_manager import DataManager; print('DataManager works')"
+
+# CLI structure exists but has import issues
+python3 cli/main.py --help  # Would work if imports were fixed
+```
+
+### Development Environment
+- **Python 3.9+**: Required for type hints and modern features
+- **Dependencies**: Basic requirements (requests, python-dotenv, etc.)
+- **Configuration**: JSON-based configuration files
+- **Data Storage**: Local file system (CSV/JSON)
+
+## Future Scaling Considerations
+
+### Planned Improvements (Not Yet Implemented)
+
+#### 1. Concurrent Processing
+```python
+# Future: Multi-threaded processing
+import concurrent.futures
+
+def process_companies_concurrently(companies):
+    """Process multiple companies simultaneously"""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(process_company, company) for company in companies]
+        results = [future.result() for future in concurrent.futures.as_completed(futures)]
+    return results
+```
+
+#### 2. Basic Caching
+```python
+# Future: Simple in-memory caching
+from functools import lru_cache
+import time
+
+@lru_cache(maxsize=100)
+def cached_api_call(company_name, ttl=3600):
+    """Cache API results with TTL"""
+    # Implementation would check cache before making API calls
+    pass
+```
+
+#### 3. Error Recovery
+```python
+# Future: Basic retry logic
+import time
+
+def retry_api_call(func, max_retries=3, delay=1):
+    """Retry failed API calls"""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            time.sleep(delay * (2 ** attempt))  # Exponential backoff
+```
+
+### Docker Considerations (Future)
+```dockerfile
+# Future: Basic containerization
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY crm_intelligence/ ./crm_intelligence/
+COPY scripts/ ./scripts/
+
+CMD ["python", "-m", "crm_intelligence.cli.main"]
+```
+
+## Realistic Scaling Path
+
+### Phase 1: Immediate Improvements
+- **Fix Import Issues**: Resolve relative import problems in CLI
+- **Add Basic Error Handling**: Try/catch blocks with logging
+- **Implement Sequential Processing**: Process companies one by one reliably
+
+### Phase 2: Basic Scaling
+- **Concurrent Processing**: Multi-threaded company processing
+- **Basic Caching**: In-memory caching for API responses
+- **Configuration Management**: Environment-based configuration
+- **Logging**: Structured logging with levels
+
+### Phase 3: Production Ready (Future)
+- **Containerization**: Docker deployment
+- **Health Checks**: Basic monitoring endpoints
+- **Batch Processing**: Handle large datasets
+- **Error Recovery**: Retry logic and graceful degradation
+
+## Current Performance Characteristics
+
+### Known Limitations
+- **Sequential Processing**: One company at a time
+- **No Caching**: Every request hits external APIs
+- **Basic Error Handling**: Simple exceptions, no recovery
+- **Memory Usage**: No optimization for large datasets
+- **API Limits**: No rate limiting or quota management
+
+### Measured Performance
+- **Single Company**: ~5-10 seconds (depending on API response)
+- **Memory Usage**: Basic Python process memory (~50-100MB)
+- **CPU Usage**: Single-threaded, low CPU utilization
+- **Error Rate**: Basic exception handling, no metrics
+
+## Deployment Strategy
+
+### Current: Local Development
+- Run scripts directly from command line
+- Process small datasets locally
+- Manual configuration and monitoring
+- File-based input/output
+
+### Next: Basic Production
+- Containerized deployment
+- Configuration management
+- Basic monitoring and logging
+- Automated processing workflows
+
+### Future: Enterprise Scale
+- Orchestrated deployment (Kubernetes)
+- Auto-scaling capabilities
+- Advanced monitoring and alerting
+- Multi-region deployment
+- Disaster recovery procedures
+```

@@ -1,0 +1,766 @@
+---
+alwaysApply: true
+description: Development workflow patterns and best practices
+globs: crm_intelligence/**/*.py, tests/**/*.py
+---
+
+# 🚀 Development Workflow
+
+## Component Development Lifecycle
+
+### 1. Component Planning
+```python
+# Before creating a component, define:
+class ComponentSpec:
+    """Component specification template"""
+
+    name: str = "ComponentName"
+    purpose: str = "What does this component do?"
+    input_format: Dict[str, Any] = {
+        "required_fields": ["field1", "field2"],
+        "optional_fields": ["field3"],
+        "example": {"field1": "value1", "field2": "value2"}
+    }
+    output_format: Dict[str, Any] = {
+        "success_fields": ["result", "confidence"],
+        "error_fields": ["error", "error_code"],
+        "example": {"result": "data", "confidence": 0.85}
+    }
+    dependencies: List[str] = ["APIClient", "ConfigurationManager"]
+    estimated_lines: int = 80
+    test_cases: List[str] = [
+        "test_successful_execution",
+        "test_error_handling",
+        "test_input_validation"
+    ]
+```
+
+### 2. Component Creation Template
+```python
+"""
+[ComponentName] Component
+[Brief description of what this component does]
+
+Based on [proven methodology or success case]
+"""
+
+from typing import Dict, List, Any, Optional
+import logging
+from datetime import datetime
+from .base_component import BaseComponent
+
+class [ComponentName]Component(BaseComponent):
+    """
+    [ComponentName] component for [specific purpose]
+
+    Responsibilities:
+    - [Responsibility 1]
+    - [Responsibility 2]
+    - [Responsibility 3]
+
+    Dependencies:
+    - [Dependency 1]: [Purpose]
+    - [Dependency 2]: [Purpose]
+    """
+
+    def __init__(self, config: Dict[str, Any], dependencies: Optional[Dict[str, Any]] = None):
+        super().__init__(config)
+        self.dependencies = dependencies or {}
+
+        # Initialize component-specific attributes
+        self.max_retries = config.get('max_retries', 3)
+        self.timeout = config.get('timeout', 30)
+
+        # Validate dependencies
+        self._validate_dependencies()
+
+    def _validate_dependencies(self):
+        """Validate required dependencies"""
+        required_deps = ['api_client', 'cache_manager']
+        for dep in required_deps:
+            if dep not in self.dependencies:
+                raise ValueError(f"Missing required dependency: {dep}")
+
+    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute component logic
+
+        Args:
+            input_data: Input data dictionary
+
+        Returns:
+            Output data dictionary with results or error
+        """
+        try:
+            # Step 1: Validate input
+            if not self._validate_input(input_data):
+                return self._create_error_response("INVALID_INPUT", "Invalid input data")
+
+            # Step 2: Check cache
+            cache_key = self._generate_cache_key(input_data)
+            cached_result = self._check_cache(cache_key)
+            if cached_result:
+                return cached_result
+
+            # Step 3: Execute main logic
+            result = self._execute_main_logic(input_data)
+
+            # Step 4: Validate and format output
+            if not self._validate_output(result):
+                return self._create_error_response("INVALID_OUTPUT", "Invalid output data")
+
+            # Step 5: Cache result
+            self._cache_result(cache_key, result)
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Component execution failed: {e}")
+            return self._create_error_response("EXECUTION_ERROR", str(e))
+
+    def _validate_input(self, input_data: Dict[str, Any]) -> bool:
+        """Validate input data"""
+        required_fields = ['target']
+        for field in required_fields:
+            if field not in input_data:
+                return False
+        return True
+
+    def _execute_main_logic(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Main component logic - OVERRIDE IN SUBCLASS"""
+        raise NotImplementedError("Subclasses must implement _execute_main_logic")
+
+    def _validate_output(self, output_data: Dict[str, Any]) -> bool:
+        """Validate output data"""
+        required_fields = ['component', 'target', 'timestamp']
+        for field in required_fields:
+            if field not in output_data:
+                return False
+        return True
+
+    def _generate_cache_key(self, input_data: Dict[str, Any]) -> str:
+        """Generate cache key for input data"""
+        target = input_data.get('target', '')
+        return f"{self.name}:{target}:{hash(str(input_data))}"
+
+    def _check_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Check cache for existing result"""
+        cache_manager = self.dependencies.get('cache_manager')
+        if cache_manager:
+            return cache_manager.get(cache_key)
+        return None
+
+    def _cache_result(self, cache_key: str, result: Dict[str, Any]):
+        """Cache result data"""
+        cache_manager = self.dependencies.get('cache_manager')
+        if cache_manager:
+            cache_manager.set(cache_key, result)
+
+    def _create_error_response(self, error_code: str, message: str) -> Dict[str, Any]:
+        """Create standardized error response"""
+        return {
+            "component": self.name,
+            "error": message,
+            "error_code": error_code,
+            "timestamp": datetime.now().isoformat(),
+            "target": "unknown"
+        }
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get component status and metrics"""
+        return {
+            "component": self.name,
+            "status": "operational",
+            "config": self.config,
+            "dependencies": list(self.dependencies.keys())
+        }
+```
+
+### 3. Component Testing Template
+```python
+"""
+Tests for [ComponentName] Component
+"""
+
+import pytest
+from unittest.mock import Mock, patch
+from datetime import datetime
+from crm_intelligence.components.[component_module] import [ComponentName]Component
+
+class Test[ComponentName]Component:
+    """Test suite for [ComponentName]Component"""
+
+    @pytest.fixture
+    def config(self):
+        """Test configuration"""
+        return {
+            "max_retries": 3,
+            "timeout": 30,
+            "cache_enabled": True
+        }
+
+    @pytest.fixture
+    def mock_dependencies(self):
+        """Mock component dependencies"""
+        return {
+            "api_client": Mock(),
+            "cache_manager": Mock()
+        }
+
+    @pytest.fixture
+    def component(self, config, mock_dependencies):
+        """Create component instance"""
+        return [ComponentName]Component(config, mock_dependencies)
+
+    def test_initialization_success(self, component):
+        """Test successful component initialization"""
+        assert component.name == "[ComponentName]Component"
+        assert component.max_retries == 3
+        assert component.timeout == 30
+
+    def test_initialization_missing_dependency(self, config):
+        """Test initialization failure with missing dependency"""
+        incomplete_deps = {"api_client": Mock()}  # Missing cache_manager
+
+        with pytest.raises(ValueError, match="Missing required dependency"):
+            [ComponentName]Component(config, incomplete_deps)
+
+    def test_execute_success(self, component, mock_dependencies):
+        """Test successful execution"""
+        input_data = {"target": "Test Target"}
+
+        # Mock successful execution
+        mock_dependencies["api_client"].some_method.return_value = {"result": "success"}
+
+        result = component.execute(input_data)
+
+        assert result["component"] == "[ComponentName]Component"
+        assert result["target"] == "Test Target"
+        assert "timestamp" in result
+        assert "error" not in result
+
+    def test_execute_invalid_input(self, component):
+        """Test execution with invalid input"""
+        invalid_input = {"invalid_field": "value"}
+
+        result = component.execute(invalid_input)
+
+        assert result["error_code"] == "INVALID_INPUT"
+        assert "Invalid input data" in result["error"]
+
+    def test_execute_api_error(self, component, mock_dependencies):
+        """Test execution with API error"""
+        input_data = {"target": "Test Target"}
+
+        # Mock API error
+        mock_dependencies["api_client"].some_method.side_effect = Exception("API Error")
+
+        result = component.execute(input_data)
+
+        assert result["error_code"] == "EXECUTION_ERROR"
+        assert "API Error" in result["error"]
+
+    def test_cache_hit(self, component, mock_dependencies):
+        """Test cache hit scenario"""
+        input_data = {"target": "Test Target"}
+        cached_result = {
+            "component": "[ComponentName]Component",
+            "result": "cached_data",
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # Mock cache hit
+        mock_dependencies["cache_manager"].get.return_value = cached_result
+
+        result = component.execute(input_data)
+
+        # Should return cached result without calling API
+        assert result == cached_result
+        mock_dependencies["api_client"].some_method.assert_not_called()
+
+    def test_cache_miss(self, component, mock_dependencies):
+        """Test cache miss scenario"""
+        input_data = {"target": "Test Target"}
+
+        # Mock cache miss then successful API call
+        mock_dependencies["cache_manager"].get.return_value = None
+        mock_dependencies["api_client"].some_method.return_value = {"result": "fresh_data"}
+
+        result = component.execute(input_data)
+
+        # Should call API and cache result
+        mock_dependencies["api_client"].some_method.assert_called_once()
+        mock_dependencies["cache_manager"].set.assert_called_once()
+
+    def test_get_status(self, component):
+        """Test status reporting"""
+        status = component.get_status()
+
+        assert status["component"] == "[ComponentName]Component"
+        assert status["status"] == "operational"
+        assert "config" in status
+        assert "dependencies" in status
+
+    @pytest.mark.parametrize("invalid_input", [
+        {},
+        {"target": ""},
+        {"target": None},
+        {"wrong_field": "value"}
+    ])
+    def test_input_validation_edge_cases(self, component, invalid_input):
+        """Test input validation with edge cases"""
+        result = component.execute(invalid_input)
+
+        assert result["error_code"] == "INVALID_INPUT"
+
+    def test_output_validation_failure(self, component, mock_dependencies):
+        """Test handling of invalid output from main logic"""
+        input_data = {"target": "Test Target"}
+
+        # Mock main logic returning invalid output
+        with patch.object(component, '_execute_main_logic') as mock_main:
+            mock_main.return_value = {"invalid_output": "missing_required_fields"}
+
+            result = component.execute(input_data)
+
+            assert result["error_code"] == "INVALID_OUTPUT"
+```
+
+## Development Workflow Patterns
+
+### 1. Feature Branch Workflow
+```bash
+# Start new feature
+git checkout -b feature/component-name
+
+# Make changes with tests
+# Add component code
+# Add comprehensive tests
+# Update documentation
+
+# Run tests
+python -m pytest tests/components/test_component_name.py -v
+
+# Commit changes
+git add .
+git commit -m "feat: Add ComponentName component
+
+- Implements core functionality
+- Includes comprehensive tests
+- Updates documentation
+- Follows component patterns"
+
+# Push and create PR
+git push origin feature/component-name
+```
+
+### 2. Component Integration Testing
+```python
+# tests/integration/test_component_integration.py
+import pytest
+from crm_intelligence.core.pipeline import IntelligencePipeline
+from crm_intelligence.components.intelligence.company_research import CompanyResearchComponent
+from crm_intelligence.components.intelligence.contact_intelligence import ContactIntelligenceComponent
+
+class TestComponentIntegration:
+    """Test component integration in pipelines"""
+
+    @pytest.fixture
+    def pipeline(self):
+        """Create test pipeline"""
+        components = [
+            CompanyResearchComponent(self._get_test_config()),
+            ContactIntelligenceComponent(self._get_test_config())
+        ]
+        return IntelligencePipeline(components)
+
+    def test_end_to_end_pipeline(self, pipeline):
+        """Test complete pipeline execution"""
+        targets = ["3EDGE Asset Management"]
+
+        results = pipeline.execute(targets)
+
+        assert len(results["final_results"]) == 1
+        assert results["targets_processed"] == 1
+        assert "processing_time" in results
+
+    def test_pipeline_error_handling(self, pipeline):
+        """Test pipeline error handling"""
+        targets = ["Invalid Company Name"]
+
+        results = pipeline.execute(targets)
+
+        # Should handle errors gracefully
+        assert len(results["errors"]) >= 0  # May or may not have errors
+        assert results["targets_processed"] == 1
+
+    def _get_test_config(self):
+        """Get test configuration"""
+        return {
+            "max_retries": 1,
+            "timeout": 5,
+            "cache_enabled": False
+        }
+```
+
+### 3. Performance Testing
+```python
+# tests/performance/test_component_performance.py
+import pytest
+import time
+from crm_intelligence.components.intelligence.company_research import CompanyResearchComponent
+
+class TestComponentPerformance:
+    """Performance tests for components"""
+
+    @pytest.fixture
+    def component(self):
+        """Create component for performance testing"""
+        config = {"max_retries": 3, "timeout": 30}
+        return CompanyResearchComponent(config)
+
+    def test_execution_time(self, component):
+        """Test component execution time"""
+        input_data = {"target": "3EDGE Asset Management"}
+
+        start_time = time.time()
+        result = component.execute(input_data)
+        execution_time = time.time() - start_time
+
+        # Should complete within reasonable time
+        assert execution_time < 10.0  # 10 seconds max
+        assert result["component"] == "CompanyResearchComponent"
+
+    def test_memory_usage(self, component):
+        """Test component memory usage"""
+        import psutil
+        import os
+
+        process = psutil.Process(os.getpid())
+        initial_memory = process.memory_info().rss
+
+        # Execute component multiple times
+        for i in range(10):
+            input_data = {"target": f"Test Company {i}"}
+            component.execute(input_data)
+
+        final_memory = process.memory_info().rss
+        memory_increase = final_memory - initial_memory
+
+        # Memory increase should be reasonable
+        max_memory_mb = 50 * 1024 * 1024  # 50MB
+        assert memory_increase < max_memory_mb
+
+    def test_concurrent_execution(self, component):
+        """Test concurrent component execution"""
+        import concurrent.futures
+        import threading
+
+        results = []
+        errors = []
+
+        def execute_with_tracking(input_data):
+            try:
+                result = component.execute(input_data)
+                results.append(result)
+            except Exception as e:
+                errors.append(e)
+
+        # Execute multiple requests concurrently
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = []
+            for i in range(10):
+                input_data = {"target": f"Concurrent Test {i}"}
+                future = executor.submit(execute_with_tracking, input_data)
+                futures.append(future)
+
+            # Wait for all to complete
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
+
+        # All executions should succeed
+        assert len(results) == 10
+        assert len(errors) == 0
+```
+
+## Code Quality Standards
+
+### 1. Linting and Formatting
+```python
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        language_version: python3
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=88, --extend-ignore=E203,W503]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+```
+
+### 2. Documentation Standards
+```python
+# docs/component_documentation.py
+"""
+Component Documentation Generator
+
+Automatically generates documentation for all components
+"""
+
+import inspect
+from pathlib import Path
+from crm_intelligence.core.component_base import BaseComponent
+
+class ComponentDocumentationGenerator:
+    """Generate comprehensive component documentation"""
+
+    def generate_docs(self, component_classes):
+        """Generate documentation for components"""
+
+        docs = {}
+
+        for component_class in component_classes:
+            docs[component_class.__name__] = self._document_component(component_class)
+
+        return docs
+
+    def _document_component(self, component_class):
+        """Document a single component"""
+
+        # Get class docstring
+        docstring = inspect.getdoc(component_class) or ""
+
+        # Get method signatures
+        methods = {}
+        for name, method in inspect.getmembers(component_class, predicate=inspect.isfunction):
+            if not name.startswith('_'):
+                signature = inspect.signature(method)
+                methods[name] = {
+                    "signature": str(signature),
+                    "docstring": inspect.getdoc(method) or "",
+                    "parameters": list(signature.parameters.keys())
+                }
+
+        # Get class attributes
+        attributes = {}
+        for name, value in inspect.getmembers(component_class):
+            if not name.startswith('_') and not callable(value):
+                attributes[name] = str(type(value).__name__)
+
+        return {
+            "name": component_class.__name__,
+            "docstring": docstring,
+            "methods": methods,
+            "attributes": attributes,
+            "file": inspect.getfile(component_class),
+            "line_number": inspect.getsourcelines(component_class)[1]
+        }
+```
+
+## Deployment Patterns
+
+### 1. Environment Configuration
+```python
+# config/environments.py
+import os
+from typing import Dict, Any
+
+class EnvironmentConfig:
+    """Environment-specific configuration management"""
+
+    ENVIRONMENTS = {
+        "development": {
+            "debug": True,
+            "log_level": "DEBUG",
+            "max_workers": 2,
+            "cache_enabled": False
+        },
+        "staging": {
+            "debug": False,
+            "log_level": "INFO",
+            "max_workers": 10,
+            "cache_enabled": True
+        },
+        "production": {
+            "debug": False,
+            "log_level": "WARNING",
+            "max_workers": 50,
+            "cache_enabled": True
+        }
+    }
+
+    @classmethod
+    def get_environment_config(cls, environment: str = None) -> Dict[str, Any]:
+        """Get configuration for specific environment"""
+        env = environment or os.getenv('PLATFORM_ENV', 'development')
+        return cls.ENVIRONMENTS.get(env, cls.ENVIRONMENTS['development'])
+
+    @classmethod
+    def is_development(cls) -> bool:
+        """Check if running in development"""
+        return cls.get_environment_config().get('debug', False)
+
+    @classmethod
+    def is_production(cls) -> bool:
+        """Check if running in production"""
+        env = os.getenv('PLATFORM_ENV', 'development')
+        return env == 'production'
+```
+
+### 2. Health Checks
+```python
+# crm_intelligence/core/health.py
+from typing import Dict, Any
+import time
+
+class HealthChecker:
+    """System health monitoring"""
+
+    def __init__(self, components):
+        self.components = components
+        self.start_time = time.time()
+
+    def check_health(self) -> Dict[str, Any]:
+        """Perform comprehensive health check"""
+
+        health_status = {
+            "status": "healthy",
+            "timestamp": time.time(),
+            "uptime": time.time() - self.start_time,
+            "components": {},
+            "system": self._check_system_health()
+        }
+
+        # Check each component
+        for component in self.components:
+            component_health = self._check_component_health(component)
+            health_status["components"][component.name] = component_health
+
+            # If any component is unhealthy, mark system unhealthy
+            if component_health["status"] != "healthy":
+                health_status["status"] = "unhealthy"
+
+        return health_status
+
+    def _check_component_health(self, component) -> Dict[str, Any]:
+        """Check individual component health"""
+        try:
+            status = component.get_status()
+            return {
+                "status": "healthy",
+                "details": status,
+                "last_check": time.time()
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+                "last_check": time.time()
+            }
+
+    def _check_system_health(self) -> Dict[str, Any]:
+        """Check overall system health"""
+        import psutil
+
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=1),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_usage": psutil.disk_usage('/').percent
+        }
+```
+
+## Continuous Integration
+
+### 1. GitHub Actions Workflow
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+
+    - name: Run linting
+      run: |
+        flake8 crm_intelligence/ tests/
+        black --check crm_intelligence/ tests/
+        mypy crm_intelligence/
+
+    - name: Run tests
+      run: |
+        pytest tests/ -v --cov=crm_intelligence --cov-report=xml
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+```
+
+### 2. Pre-commit Hooks
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: component-validation
+        name: Validate component structure
+        entry: python scripts/validate_component.py
+        language: system
+        files: crm_intelligence/components/**/*.py
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: test-validation
+        name: Validate test coverage
+        entry: python scripts/validate_tests.py
+        language: system
+        files: crm_intelligence/**/*.py
+        pass_filenames: false
+```

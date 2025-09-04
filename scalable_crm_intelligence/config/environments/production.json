@@ -1,0 +1,15 @@
+{
+  "environment": "production",
+  "log_level": "INFO",
+  "components": {
+    "company_intelligence": {
+      "enabled": true,
+      "rate_limit": 1.0,
+      "search_depth": "comprehensive"
+    },
+    "executive_intelligence": {
+      "enabled": true,
+      "max_executives": 10
+    }
+  }
+}

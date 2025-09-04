@@ -1,0 +1,132 @@
+{
+  "company": "Abbey Capital",
+  "analysis_timestamp": "2025-08-30T20:01:23.857682",
+  "decision_makers": {
+    "query": "Abbey Capital decision makers executives leadership team partners directors investment committee",
+    "tavily_answer": "Tony Gannon leads Abbey Capital's investment committee; Patrick manages risk, Rory oversees Treasury operations, and John directs research. The firm is based in Dublin and focuses on managed futures.",
+    "sources": [
+      {
+        "url": "https://thehedgefundjournal.com/abbey-capital-cta-portfolio-diversification/",
+        "title": "Abbey Capital Celebrates 23 Years - The Hedge Fund Journal",
+        "content": "Abbey Capital's investment committee is led by founder and CIO, Tony Gannon, who has been in the managed futures industry since the 1980s, as",
+        "score": 0.614464,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.bsx.com/CompanyDocuments/1099936944/2022-12-31%20ACMMFL%20-%20AFS%20-%20Final.pdf",
+        "title": "[PDF] Abbey Capital Multi-Manager Fund Limited",
+        "content": "Directors. Investment Manager. Peter Carney. (Non-Executive Director). Abbey Capital Limited. 1-2 Cavendish Row. Nicholas Hoskins. Dublin 1. (",
+        "score": 0.6133529,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.abbeycapital.com/our-people/",
+        "title": "Our People - Abbey Capital",
+        "content": "Patrick is responsible for building a culture of risk management at Abbey Capital, leading our work to monitor, anticipate and respond to risks. Rory leads the team responsible for developing and supporting our Treasury, Reporting, Fund Operations & Devops systems. As Director of Research, John oversees Abbey\u2019s investment process end-to-end, including manager analysis and due diligence, quantitative research, portfolio construction, market analysis and liquidity management. The information contained herein is not intended to and shall not in any way constitute an invitation to invest in any of the funds managed by Abbey Capital. Prospective investors should consult with their own professional advisors before investing in any of the funds managed by Abbey Capital.",
+        "score": 0.6021791,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.zoominfo.com/c/abbey-capital-llc/359963454",
+        "title": "Abbey Capital - Overview, News & Similar companies | ZoomInfo.com",
+        "content": "Abbey Capital Ltd. is an Irish-owned alternative investment manager based in Dublin, specializing in managed futures and multi-manager strategies.",
+        "score": 0.5278769,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.bsx.com/CompanyDocuments/1099936944/ACMMF%20Ltd%20-%2031%20December%202023%20-%20Final%20Signed(659675.1).pdf",
+        "title": "[PDF] Abbey Capital Multi-Manager Fund Limited",
+        "content": "Investment Committee that are also members of the board are authorized to take any decision that affects the risk profile of the Investment",
+        "score": 0.4948006,
+        "raw_content": null
+      }
+    ],
+    "source_count": 5
+  },
+  "recent_investments": {
+    "query": "Abbey Capital recent investments portfolio companies deals 2023 2024 funding acquisitions",
+    "tavily_answer": "Abbey Capital invested in several portfolio companies in 2023 and 2024. Their 2023 fiscal year returns were negative. Current data ends in August 2025.",
+    "sources": [
+      {
+        "url": "https://radientanalytics.com/firm/adv/abbey-capital-limited-153498",
+        "title": "ABBEY CAPITAL LIMITED | Form ADV - RADiENT Analytics",
+        "content": "The company manages approximately $7.6 billion in assets under management on a discretionary basis as of June 30, 2024. Abbey Capital is owned",
+        "score": 0.32059842,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.abbeycapital.com/wp-content/uploads/2025/05/Abbey-Capital-Futures-Strategy-Prospectus-2024-with-May-2025-Sticker.pdf",
+        "title": "[PDF] THE RBB FUND INC. Abbey Capital Futures Strategy Fund (the ...",
+        "content": "investments, describe the Fund's performance, list portfolio holdings and discuss recent market conditions and economic trends. The annual report includes",
+        "score": 0.26880473,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.abbeycapital.com/wp-content/uploads/2025/05/fp0091742-11_RBB-Abbey-CFS_FinancialStatements-S_2025_Final_web.pdf",
+        "title": "[PDF] Abbey Capital Futures Strategy Fund",
+        "content": "The Fund is an investment company and follows accounting and reporting guidance in the Financial Accounting. Standards Board (\u201cFASB\u201d) Accounting",
+        "score": 0.18133602,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.sec.gov/Archives/edgar/data/831114/000139834423020314/fp0084554-12_ncsr.htm",
+        "title": "Abbey Capital Futures Strategy Fund - SEC.gov",
+        "content": "The Abbey Capital Futures Strategy Fund (the \u201cFund\u201d) Class I Shares returned -2.83% net of fees for the 12-month fiscal year ended August 31, 2023. Negative",
+        "score": 0.17736903,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.abbeycapital.com/abbey-capital-futures-strategy-fund/",
+        "title": "Abbey Capital Futures Strategy Fund",
+        "content": "The Abbey Capital Futures Strategy Fund (the \u201cFund\u201d) is an actively managed mutual fund which will seek long-term capital appreciation.",
+        "score": 0.17317663,
+        "raw_content": null
+      }
+    ],
+    "source_count": 5
+  },
+  "investment_gaps": {
+    "query": "Abbey Capital investment strategy gaps opportunities sectors missing from portfolio whitespace",
+    "tavily_answer": "Abbey Capital's portfolio lacks investments in social housing and rural development sectors. Opportunities in these areas remain largely unexplored. Focus on sustainable and community-driven projects could fill gaps.",
+    "sources": [
+      {
+        "url": "https://issuu.com/cultureliverpool/docs/liverpool_cultural_strategy_2025-2030",
+        "title": "Liverpool Cultural Strategy 2025-2030 - Issuu",
+        "content": "This strategy is for people across the culture sector and those who value and champion culture's abi ity to make a difference as part of public hea th,",
+        "score": 0.022892075,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.sec.gov/Archives/edgar/data/1649373/000119312520068594/0001193125-20-068594.txt",
+        "title": "0001193125-20-068594.txt - SEC.gov",
+        "content": "... capital or common stock as of the close of the period covered by the annual ... strategy, albeit the principal business activities of the Santander UK",
+        "score": 0.021420047,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.madisonmaine.com/images/GRI_Madison_ME_Report_Final_June_2021.pdf",
+        "title": "[PDF] A Baseline Resilience Assessment to Support Opportunity Zone ...",
+        "content": "A Baseline Resilience Assessment to Support Opportunity Zone Investment: Madison, Maine Prepared for the State of Maine June 2021 Front and Back Cover: https:/ /commons.wikimedia.org/wiki/File:Madison_maine_mill.jpg Prepared by With support from the U.S. Economic Development Administration, this report has been prepared by the Global Resilience Institute at Northeastern University for the use and benefit of the State of Maine and the community of Madison, Maine. Retrieved from: https:/ /www.rd.usda.gov/ programs-services/community-facilities-direct-loan-grant-program/me 157 USDA Rural Development. Retrieved from: https:/ /www.rd.usda.gov/pro\u00ad grams-services/rural-economic-development-loan-grant-program 158 Department of Housing and Urban Development. Retrieved from: https:/ /www.rd.usda.gov/programs-ser\u00ad vices/community-facilities-technical-assistance-and-training-grant 162 Opportunity Zones Investing Guide. Retrieved from: https:/ /www.mainetech\u00ad nology.org/wp-content/uploads/2015/05/SG-Overview-of-MTI-Business-Innovation-Program-GIFTS-UPDATE-7.26.16.pdf 189 Maine Department of Economic and Community Development. Retrieved from: https:/ /www.famemaine.com/business/pro\u00ad grams/bonds/municipal-securities-approval-program/ 191 Maine Department of Economic and Community Development.",
+        "score": 0.015920192,
+        "raw_content": null
+      },
+      {
+        "url": "https://papers.ssrn.com/sol3/Delivery.cfm/SSRN_ID4052973_code5113797.pdf?abstractid=4052973&mirid=1",
+        "title": "[PDF] Impact Investing in Social Property: A Case Study of Cheyne Capital",
+        "content": "It further examines the challenges that Cheyne Capital faced as a new social landlord, particularly those relating to inefficiencies in building procurement, its need to develop a viable real estate scheme and its pledge to demonstrate a measurable social impact, alongside a financial return, for each investment. **Keywords:** impact investing; impact real estate; social housing; sustainable real estate; architecture; hedge funds; building procurement; public-private partnerships; social impact measurement; Social Investment Finance Intermediaries (SIFIs) Jarvis, Serena, Impact Investing in Social Property: A Case Study of Cheyne Capital (2021). You can set your browser to block or alert you about these cookies, but some parts of the site will not then work. These cookies may be set through our site by our advertising partners.",
+        "score": 0.015737634,
+        "raw_content": null
+      },
+      {
+        "url": "https://www.diplomaplc.com/media/kfkfe4ej/diploma-2024-annual-report-1.pdf",
+        "title": "[PDF] ANNUAL REPORT AND ACCOUNTS 2024 - Diploma PLC",
+        "content": "As a decentralised and diversified Group, a strong purpose ensures that every colleague and every business is aligned.",
+        "score": 0.013512635,
+        "raw_content": null
+      }
+    ],
+    "source_count": 5
+  },
+  "total_sources": 15,
+  "method": "tavily_semantic_search_with_llm"
+}

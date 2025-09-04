@@ -1,0 +1,230 @@
+---
+alwaysApply: true
+description: Overview of all Cursor Rules and how to use them
+---
+
+# 📚 CRM Intelligence Platform - Cursor Rules Guide
+
+## 🎯 Rules Overview
+
+This comprehensive set of Cursor Rules documents our **component-based CRM Intelligence Platform** that scales from development to enterprise production.
+
+## 📋 Available Rules
+
+### Core Architecture Rules
+
+#### 1. **Architecture Overview** (`architecture_overview.mdc`)
+```
+Purpose: Core architecture and design philosophy
+Applies To: All project files
+Key Concepts:
+✅ Component-based design (50-200 lines per component)
+✅ Single responsibility principle
+✅ Configuration-driven architecture
+✅ Basic error handling and logging
+✅ Modular structure for maintainability
+```
+
+#### 2. **Component Patterns** (`component_patterns.mdc`)
+```
+Purpose: Component design patterns and implementation guidelines
+Applies To: crm_intelligence/**/*.py
+Key Concepts:
+✅ Base component structure with ABC
+✅ Intelligence, Data, and Content component types
+✅ Dependency injection patterns
+✅ Error handling and validation
+✅ Testing patterns and fixtures
+```
+
+#### 3. **Data Flow Patterns** (`data_flow_patterns.mdc`)
+```
+Purpose: Data flow patterns and pipeline orchestration
+Applies To: crm_intelligence/**/*.py
+Key Concepts:
+✅ Intelligence → Personalization → Outreach pipeline
+✅ Component data contracts and validation
+✅ Basic error recovery
+✅ Sequential processing patterns
+```
+
+#### 4. **Configuration Management** (`configuration_management.mdc`)
+```
+Purpose: Configuration management and environment setup
+Applies To: crm_intelligence/**/*.py, config/**/*.json
+Key Concepts:
+✅ JSON-based configuration files
+✅ Environment variable support
+✅ Configuration validation
+✅ Basic settings management
+```
+
+#### 5. **Development Workflow** (`development_workflow.mdc`)
+```
+Purpose: Development workflow patterns and best practices
+Applies To: crm_intelligence/**/*.py, tests/**/*.py
+Key Concepts:
+✅ Component development lifecycle
+✅ Basic testing strategies
+✅ Code quality standards
+✅ Development best practices
+```
+
+#### 6. **Testing Patterns** (`testing_patterns.mdc`)
+```
+Purpose: Testing patterns and quality assurance guidelines
+Applies To: tests/**/*.py, crm_intelligence/**/*.py
+Key Concepts:
+✅ Unit testing with pytest
+✅ Component testing patterns
+✅ Basic integration testing
+✅ Test fixtures and mocking
+```
+
+#### 7. **Scaling & Deployment** (`scaling_deployment.mdc`)
+```
+Purpose: Current deployment and future scaling considerations
+Applies To: crm_intelligence/**/*.py
+Key Concepts:
+✅ Local development deployment
+✅ Future scaling considerations
+✅ Basic performance optimization
+✅ Realistic scaling roadmap
+```
+
+## 🚀 How to Use These Rules
+
+### For New Development
+
+#### Adding a New Component
+```python
+# 1. Refer to component_patterns.mdc for base structure
+# 2. Follow the component template provided
+# 3. Use dependency injection pattern
+# 4. Include basic error handling
+# 5. Add corresponding unit tests
+
+# Example: Creating a new intelligence gatherer
+class NewIntelligenceComponent(BaseComponent):
+    """New intelligence gathering component - ~80 lines"""
+
+    def __init__(self, config, dependencies):
+        super().__init__(config)
+        self.api_client = dependencies.get('api_client')
+        self._validate_dependencies()
+
+    def execute(self, input_data):
+        # Implementation following patterns from component_patterns.mdc
+        pass
+```
+
+#### Testing Components
+```python
+# 1. Refer to testing_patterns.mdc for test structure
+# 2. Use fixtures for test data and dependencies
+# 3. Test both success and failure scenarios
+# 4. Follow naming conventions and patterns
+
+# Example: Component unit test
+def test_component_success(component, mock_dependencies):
+    """Test successful component execution"""
+    # Arrange
+    input_data = {"target": "Test Company"}
+
+    # Act
+    result = component.execute(input_data)
+
+    # Assert
+    assert result["component"] == "TestComponent"
+    assert "timestamp" in result
+```
+
+### For Current Development
+
+#### What Works Now
+```bash
+# Current working functionality:
+cd crm_intelligence
+python3 -c "from data.data_manager import DataManager; print('DataManager works')"
+```
+
+#### What Needs Fixing
+```bash
+# These have issues that need to be resolved:
+python3 cli/main.py --help  # Import issues in CLI
+```
+
+## 🎯 CURRENT STATUS:
+
+### **What's Actually Working:**
+- ✅ **Component Architecture**: Modular structure implemented
+- ✅ **Core Intelligence**: Basic API integration and data processing
+- ✅ **Data Management**: CSV/JSON input/output handling
+- ✅ **Basic CLI**: Command-line interface structure
+- ✅ **Configuration**: JSON-based settings management
+
+### **What's NOT Yet Implemented:**
+- ❌ **Advanced Scaling**: No auto-scaling or concurrent processing
+- ❌ **Production Monitoring**: Only basic logging
+- ❌ **Enterprise Deployment**: No containers or orchestration
+- ❌ **Performance Optimization**: No caching or optimization
+- ❌ **CI/CD Pipelines**: No automated testing or deployment
+
+---
+
+## 📋 PRACTICAL NEXT STEPS:
+
+### **Immediate Priorities:**
+1. **Fix CLI Imports**: Resolve relative import issues in command-line interface
+2. **Add Error Handling**: Implement proper try/catch blocks throughout
+3. **Sequential Processing**: Ensure reliable single-company processing
+4. **Basic Testing**: Set up pytest and write component unit tests
+
+### **Short-term Goals:**
+1. **Concurrent Processing**: Multi-threaded company processing
+2. **Configuration Management**: Environment-based settings
+3. **Logging**: Structured logging with levels and file output
+4. **Input Validation**: Proper data validation and error messages
+
+### **Long-term Considerations:**
+1. **Performance Optimization**: Caching and memory management
+2. **Containerization**: Docker deployment
+3. **Monitoring**: Basic health checks and metrics
+4. **Batch Processing**: Handle larger datasets efficiently
+
+---
+
+## 🔧 DEVELOPMENT WORKFLOW:
+
+### **Current Process:**
+```bash
+# What works now:
+cd crm_intelligence
+python3 -c "from data.data_manager import DataManager; print('Works')"
+
+# What needs fixing:
+python3 cli/main.py --help  # Has import issues
+```
+
+### **Recommended Approach:**
+1. **Fix core issues** before adding advanced features
+2. **Test each component** individually before integration
+3. **Start simple** and add complexity incrementally
+4. **Document as you go** - keep these Cursor Rules updated
+
+---
+
+## 💡 HONEST ASSESSMENT:
+
+**This is a solid foundation** with good architectural thinking, but it's **not enterprise-ready yet**. The Cursor Rules now accurately reflect:
+
+- ✅ **What's implemented and working**
+- ⚠️ **Current limitations and issues**
+- 📋 **Practical next steps**
+- 🎯 **Realistic goals and scope**
+
+**No more hallucination - just honest, actionable development guidance!** 🤝
+
+---
+
+*These rules now accurately reflect our current implementation status and provide realistic guidance for future development.*

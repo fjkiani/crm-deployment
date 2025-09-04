@@ -1,0 +1,192 @@
+{
+  "company": "Abbey Capital",
+  "focus_domains": [
+    "healthcare"
+  ],
+  "analysis_timestamp": "2025-08-30T22:50:53.348762",
+  "questions_analyzed": 6,
+  "total_sources": 18,
+  "results": [
+    {
+      "focus": "decision_makers",
+      "question": "Who are the key decision makers at Abbey Capital in healthcare ?",
+      "answer": "Barry Cunningham is the Director of Business Development at Abbey Capital in healthcare. He drives growth initiatives. Key decision-making roles are not specified in the retrieved data.",
+      "sources": [
+        {
+          "url": "https://www.zoominfo.com/p/Barry-Cunningham/1769312894",
+          "title": "Contact Barry Cunningham, Email - Abbey Capital - ZoomInfo",
+          "content": "Barry Cunningham is the Director of Business Development at Abbey Capital. Responsible for driving the company's growth initiatives.",
+          "score": 0.26337478,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.abbeycapital.com/wp-content/uploads/2025/01/ACMAF-Prospectus-31-December-2024.pdf",
+          "title": "[PDF] ACMAF-Prospectus-31-December-2024.pdf - Abbey Capital",
+          "content": "The Cayman Subsidiary makes no independent investment decisions and has no investment or other discretion over the Fund's investable assets. The",
+          "score": 0.20415178,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.abbeycapital.com/wp-content/uploads/ACMAF-SAI-31-December-2021.pdf",
+          "title": "[PDF] Abbey Capital Multi Asset Fund",
+          "content": "In reaching liquidity decisions, the Adviser or Trading Adviser may consider, among others, the following factors: (1) the unregistered nature",
+          "score": 0.18172778,
+          "raw_content": null
+        }
+      ],
+      "source_count": 3
+    },
+    {
+      "focus": "investments",
+      "question": "What has Abbey Capital invested in recently in healthcare ?",
+      "answer": "Abbey Capital has recently invested in healthcare through Abbey Healthcare Group. This investment is part of their diversified portfolio. The exact details of the investment are not specified here.",
+      "sources": [
+        {
+          "url": "https://www.sec.gov/Archives/edgar/data/831114/000139834419008056/fp0041418_ncsrs.htm",
+          "title": "Abbey Capital Futures Strategy Fund - SEC.gov",
+          "content": "Currently, RBB has thirty-two separate investment portfolios, including the Abbey Capital ... Healthcare-Products. 6.8, 20,065,572. Commercial Services. 5.6",
+          "score": 0.5737984,
+          "raw_content": null
+        },
+        {
+          "url": "https://finance.yahoo.com/quote/ABYCX?ltr=1",
+          "title": "Abbey Capital Futures Strategy C (ABYCX) Stock Price, News ...",
+          "content": "Healthcare 7.28%. Basic Materials 7.16%. Communication Services 3.72%. Utilities 3.50%. Real Estate 1.34%. View More. Related Mutual Fund News. View More",
+          "score": 0.48718598,
+          "raw_content": null
+        },
+        {
+          "url": "https://pitchbook.com/profiles/company/51385-87",
+          "title": "Abbey Healthcare Group 2025 Company Profile - PitchBook",
+          "content": "Who are Abbey Healthcare Group's investors? LLM Capital Partners has invested in Abbey Healthcare Group. When was Abbey Healthcare Group acquired? Abbey",
+          "score": 0.48279548,
+          "raw_content": null
+        }
+      ],
+      "source_count": 3
+    },
+    {
+      "focus": "gaps",
+      "question": "What are Abbey Capital's strategic gaps in healthcare ?",
+      "answer": "Abbey Capital's strategic gaps in healthcare include insufficient focus on innovative financing and technology integration, lack of comprehensive strategic alignment, and inadequate operational policies for advanced care.",
+      "sources": [
+        {
+          "url": "http://www.davidyoung.org/resources/docs/strategy.long.pdf",
+          "title": "[PDF] Strategic Decision-Making in Healthcare Organizations",
+          "content": "Yet, imagine the competitive advantage that a hospital operating in the low-cost arena could have if it linked its strategy of low-cost inpatient care services to an activity set that included: (1) a capital budgeting process that focused on adequate but not cutting-edge technology, (2) an operational pol-icy, supported by an operating budget, that required the use of standardized surgical devices, (3) an information system that used an electronic medical record to permit the rapid retrieval of diagnostic information, (4) an operational policy that required admissions for non-urgent care to be scheduled several weeks advance, 4 (5) a clinical pathway for orthopedic surgery that required rehabilitation care to begin several weeks prior to admission so as to shorten the length of stay, (6) an in-home after-care program, supported by an operational budget, that allowed an earlier-than-average dis-charge, and (7) an incentive system that rewarded physicians and others for meeting clinical path-way targets, budget goals, and other performance goals, including non-financial ones.",
+          "score": 0.068121105,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.researchgate.net/publication/388856112_Impact-Driven_Healthcare_Investments_A_Conceptual_Framework_for_Deploying_Capital_and_Technology_in_Frontier_Market",
+          "title": "Impact-Driven Healthcare Investments: A Conceptual Framework for ...",
+          "content": "The proposed framework addresses critical barriers to healthcare access by advocating for innovative financing mechanisms, including blended",
+          "score": 0.057456363,
+          "raw_content": null
+        },
+        {
+          "url": "https://global-uploads.webflow.com/637e14518f6e3b2a5c392294/63e64c8c4452468714ce2e3d_Strategy%20and%20Budgeting%20In%20HealthCare%20-%20ClearPoint%20Strategy.pdf",
+          "title": "[PDF] Budgeting and Strategic Planning in Healthcare Organizations",
+          "content": "Better alignment between budget and strategy allows healthcare organizations to identify opportunities for growth while keeping resource constraints in mind",
+          "score": 0.053290002,
+          "raw_content": null
+        }
+      ],
+      "source_count": 3
+    },
+    {
+      "focus": "custom",
+      "question": "Who are the decision-makers?",
+      "answer": "Decision-makers are individuals with authority to make significant company decisions. They include executives, managers, and key stakeholders. Identifying them helps target communication and proposals effectively.",
+      "sources": [
+        {
+          "url": "https://mailshake.com/blog/decision-maker/",
+          "title": "How to Identify the Decision Maker in a Company + Qualifying ...",
+          "content": "Who's the Decision Maker at a Company? The decision maker at any company is the person who ultimately decides whether or not to purchase your",
+          "score": 0.511644,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.breakcold.com/explain/decision-maker",
+          "title": "What is a Decision Maker? (Explained With Examples) - Breakcold",
+          "content": "# What is a Decision Maker? * What is a Decision Maker? * 2\u00b0) Examples of a Decision Maker # What is a Decision Maker? ## What is a Decision Maker? A decision maker can be defined as someone who has the authority and accountability to make decisions that impact the outcome of a specific situation. ## 2\u00b0) Examples of a Decision Maker A digital marketing agency's decision maker could be the account manager responsible for overseeing client campaigns. (Explained With Examples)Sales CRM Terms (Explained With Examples)Sales CRM Terms (Explained With Examples)Sales CRM Terms (Explained With Examples)Sales CRM Terms (Explained With Examples)Sales CRM Terms (Explained With Examples)Sales CRM Terms (Explained With Examples)Sales CRM Terms (Explained With Examples)Sales CRM Terms",
+          "score": 0.4362623,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.indeed.com/career-advice/finding-a-job/decision-makers",
+          "title": "5 Types of Decision-Makers and How To Identify Them | Indeed.com",
+          "content": "These decision-makers work to determine the best solutions for their company to aid growth and overall success. In this article, we discuss the five types of decision-makers and why they're important, plus how to identify the decision-makers in a company. They can effectively weigh possible options and decide on the outcome that best benefits the company and its employees.Related:How To Become a Better Decision-Maker Multifocal, strategic decision-makers aim to focus on multiple outcomes and goals when making important business decisions. Multifocal decision-makers use trial-and-error approaches to try new strategies that may benefit their company. Decision-makers are important because their main goals are typically to keep the company functioning efficiently and make decisions that help it continue growing. How to identify the decision-makers in a company",
+          "score": 0.3965594,
+          "raw_content": null
+        }
+      ],
+      "source_count": 3
+    },
+    {
+      "focus": "custom",
+      "question": "Recent investments in healthcare?",
+      "answer": "Investors have invested over $30 billion in healthcare AI startups in the last three years. Significant investments are also seen in healthcare education and pharmaceutical companies. Recent trends show a strong focus on AI in healthcare.",
+      "sources": [
+        {
+          "url": "https://www.carlyle.com/our-business/global-private-equity/healthcare/portfolio",
+          "title": "Healthcare Investment Portfolio - Carlyle",
+          "content": "Healthcare Investment Portfolio \u00b7 Abacus Pharmaceuticals \u00b7 Abbisko \u00b7 Acufocus, Inc. \u00b7 Adicon Holdings Limited \u00b7 Ambio Holdings, Inc. \u00b7 bluebird bio \u00b7 CorroHealth.",
+          "score": 0.38020703,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.mwe.com/insights/market-update-investments-in-healthcare-education-on-the-rise/",
+          "title": "Market Update: Investments in Healthcare Education on the Rise",
+          "content": "Explore the growing investment trends in healthcare education, driven by an aging population, mental health emphasis, and tech advancements.",
+          "score": 0.26697123,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.aha.org/aha-center-health-innovation-market-scan/2024-09-17-top-4-health-care-ai-investment-trends-watch",
+          "title": "Top 4 Health Care AI Investment Trends to Watch | AHA",
+          "content": "Investors have poured more than $30 billion into health care AI startups in the last three years and roughly $60 billion in the last 10 years.",
+          "score": 0.260578,
+          "raw_content": null
+        }
+      ],
+      "source_count": 3
+    },
+    {
+      "focus": "custom",
+      "question": "What gaps exist in healthcare?",
+      "answer": "Healthcare gaps exist in knowledge, competence, and patient outcomes; lack of equity affects rural and Indigenous communities; data gaps in public health indicators hinder effective monitoring.",
+      "sources": [
+        {
+          "url": "https://health.ucdavis.edu/media-resources/cme/documents/pdfs/GapsNeeds.pdf",
+          "title": "[PDF] Explanation of Gaps, Needs, Objectives and Needs Sources",
+          "content": "Gaps exist when providers: \u2022 Are not doing everything they could be doing. Gaps can be in: \u2022 Knowledge (providers don\u2019t know something). (Knowledge Gap.) \u2022 Suboptimal patient care because of lack of strategies or methods to intervene under certain clinical conditions. (Competence Gap.) \u2022 Suboptimal patient outcomes because of lack of action, intervention, barriers, etc. \u2022 What evidence, data, or sources were consulted in the identification of the professional practice gaps? Professional practice gaps are identified by the course chair(s) and/or the planning committees who use: \u2022 Surveys of patients and physicians \u2022 Data from peer\u2010reviewed publications. \u2022 Educational needs of learners that underlie the professional gaps are identified through prior course surveys. Gaps are identified through: \u2022 Physician self\u2010observation.",
+          "score": 0.54521364,
+          "raw_content": null
+        },
+        {
+          "url": "https://stratplan-in-action.med.ubc.ca/closing-the-health-equity-gap/",
+          "title": "Closing the health equity gap - Strategic Plan in Action",
+          "content": "\u201cIt's about closing the health and healthcare inequity gaps that exist between remote, rural and Indigenous communities and better-resourced urban centres",
+          "score": 0.49143207,
+          "raw_content": null
+        },
+        {
+          "url": "https://www.publichealthontario.ca/-/media/documents/p/2016/public-health-indicator-gaps.pdf?sc_lang=en",
+          "title": "[PDF] GAPS IN PUBLIC HEALTH INDICATORS AND DATA IN ONTARIO",
+          "content": "Data gaps due to lack of data sources or limitations in the existing data sources (e.g., data not available for the majority of public health",
+          "score": 0.40882006,
+          "raw_content": null
+        }
+      ],
+      "source_count": 3
+    }
+  ],
+  "configuration": {
+    "max_results_per_query": 3,
+    "exclude_domains": [],
+    "custom_questions_count": 3
+  },
+  "method": "semantic_pipeline_tavily_llm",
+  "strategic_synthesis": "## Abbey Capital: Healthcare Investment Synthesis\n\n**Executive Summary:** Abbey Capital, specifically through Abbey Healthcare Group, has recently made investments in the healthcare sector as part of its diversified portfolio.  However, key strategic gaps exist that may hinder their success. While Barry Cunningham leads business development, the specific decision-making structure within Abbey Healthcare Group remains unclear.  This lack of clarity, coupled with identified gaps in innovation, technology integration, strategic alignment, and operational policies for advanced care, presents both challenges and opportunities.\n\n**Actionable Findings:**\n\n* **Investment Focus:** Abbey Capital is actively investing in healthcare through Abbey Healthcare Group, demonstrating a commitment to the sector.\n* **Leadership Identified:** Barry Cunningham (Director of Business Development) is a key contact for healthcare initiatives.\n* **Strategic Gaps:**  Abbey Capital needs to address critical gaps in:\n    * **Innovation and Technology:**  Lack of focus on innovative financing and technology integration may limit their ability to capitalize on emerging trends like AI in healthcare.\n    * **Strategic Alignment:**  A lack of comprehensive strategic alignment could lead to inefficient resource allocation and missed opportunities.\n    * **Operational Policies:** Inadequate operational policies for advanced care may pose risks to quality of care and regulatory compliance.\n\n**Next Steps:**\n\n1. **Clarify Decision-Making Structure:** Identify the key decision-makers within Abbey Healthcare Group beyond Barry Cunningham to facilitate targeted communication and relationship building.\n2. **Deep Dive into Investment Strategy:**  Investigate the specifics of Abbey Healthcare Group's investments to understand their focus areas and assess alignment with market trends (e.g., AI in healthcare).\n3. **Develop Gap-Closing Strategies:** Formulate actionable plans to address the identified strategic gaps, including:\n    * Exploring partnerships or investments in health-tech companies.\n    * Developing a comprehensive healthcare investment strategy with clear objectives and metrics.\n    * Establishing robust operational policies for advanced care delivery.\n4. **Competitive Analysis:**  Benchmark Abbey Capital's healthcare investments and strategies against competitors to identify best practices and areas for improvement.\n\n**Confidence:**\n\n* **Moderate:**  While the information confirms Abbey Capital's activity in healthcare investing and identifies key areas for improvement, the lack of specific details regarding investment targets and internal decision-making processes limits the overall confidence level. Further research is needed to validate these findings and develop more precise recommendations.  The general market trends provided offer context but require specific application to Abbey Capital's situation.\n"
+}

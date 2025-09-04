@@ -1,0 +1,234 @@
+---
+alwaysApply: true
+description: Component design patterns and implementation guidelines
+globs: crm_intelligence/**/*.py
+---
+
+# 🧩 Component Design Patterns
+
+## Core Component Structure
+
+### Base Component Pattern
+```python
+from typing import Dict, List, Any, Optional
+from abc import ABC, abstractmethod
+import logging
+
+class BaseComponent(ABC):
+    """Base component with common functionality"""
+
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.name = config.get('name', self.__class__.__name__)
+        self.logger = logging.getLogger(self.name)
+
+    @abstractmethod
+    def execute(self, input_data: Any) -> Any:
+        """Execute component logic"""
+        pass
+
+    def validate_input(self, input_data: Any) -> bool:
+        """Validate input data"""
+        return True
+
+    def handle_error(self, error: Exception) -> Dict[str, Any]:
+        """Handle errors gracefully"""
+        self.logger.error(f"Component error: {error}")
+        return {"error": str(error), "component": self.name}
+```
+
+### Intelligence Component Pattern
+```python
+class IntelligenceComponent(BaseComponent):
+    """Intelligence gathering component"""
+
+    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Gather intelligence for target"""
+        target = input_data.get('target', '')
+
+        try:
+            # Step 1: Validate input
+            if not self.validate_input(input_data):
+                return self.handle_error(ValueError("Invalid input"))
+
+            # Step 2: Gather intelligence
+            intelligence = self._gather_intelligence(target)
+
+            # Step 3: Process and validate results
+            processed = self._process_results(intelligence)
+
+            return {
+                "component": self.name,
+                "target": target,
+                "intelligence": processed,
+                "confidence": self._calculate_confidence(processed),
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            return self.handle_error(e)
+
+    @abstractmethod
+    def _gather_intelligence(self, target: str) -> Dict[str, Any]:
+        """Abstract method for intelligence gathering"""
+        pass
+
+    def _process_results(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process and normalize results"""
+        return raw_data
+
+    def _calculate_confidence(self, data: Dict[str, Any]) -> float:
+        """Calculate confidence score for results"""
+        return 0.8  # Default confidence
+```
+
+## Component Categories
+
+### 1. Intelligence Gatherers
+**Purpose**: Collect data from various sources
+**Examples**: Company research, contact intelligence, news analysis
+**Pattern**: IntelligenceGatherer class (120 lines)
+**File**: `components/intelligence/intelligence_gatherer.py`
+
+### 2. Data Processors
+**Purpose**: Extract and normalize structured data from raw results
+**Examples**: Executive info extraction, investment data parsing
+**Pattern**: DataProcessor class (160 lines)
+**File**: `components/intelligence/data_processor.py`
+
+### 3. Profile Builders
+**Purpose**: Build structured intelligence profiles from processed data
+**Examples**: Executive profiles, investment analysis, news categorization
+**Pattern**: ProfileBuilder class (180 lines)
+**File**: `components/intelligence/profile_builder.py`
+
+### 4. Lead Selectors
+**Purpose**: Evaluate and prioritize leads for intelligence gathering
+**Examples**: Scoring algorithms, lead filtering, selection criteria
+**Pattern**: LeadSelector class (120 lines)
+**File**: `components/intelligence/lead_selector.py`
+
+### 5. Orchestrators
+**Purpose**: Coordinate multiple components for complete workflows
+**Examples**: Intelligence pipelines, data processing workflows
+**Pattern**: IntelligenceOrchestrator class (100 lines)
+**File**: `components/intelligence/intelligence_orchestrator.py`
+
+## Implementation Guidelines
+
+### File Size Limits
+```python
+# ❌ BAD: Monolithic file
+class MassiveComponent:
+    # 2000+ lines of mixed concerns
+
+# ✅ GOOD: Focused components
+class CompanyResearchComponent(IntelligenceComponent):
+    """Research company info - ~80 lines"""
+
+class ContactIntelligenceComponent(IntelligenceComponent):
+    """Find contact details - ~60 lines"""
+
+class EmailGeneratorComponent(GeneratorComponent):
+    """Generate emails - ~70 lines"""
+```
+
+### Dependency Injection
+```python
+# ❌ BAD: Hard dependencies
+class BadComponent:
+    def __init__(self):
+        self.api = TavilyClient()  # Hard-coded
+
+# ✅ GOOD: Injected dependencies
+class GoodComponent:
+    def __init__(self, config: Dict[str, Any], api_client=None):
+        self.config = config
+        self.api_client = api_client or TavilyClient(config)
+```
+
+### Configuration Management
+```python
+# ✅ GOOD: Configuration-driven
+class ConfigurableComponent:
+    def __init__(self, config: Dict[str, Any]):
+        self.max_results = config.get('max_results', 10)
+        self.timeout = config.get('timeout', 30)
+        self.retry_count = config.get('retry_count', 3)
+```
+
+## Component Communication
+
+### Input/Output Contracts
+```python
+# Standard input format
+input_data = {
+    "target": "3EDGE Asset Management",
+    "context": {"industry": "finance", "region": "US"},
+    "requirements": ["contacts", "news", "investment_focus"]
+}
+
+# Standard output format
+output_data = {
+    "component": "CompanyResearchComponent",
+    "target": "3EDGE Asset Management",
+    "results": {...},
+    "confidence": 0.85,
+    "timestamp": "2024-01-01T12:00:00Z",
+    "metadata": {"source": "tavily", "processing_time": 2.3}
+}
+```
+
+### Error Handling
+```python
+# Consistent error responses
+error_response = {
+    "component": "FailedComponent",
+    "error": "API rate limit exceeded",
+    "error_code": "RATE_LIMIT",
+    "retry_after": 60,
+    "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+## Testing Patterns
+
+### Unit Test Structure
+```python
+import pytest
+from components.intelligence.company_research import CompanyResearchComponent
+
+class TestCompanyResearchComponent:
+    def test_successful_research(self):
+        config = {"max_results": 5}
+        component = CompanyResearchComponent(config)
+
+        input_data = {"target": "Test Company"}
+        result = component.execute(input_data)
+
+        assert result["component"] == "CompanyResearchComponent"
+        assert "results" in result
+        assert result["confidence"] > 0
+
+    def test_error_handling(self):
+        component = CompanyResearchComponent({})
+
+        result = component.execute({"invalid": "data"})
+        assert "error" in result
+```
+
+### Mock Dependencies
+```python
+from unittest.mock import Mock, patch
+
+def test_with_mocked_api():
+    with patch('api.tavily_client.TavilyClient') as mock_api:
+        mock_api.return_value.search.return_value = {
+            "results": [{"title": "Test Result"}]
+        }
+
+        component = CompanyResearchComponent({"api_key": "test"})
+        result = component.execute({"target": "Test"})
+
+        assert result["results"] is not None
+```

@@ -1,0 +1,45 @@
+{
+  "original_question": "For Abbey Capital, find all their decision makers involved in healthcare, what have they invested in recently? what are some gaps?",
+  "company": "Abbey Capital",
+  "processing_time_seconds": 28.758016,
+  "sub_questions": [
+    {
+      "question": "Who are the key decision-makers at Abbey Capital involved in healthcare investments, including their roles, responsibilities, and investment focus within healthcare?",
+      "focus": "decision_makers",
+      "search_query": "Abbey Capital healthcare investment team executives decision makers leadership roles responsibilities portfolio management investment committee"
+    },
+    {
+      "question": "What specific healthcare investments (e.g., company, technology, therapeutic area) has Abbey Capital made in the past 2 years, including deal size, stage of investment, and co-investors?",
+      "focus": "investments",
+      "search_query": "Abbey Capital healthcare investments deals portfolio recent transactions funding rounds acquisitions mergers co-investors deal size stage series therapeutics technology"
+    },
+    {
+      "question": "Considering the current healthcare market landscape and Abbey Capital's existing portfolio, what are the potential gaps or unmet needs within specific healthcare sub-sectors that represent investment opportunities?",
+      "focus": "gaps",
+      "search_query": "Abbey Capital healthcare strategy gaps opportunities market whitespace unmet needs competitive landscape emerging trends sub-sectors therapeutic areas digital health biotech medtech"
+    }
+  ],
+  "raw_intelligence": {
+    "decision_makers": [],
+    "investments": [],
+    "gaps": [],
+    "all_sources": [
+      "https://www.abbeycapital.com/our-people/",
+      "https://cimam.org/news-archive/",
+      "https://keenenh.gov/wp-content/uploads/2025/06/2025_06_05_City_Council_Agenda_Packet_optimized-1.pdf",
+      "https://www.foodticker.co.nz/category/investment/",
+      "https://maritime-professionals.com/how-do-you-make-valid-claims-during-your-net-zero-journey/",
+      "https://issuu.com/benham/docs/c_w_may_25",
+      "https://en.m.wikipedia.org/wiki/Abbey",
+      "https://www.thefreedictionary.com/abbey",
+      "https://belmontabbeycollege.edu/"
+    ]
+  },
+  "synthesized_response": "**EXECUTIVE SUMMARY:**  No decision-makers at Abbey Capital specifically focused on healthcare were identified, nor were any recent healthcare investments found. This suggests either a lack of public information on Abbey Capital's activities in this sector or a genuine absence of involvement in healthcare investing.\n\n**KEY FINDINGS:**\n\n* **Decision Makers:** No identifiable decision-makers at Abbey Capital with a public-facing healthcare focus were found across the 9 sources consulted.\n* **Investments:** No recent investments in healthcare-related companies or projects by Abbey Capital were identified.\n* **Opportunities/Gaps:**  Due to the lack of information on Abbey Capital's activities, identifying specific gaps is currently impossible.  However, the apparent absence of healthcare investments presents a potential gap *if* Abbey Capital has an unstated interest in the sector.\n\n**ACTIONABLE RECOMMENDATIONS:**\n\n1. **Broaden Search Scope:** Expand the search beyond the initial 9 sources to include specialized healthcare investment databases, industry publications, and news aggregators. Consider using alternative search terms related to adjacent sectors like life sciences or medical technology.\n2. **Explore Indirect Connections:** Investigate Abbey Capital's portfolio companies for any secondary involvement in healthcare, such as subsidiaries or partnerships.  Examine the investment activities of any related entities or sister funds.\n3. **Consider Direct Contact:** If deemed appropriate, attempt to contact Abbey Capital directly (e.g., investor relations) to inquire about their healthcare investment activities. This should be done strategically and respectfully, acknowledging the limited public information available.\n4. **Analyze Competitors:**  Research the healthcare investment strategies of Abbey Capital's competitors to identify potential areas of interest and benchmark their activities. This can provide valuable context and inform future investigations.\n\n**FOLLOW-UP QUESTIONS:**\n\n1. Does Abbey Capital have any undisclosed or private investments in healthcare that are not reflected in publicly available sources?\n2.  Is Abbey Capital considering entering the healthcare investment space in the future, and what might their strategic focus be (e.g., specific therapeutic areas, technologies)?\n3. Are there any individuals within Abbey Capital with relevant healthcare experience or expertise, even if their current role isn't explicitly healthcare-focused?\n",
+  "generated_at": "2025-08-30T19:25:01.084861",
+  "api_info": {
+    "llm_provider": "gemini-1.5-pro",
+    "intelligence_provider": "tavily",
+    "total_sources": 9
+  }
+}

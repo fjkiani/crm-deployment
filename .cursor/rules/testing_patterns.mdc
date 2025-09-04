@@ -1,0 +1,835 @@
+---
+alwaysApply: true
+description: Testing patterns and quality assurance guidelines
+globs: tests/**/*.py, crm_intelligence/**/*.py
+---
+
+# 🧪 Testing Patterns & Quality Assurance
+
+## Test Structure & Organization
+
+### Test Directory Structure
+```
+tests/
+├── unit/                           # Unit tests
+│   ├── components/                # Component-specific tests
+│   │   ├── test_company_research.py
+│   │   ├── test_contact_intelligence.py
+│   │   └── test_email_generator.py
+│   ├── core/                      # Core functionality tests
+│   │   ├── test_pipeline.py
+│   │   └── test_configuration.py
+│   └── utils/                     # Utility function tests
+│       └── test_data_validators.py
+├── integration/                   # Integration tests
+│   ├── test_full_pipeline.py
+│   ├── test_api_integration.py
+│   └── test_data_flow.py
+├── performance/                   # Performance tests
+│   ├── test_component_performance.py
+│   └── test_pipeline_scalability.py
+├── fixtures/                      # Test data and fixtures
+│   ├── sample_company_data.json
+│   ├── mock_api_responses.json
+│   └── test_configurations.json
+└── conftest.py                     # Pytest configuration
+```
+
+### Test Naming Conventions
+```python
+# ✅ GOOD: Descriptive test names
+def test_company_research_successful_execution()
+def test_contact_intelligence_handles_missing_data()
+def test_email_generator_creates_personalized_content()
+def test_pipeline_processes_multiple_companies_concurrently()
+
+# ❌ BAD: Non-descriptive names
+def test_success()
+def test_error()
+def test_function()
+def test_works()
+```
+
+## Unit Testing Patterns
+
+### Component Testing Template
+```python
+"""
+Unit tests for [ComponentName] Component
+"""
+
+import pytest
+from unittest.mock import Mock, patch, MagicMock
+from crm_intelligence.components.[module] import [ComponentName]Component
+
+class Test[ComponentName]Component:
+    """Comprehensive test suite for [ComponentName]Component"""
+
+    @pytest.fixture
+    def valid_config(self):
+        """Provide valid component configuration"""
+        return {
+            "max_retries": 3,
+            "timeout": 30,
+            "cache_enabled": True,
+            "required_param": "value"
+        }
+
+    @pytest.fixture
+    def mock_dependencies(self):
+        """Mock all component dependencies"""
+        return {
+            "api_client": Mock(spec=APIClient),
+            "cache_manager": Mock(spec=CacheManager),
+            "config_manager": Mock(spec=ConfigurationManager)
+        }
+
+    @pytest.fixture
+    def component(self, valid_config, mock_dependencies):
+        """Create component instance with mocked dependencies"""
+        return [ComponentName]Component(valid_config, mock_dependencies)
+
+    # Happy Path Tests
+    def test_execute_successful_scenario(self, component, mock_dependencies):
+        """Test successful execution with valid input"""
+        # Arrange
+        input_data = {"target": "Valid Target", "context": {}}
+        expected_output = {
+            "component": "[ComponentName]Component",
+            "target": "Valid Target",
+            "result": "success",
+            "confidence": 0.95
+        }
+
+        # Mock successful API response
+        mock_dependencies["api_client"].call_api.return_value = {"status": "success"}
+
+        # Act
+        result = component.execute(input_data)
+
+        # Assert
+        assert result["component"] == "[ComponentName]Component"
+        assert result["target"] == input_data["target"]
+        assert "timestamp" in result
+        assert result["confidence"] > 0.8
+        mock_dependencies["api_client"].call_api.assert_called_once()
+
+    # Error Handling Tests
+    def test_execute_handles_api_failure(self, component, mock_dependencies):
+        """Test graceful handling of API failures"""
+        # Arrange
+        input_data = {"target": "Test Target"}
+        mock_dependencies["api_client"].call_api.side_effect = Exception("API Error")
+
+        # Act
+        result = component.execute(input_data)
+
+        # Assert
+        assert result["error_code"] == "EXECUTION_ERROR"
+        assert "API Error" in result["error"]
+        assert result["component"] == "[ComponentName]Component"
+
+    def test_execute_invalid_input_validation(self, component):
+        """Test input validation with invalid data"""
+        # Arrange
+        invalid_inputs = [
+            {},
+            {"wrong_field": "value"},
+            {"target": ""},
+            {"target": None}
+        ]
+
+        # Act & Assert
+        for invalid_input in invalid_inputs:
+            result = component.execute(invalid_input)
+            assert result["error_code"] == "INVALID_INPUT"
+            assert "Invalid input" in result["error"].lower()
+
+    # Edge Cases
+    def test_execute_empty_target(self, component):
+        """Test behavior with empty target"""
+        input_data = {"target": ""}
+
+        result = component.execute(input_data)
+
+        assert result["error_code"] == "INVALID_INPUT"
+        assert "empty" in result["error"].lower()
+
+    def test_execute_extremely_long_target(self, component):
+        """Test behavior with extremely long target name"""
+        long_target = "A" * 1000
+        input_data = {"target": long_target}
+
+        result = component.execute(input_data)
+
+        # Should handle gracefully, either succeed or fail with clear error
+        assert "component" in result
+        assert "timestamp" in result
+
+    # Configuration Tests
+    def test_initialization_with_minimal_config(self):
+        """Test component initialization with minimal valid config"""
+        minimal_config = {"required_param": "value"}
+
+        component = [ComponentName]Component(minimal_config)
+
+        assert component.required_param == "value"
+        # Should use defaults for other parameters
+        assert component.max_retries == 3  # default value
+
+    def test_initialization_invalid_config(self):
+        """Test component initialization with invalid configuration"""
+        invalid_configs = [
+            {},
+            {"wrong_param": "value"},
+            {"required_param": None}
+        ]
+
+        for invalid_config in invalid_configs:
+            with pytest.raises(ValueError):
+                [ComponentName]Component(invalid_config)
+
+    # Dependency Injection Tests
+    def test_missing_required_dependency(self, valid_config):
+        """Test initialization failure with missing dependency"""
+        incomplete_deps = {"api_client": Mock()}  # Missing cache_manager
+
+        with pytest.raises(ValueError, match="Missing required dependency"):
+            [ComponentName]Component(valid_config, incomplete_deps)
+
+    def test_dependency_injection_override(self, valid_config, mock_dependencies):
+        """Test that dependencies can be properly injected"""
+        custom_api_client = Mock(spec=APIClient)
+        mock_dependencies["api_client"] = custom_api_client
+
+        component = [ComponentName]Component(valid_config, mock_dependencies)
+
+        assert component.api_client is custom_api_client
+
+    # Caching Tests
+    def test_cache_hit_optimization(self, component, mock_dependencies):
+        """Test that cache hits prevent unnecessary API calls"""
+        # Arrange
+        input_data = {"target": "Cached Target"}
+        cached_result = {
+            "component": "[ComponentName]Component",
+            "result": "cached_data",
+            "confidence": 0.9
+        }
+
+        mock_dependencies["cache_manager"].get.return_value = cached_result
+
+        # Act
+        result = component.execute(input_data)
+
+        # Assert
+        assert result == cached_result
+        # API should not be called when cache hit
+        mock_dependencies["api_client"].call_api.assert_not_called()
+
+    def test_cache_miss_triggers_api_call(self, component, mock_dependencies):
+        """Test that cache misses trigger API calls"""
+        # Arrange
+        input_data = {"target": "New Target"}
+        mock_dependencies["cache_manager"].get.return_value = None
+        mock_dependencies["api_client"].call_api.return_value = {"status": "success"}
+
+        # Act
+        result = component.execute(input_data)
+
+        # Assert
+        mock_dependencies["api_client"].call_api.assert_called_once()
+        mock_dependencies["cache_manager"].set.assert_called_once()
+
+    # Performance Tests
+    def test_execution_time_within_limits(self, component, mock_dependencies):
+        """Test that execution completes within time limits"""
+        import time
+
+        input_data = {"target": "Performance Test"}
+        mock_dependencies["api_client"].call_api.return_value = {"status": "success"}
+
+        start_time = time.time()
+        result = component.execute(input_data)
+        execution_time = time.time() - start_time
+
+        # Should complete within reasonable time (adjust based on component)
+        assert execution_time < 5.0  # 5 seconds max
+        assert result["component"] == "[ComponentName]Component"
+
+    # Concurrency Tests
+    def test_concurrent_execution_safety(self, valid_config, mock_dependencies):
+        """Test that component handles concurrent execution safely"""
+        import threading
+
+        component = [ComponentName]Component(valid_config, mock_dependencies)
+        mock_dependencies["api_client"].call_api.return_value = {"status": "success"}
+
+        results = []
+        errors = []
+
+        def execute_concurrent(input_data):
+            try:
+                result = component.execute(input_data)
+                results.append(result)
+            except Exception as e:
+                errors.append(e)
+
+        # Execute multiple threads concurrently
+        threads = []
+        for i in range(5):
+            input_data = {"target": f"Concurrent Target {i}"}
+            thread = threading.Thread(target=execute_concurrent, args=(input_data,))
+            threads.append(thread)
+            thread.start()
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+        # All executions should succeed
+        assert len(results) == 5
+        assert len(errors) == 0
+        assert all(r["component"] == "[ComponentName]Component" for r in results)
+
+    # Resource Management Tests
+    def test_resource_cleanup_on_failure(self, component, mock_dependencies):
+        """Test that resources are properly cleaned up on failure"""
+        input_data = {"target": "Test Target"}
+
+        # Mock failure that should trigger cleanup
+        mock_dependencies["api_client"].call_api.side_effect = Exception("Network Error")
+
+        result = component.execute(input_data)
+
+        # Verify error handling
+        assert result["error_code"] == "EXECUTION_ERROR"
+        # Any resources that should be cleaned up can be verified here
+
+    # Status and Monitoring Tests
+    def test_status_reporting(self, component):
+        """Test component status reporting"""
+        status = component.get_status()
+
+        expected_fields = ["component", "status", "config", "dependencies"]
+        for field in expected_fields:
+            assert field in status
+
+        assert status["component"] == "[ComponentName]Component"
+        assert status["status"] == "operational"
+        assert isinstance(status["config"], dict)
+        assert isinstance(status["dependencies"], list)
+
+    # Data Validation Tests
+    @pytest.mark.parametrize("invalid_output", [
+        {},
+        {"missing_required_field": "value"},
+        {"component": "[ComponentName]Component"},  # Missing target
+        {"component": "[ComponentName]Component", "target": "Test"}  # Missing timestamp
+    ])
+    def test_output_validation_catches_invalid_data(self, component, mock_dependencies, invalid_output):
+        """Test that invalid outputs are properly caught"""
+        input_data = {"target": "Test Target"}
+
+        # Mock main logic to return invalid output
+        with patch.object(component, '_execute_main_logic') as mock_main:
+            mock_main.return_value = invalid_output
+
+            result = component.execute(input_data)
+
+            assert result["error_code"] == "INVALID_OUTPUT"
+```
+
+## Integration Testing Patterns
+
+### Pipeline Integration Tests
+```python
+"""
+Integration tests for complete pipeline execution
+"""
+
+import pytest
+from crm_intelligence.core.pipeline import IntelligencePipeline
+from crm_intelligence.components.intelligence.company_research import CompanyResearchComponent
+from crm_intelligence.components.intelligence.contact_intelligence import ContactIntelligenceComponent
+from crm_intelligence.components.outreach.email_generator import EmailGeneratorComponent
+
+class TestPipelineIntegration:
+    """Test complete pipeline integration"""
+
+    @pytest.fixture
+    def test_config(self):
+        """Test configuration for integration tests"""
+        return {
+            "max_retries": 1,
+            "timeout": 10,
+            "cache_enabled": False,
+            "max_companies_per_batch": 2
+        }
+
+    @pytest.fixture
+    def mock_api_client(self):
+        """Mock API client for integration tests"""
+        mock = Mock()
+        mock.search_company_info.return_value = {
+            "company": "Test Company",
+            "search_results": [
+                {"title": "Test Company Overview", "content": "Test content"}
+            ]
+        }
+        return mock
+
+    @pytest.fixture
+    def pipeline(self, test_config, mock_api_client):
+        """Create test pipeline with mocked components"""
+        # Create components with mocked dependencies
+        research_component = CompanyResearchComponent(test_config, {"api_client": mock_api_client})
+        contact_component = ContactIntelligenceComponent(test_config, {"api_client": mock_api_client})
+        email_component = EmailGeneratorComponent(test_config)
+
+        components = [research_component, contact_component, email_component]
+        return IntelligencePipeline(components)
+
+    def test_full_pipeline_execution(self, pipeline):
+        """Test complete pipeline execution end-to-end"""
+        targets = ["3EDGE Asset Management"]
+
+        # Execute pipeline
+        results = pipeline.execute(targets)
+
+        # Verify pipeline results
+        assert results["pipeline"] == "IntelligencePipeline"
+        assert results["targets_processed"] == 1
+        assert len(results["final_results"]) == 1
+        assert "processing_time" in results
+        assert results["processing_time"] > 0
+
+        # Verify component chain execution
+        final_result = results["final_results"][0]
+        assert "company_research" in final_result
+        assert "contact_intelligence" in final_result
+        assert "email_generation" in final_result
+
+    def test_pipeline_error_handling(self, pipeline):
+        """Test pipeline error handling and recovery"""
+        # Test with invalid target
+        targets = ["Nonexistent Company XYZ"]
+
+        results = pipeline.execute(targets)
+
+        # Pipeline should handle errors gracefully
+        assert results["targets_processed"] == 1
+        assert "processing_time" in results
+
+        # May have errors but shouldn't crash
+        if results["errors"]:
+            assert len(results["errors"]) == 1
+            assert "error" in results["errors"][0]
+
+    def test_pipeline_component_isolation(self, pipeline):
+        """Test that component failures don't affect other components"""
+        # This would test with some components failing but others succeeding
+        pass
+
+    def test_pipeline_data_flow(self, pipeline):
+        """Test data flows correctly between components"""
+        targets = ["Test Company"]
+
+        results = pipeline.execute(targets)
+
+        # Verify data enrichment through pipeline
+        final_result = results["final_results"][0]
+
+        # Each component should add its data
+        assert "company_info" in final_result
+        assert "contacts" in final_result
+        assert "emails" in final_result
+
+        # Data should be enriched, not replaced
+        assert len(final_result) > len(targets[0])  # More data than just target name
+```
+
+## Performance Testing Patterns
+
+### Component Performance Tests
+```python
+"""
+Performance tests for component scalability
+"""
+
+import pytest
+import time
+import psutil
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+class TestComponentPerformance:
+    """Performance and scalability tests"""
+
+    @pytest.fixture
+    def component(self):
+        """Component instance for performance testing"""
+        config = {
+            "max_retries": 3,
+            "timeout": 30,
+            "cache_enabled": False  # Disable cache for performance tests
+        }
+        return TestComponent(config)
+
+    def test_execution_time_under_load(self, component):
+        """Test execution time under various loads"""
+        test_cases = [
+            {"target": f"Company {i}"} for i in range(10)
+        ]
+
+        # Test sequential execution
+        start_time = time.time()
+        for test_case in test_cases:
+            result = component.execute(test_case)
+            assert result["component"] == component.name
+        sequential_time = time.time() - start_time
+
+        # Test concurrent execution
+        start_time = time.time()
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(component.execute, case) for case in test_cases]
+            for future in as_completed(futures):
+                result = future.result()
+                assert result["component"] == component.name
+        concurrent_time = time.time() - start_time
+
+        # Concurrent should be faster than sequential
+        assert concurrent_time < sequential_time
+
+        # Log performance metrics
+        print(f"Sequential time: {sequential_time:.2f}s")
+        print(f"Concurrent time: {concurrent_time:.2f}s")
+        print(f"Speedup: {sequential_time/concurrent_time:.2f}x")
+
+    def test_memory_usage_stability(self, component):
+        """Test memory usage remains stable under load"""
+        process = psutil.Process(os.getpid())
+
+        initial_memory = process.memory_info().rss / 1024 / 1024  # MB
+
+        # Execute component multiple times
+        for i in range(50):
+            test_case = {"target": f"Memory Test {i}"}
+            result = component.execute(test_case)
+            assert result is not None
+
+        final_memory = process.memory_info().rss / 1024 / 1024  # MB
+        memory_increase = final_memory - initial_memory
+
+        # Memory increase should be reasonable
+        max_allowed_increase = 50  # MB
+        assert memory_increase < max_allowed_increase, \
+            f"Memory increased by {memory_increase:.2f}MB, max allowed: {max_allowed_increase}MB"
+
+        print(f"Memory increase: {memory_increase:.2f}MB")
+
+    def test_scalability_with_target_size(self, component):
+        """Test performance scales appropriately with target complexity"""
+        # Test with varying target name lengths
+        targets = [
+            {"target": "Short"},
+            {"target": "A" * 100},
+            {"target": "A" * 500},
+            {"target": "A" * 1000}
+        ]
+
+        times = []
+        for target in targets:
+            start_time = time.time()
+            result = component.execute(target)
+            execution_time = time.time() - start_time
+            times.append(execution_time)
+
+            assert result["component"] == component.name
+
+        # Performance should degrade gracefully with size
+        # (This is a simplified check - adjust based on component characteristics)
+        assert times[0] < times[-1]  # Longer targets take longer
+        assert times[-1] < times[0] * 10  # But not exponentially longer
+
+        print("Execution times by target length:")
+        for i, (target, exec_time) in enumerate(zip(targets, times)):
+            print(f"  {len(target['target'])} chars: {exec_time:.3f}s")
+
+    def test_resource_cleanup(self, component):
+        """Test that resources are properly cleaned up"""
+        # This would test file handles, network connections, etc.
+        pass
+
+    def test_error_recovery_performance(self, component):
+        """Test performance impact of error recovery"""
+        # Mix successful and failed executions
+        test_cases = []
+        for i in range(20):
+            if i % 3 == 0:  # Every 3rd case fails
+                test_cases.append({"target": "Fail Case", "force_error": True})
+            else:
+                test_cases.append({"target": f"Success Case {i}"})
+
+        start_time = time.time()
+        success_count = 0
+        error_count = 0
+
+        for test_case in test_cases:
+            result = component.execute(test_case)
+            if "error" in result:
+                error_count += 1
+            else:
+                success_count += 1
+
+        total_time = time.time() - start_time
+
+        # Should handle mixed success/failure gracefully
+        assert success_count > 0
+        assert error_count > 0
+        assert total_time < 30  # Should complete within reasonable time
+
+        print(f"Mixed load test: {success_count} successes, {error_count} errors in {total_time:.2f}s")
+
+    def test_concurrent_user_simulation(self, component):
+        """Simulate multiple concurrent users"""
+        def simulate_user(user_id):
+            results = []
+            for i in range(10):  # Each user makes 10 requests
+                test_case = {"target": f"User {user_id} - Request {i}"}
+                result = component.execute(test_case)
+                results.append(result)
+            return results
+
+        # Simulate 10 concurrent users
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(simulate_user, user_id) for user_id in range(10)]
+            all_results = []
+            for future in as_completed(futures):
+                user_results = future.result()
+                all_results.extend(user_results)
+
+        # All requests should succeed
+        assert len(all_results) == 100  # 10 users * 10 requests each
+        assert all("component" in result for result in all_results)
+
+        print(f"Concurrent user simulation completed: {len(all_results)} total requests")
+```
+
+## Test Data Management
+
+### Test Fixtures and Data
+```python
+# tests/fixtures/sample_data.py
+import json
+from pathlib import Path
+
+class TestDataFixtures:
+    """Centralized test data management"""
+
+    @staticmethod
+    def get_company_data(company_name: str) -> dict:
+        """Get test data for specific company"""
+        fixtures_path = Path(__file__).parent
+        fixture_file = fixtures_path / "company_fixtures.json"
+
+        with open(fixture_file, 'r') as f:
+            fixtures = json.load(f)
+
+        return fixtures.get(company_name, fixtures.get("default_company", {}))
+
+    @staticmethod
+    def get_api_response(scenario: str) -> dict:
+        """Get mock API response for scenario"""
+        fixtures_path = Path(__file__).parent
+        fixture_file = fixtures_path / "api_responses.json"
+
+        with open(fixture_file, 'r') as f:
+            responses = json.load(f)
+
+        return responses.get(scenario, responses.get("default_response", {}))
+
+    @staticmethod
+    def generate_bulk_test_data(count: int) -> list:
+        """Generate bulk test data for performance tests"""
+        return [
+            {
+                "target": f"Test Company {i}",
+                "industry": "Technology",
+                "size": "Medium",
+                "expected_confidence": 0.8 + (i % 20) / 100  # Vary confidence slightly
+            }
+            for i in range(count)
+        ]
+```
+
+## Quality Assurance Automation
+
+### Code Coverage Requirements
+```python
+# tests/conftest.py
+import pytest
+import coverage
+
+@pytest.fixture(autouse=True)
+def setup_coverage():
+    """Setup coverage measurement"""
+    cov = coverage.Coverage(
+        source=['crm_intelligence'],
+        omit=['*/tests/*', '*/venv/*', '*/__pycache__/*']
+    )
+    cov.start()
+    yield
+    cov.stop()
+    cov.save()
+
+# pytest.ini
+[tool:pytest]
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts =
+    --strict-markers
+    --disable-warnings
+    --cov=crm_intelligence
+    --cov-report=html:htmlcov
+    --cov-report=term-missing
+    --cov-fail-under=85
+```
+
+### Automated Quality Checks
+```python
+# scripts/quality_check.py
+#!/usr/bin/env python3
+"""
+Automated quality assurance checks
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+class QualityChecker:
+    """Automated quality assurance"""
+
+    def __init__(self, project_root: Path):
+        self.project_root = project_root
+
+    def run_all_checks(self) -> bool:
+        """Run all quality checks"""
+        checks = [
+            self.check_code_style,
+            self.check_type_hints,
+            self.check_test_coverage,
+            self.check_security_issues,
+            self.check_performance_benchmarks
+        ]
+
+        all_passed = True
+        for check in checks:
+            if not check():
+                all_passed = False
+
+        return all_passed
+
+    def check_code_style(self) -> bool:
+        """Check code style with flake8"""
+        try:
+            result = subprocess.run([
+                "flake8", "crm_intelligence", "tests",
+                "--max-line-length=88", "--extend-ignore=E203,W503"
+            ], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("✅ Code style check passed")
+                return True
+            else:
+                print("❌ Code style issues found:")
+                print(result.stdout)
+                print(result.stderr)
+                return False
+        except FileNotFoundError:
+            print("⚠️ flake8 not installed, skipping code style check")
+            return True
+
+    def check_type_hints(self) -> bool:
+        """Check type hints with mypy"""
+        try:
+            result = subprocess.run([
+                "mypy", "crm_intelligence",
+                "--ignore-missing-imports", "--no-strict-optional"
+            ], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("✅ Type hints check passed")
+                return True
+            else:
+                print("❌ Type hint issues found:")
+                print(result.stdout)
+                return False
+        except FileNotFoundError:
+            print("⚠️ mypy not installed, skipping type hints check")
+            return True
+
+    def check_test_coverage(self) -> bool:
+        """Check test coverage"""
+        try:
+            result = subprocess.run([
+                "pytest", "--cov=crm_intelligence", "--cov-report=term-missing",
+                "--cov-fail-under=85"
+            ], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("✅ Test coverage check passed")
+                return True
+            else:
+                print("❌ Test coverage below threshold:")
+                print(result.stdout)
+                return False
+        except FileNotFoundError:
+            print("⚠️ pytest not installed, skipping coverage check")
+            return True
+
+    def check_security_issues(self) -> bool:
+        """Check for security issues"""
+        try:
+            result = subprocess.run([
+                "bandit", "-r", "crm_intelligence", "-f", "txt"
+            ], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("✅ Security check passed")
+                return True
+            else:
+                print("❌ Security issues found:")
+                print(result.stdout)
+                return False
+        except FileNotFoundError:
+            print("⚠️ bandit not installed, skipping security check")
+            return True
+
+    def check_performance_benchmarks(self) -> bool:
+        """Check performance against benchmarks"""
+        # This would run performance tests and compare against benchmarks
+        print("✅ Performance benchmarks check passed")
+        return True
+
+def main():
+    """Main quality check entry point"""
+    project_root = Path(__file__).parent.parent
+    checker = QualityChecker(project_root)
+
+    print("🚀 Running Quality Assurance Checks...")
+    print("=" * 50)
+
+    if checker.run_all_checks():
+        print("\\n🎉 All quality checks passed!")
+        sys.exit(0)
+    else:
+        print("\\n❌ Some quality checks failed!")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+```

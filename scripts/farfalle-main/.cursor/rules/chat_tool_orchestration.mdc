@@ -1,0 +1,76 @@
+---
+alwaysApply: false
+description: Plan for Farfalle chat intent routing and tool/agent orchestration using semantic intelligence
+---
+
+### Goal
+Enable Farfalle's existing chat to intelligently choose between general chat, pro search, and our semantic intelligence enrichment (decision-makers, investments, gaps), using a simple, reliable routing strategy (no hallucinated features).
+
+### Current Building Blocks
+- Chat routes exist: `POST /chat` (SSE streaming), plus history/thread.
+- Our semantic intelligence endpoint exists: `POST /intel/analyze` (Tavily + optional Diffbot/LinkedIn).
+- Search providers include Tavily SDK provider (non-streaming) used by agent search.
+
+### Intent Types (first pass)
+- `intel_enrichment`: Questions about decision-makers, investments, gaps, partnerships, org structure at a company.
+- `agent_search_pro`: Multi-step web research (existing Farfalle pro-search path).
+- `general_chat`: Regular conversational Q&A.
+- `follow_up`: Clarifications grounded in the current thread context.
+
+### Routing Strategy (minimal, deterministic)
+1) Extract signals from the user query and thread context:
+   - Keywords: ["decision makers", "decision-makers", "executives", "CIO", "CEO", "investments", "portfolio", "holdings", "gaps", "opportunities", "partnerships"].
+   - Company/entity: use last mentioned company in thread if not present in the current query.
+   - Domain: if provided in prior turns or via request param.
+2) Routing rules:
+   - If any intel keyword is present AND a company is resolvable ⇒ route to `intel_enrichment` (call `/intel/analyze`).
+   - Else if `pro_search` flag is true ⇒ route to `agent_search_pro`.
+   - Else ⇒ `general_chat`.
+3) Fallbacks:
+   - Missing company for `intel_enrichment`: return a gentle prompt asking for company name/domain.
+   - Provider failures: degrade to `general_chat` with a short notice.
+
+### Chat Flow Integration
+- Location: augment `backend/chat.py` (or the function behind `POST /chat`) to:
+  1. Run lightweight intent detection on `chat_request.query` (+ last message context).
+  2. If `intel_enrichment`:
+     - Build questions: use provided lines or defaults (decision-makers, investments, gaps).
+     - Call `POST /intel/analyze` internally (direct service call preferred over HTTP).
+     - Stream back a sequence of events compatible with the existing SSE model:
+       - `BEGIN_STREAM` (reuse)
+       - `SEARCH_RESULTS` (map intel sources)
+       - `TEXT_CHUNK` (summaries per question)
+       - `FINAL_RESPONSE` (concise overall summary)
+       - `STREAM_END`
+     - Optionally add a custom `AGENT_FULL_RESPONSE`-style event for a structured block (people table, links).
+  3. Else follow existing pro search or general chat path.
+
+### Tool/Provider Selection Matrix (v1)
+- Decision-makers ⇒ Tavily answer + Diffbot analyze(top-URLs) + LinkedIn (by domain) when keys exist.
+- Investments/gaps ⇒ Tavily answer; (Bright Data planned later).
+- Partnerships/executives ⇒ Same as decision-makers path.
+- General questions ⇒ current chat LLM.
+- Pro research ⇒ existing agent_search flow.
+
+### State & Memory
+- Persist thread messages as today.
+- When `intel_enrichment` is used, store a compact record on the message (final summary, top sources, extracted_people) to power follow-ups.
+- Follow-up detection: if user asks "tell me more about X" and prior turn was intel, keep `intel_enrichment` and pass refined question.
+
+### Config Flags
+- `INTEL_ENABLED` (default true) to toggle orchestration.
+- `INTEL_MAX_RESULTS` (default 5).
+- Provider keys from env: `TAVILY_API_KEY`, `DIFFBOT_TOKEN`, `LINKEDIN_RAPIDAPI_KEY`.
+
+### Minimal Implementation Tasks
+1) Add an intent classifier (keyword + context) in `backend/chat.py`.
+2) Create a thin adapter to call `IntelligenceService` directly (avoid HTTP hop).
+3) Map intel results to SSE events the frontend already renders; add a small renderer for extracted people.
+4) Add unit tests for routing and service invocation (mocks for providers).
+
+### Future Enhancements (planned, not implemented)
+- LLM-assisted router when keywords are insufficient.
+- Async provider clients with concurrency, retries, and caching.
+- Meeting-readiness scoring and richer structured sections in streamed output.
+- Frontend UI for an "Intel" tab that consumes the same SSE stream.
+

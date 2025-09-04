@@ -1,0 +1,104 @@
+{
+  "name": "3EDGE Asset Management",
+  "industry": "Asset Management",
+  "focus_areas": [
+    "Multi-Asset Management",
+    "Institutional Investing",
+    "ETF Strategies",
+    "Alternative Investments"
+  ],
+  "description": "Leading independent investment management firm specializing in multi-asset strategies for institutional investors",
+  "headquarters": "New York, NY",
+  "founded": 2008,
+  "aum": "$50B+",
+  "decision_makers": {
+    "stephen_cucchiaro": {
+      "name": "Stephen Cucchiaro",
+      "title": "CEO & Chief Investment Officer",
+      "focus_areas": ["Strategic Direction", "Investment Strategy", "Risk Management"],
+      "pain_points": [
+        "Portfolio optimization complexity",
+        "Market prediction accuracy",
+        "Risk management in volatile markets",
+        "Multi-asset strategy efficiency",
+        "Real-time investment insights"
+      ],
+      "communication_style": "Strategic, ROI-focused",
+      "linkedin_url": "",
+      "email": ""
+    },
+    "monica_chandra": {
+      "name": "Monica Chandra",
+      "title": "President",
+      "focus_areas": ["Business Development", "Client Relations", "Growth Strategy"],
+      "pain_points": [
+        "Client acquisition and retention",
+        "Operational efficiency scaling",
+        "Client experience personalization",
+        "Business development automation",
+        "Strategic partnership identification"
+      ],
+      "communication_style": "Business-focused, growth-oriented",
+      "linkedin_url": "",
+      "email": ""
+    },
+    "eric_biegeleisen": {
+      "name": "Eric Biegeleisen",
+      "title": "Deputy CIO & Director of Research",
+      "focus_areas": ["Investment Research", "Portfolio Construction", "Data Analytics"],
+      "pain_points": [
+        "Advanced data analysis capabilities",
+        "Research process automation",
+        "Investment model validation",
+        "Performance attribution analytics",
+        "Alternative data integration"
+      ],
+      "communication_style": "Technical, data-driven",
+      "linkedin_url": "",
+      "email": ""
+    },
+    "fritz_folts": {
+      "name": "Fritz Folts",
+      "title": "Chief Investment Strategist",
+      "focus_areas": ["Investment Strategy", "Market Analysis", "Portfolio Management"],
+      "pain_points": [
+        "Market trend prediction",
+        "Investment strategy optimization",
+        "Portfolio risk assessment",
+        "Performance benchmarking",
+        "Client reporting automation"
+      ],
+      "communication_style": "Strategic, analytical",
+      "linkedin_url": "",
+      "email": ""
+    }
+  },
+  "recent_news": [
+    "ETF launches and Schwab partnership",
+    "Institutional client growth announcements",
+    "Technology platform enhancements"
+  ],
+  "partnerships": [
+    "Charles Schwab",
+    "Major institutional investors",
+    "Technology platform providers"
+  ],
+  "investment_strategy": {
+    "approach": "Multi-asset, active management",
+    "focus": "Risk-adjusted returns",
+    "time_horizon": "Long-term institutional",
+    "client_base": "Institutional investors, endowments, foundations"
+  },
+  "competitive_advantages": [
+    "Independent ownership structure",
+    "Focus on institutional clients",
+    "Multi-asset expertise",
+    "Technology-driven investment process"
+  ],
+  "growth_areas": [
+    "ETF business expansion",
+    "Alternative investment strategies",
+    "International market expansion",
+    "Technology platform development"
+  ]
+}

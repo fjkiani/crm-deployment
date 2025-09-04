@@ -1,0 +1,473 @@
+---
+globs: components/response_structure/*.py,orchestration/workflows/*qa*.py
+description: Standard output formats for question-driven intelligence responses
+---
+
+# Question-Driven Output Format Standards
+
+## Current Problem: Data Dump vs. Actionable Intelligence
+
+### ❌ Current Output (from 3edge_focused_analysis.json)
+```json
+{
+  "investment_preferences": [
+    {
+      "preference": "Fixed Income",
+      "context": "3EDGE Asset Management, LP is an investment...",
+      "source": "3EDGE Growth Strategy",
+      "url": "https://..."
+    },
+    // ... 500+ similar redundant entries
+  ]
+}
+```
+**Problems:**
+- 12,080 lines of repetitive data
+- No clear answers to specific questions
+- Requires manual analysis to extract insights
+- No actionable recommendations
+
+### ✅ New Question-Driven Output
+```json
+{
+  "query_analysis": {
+    "original_question": "For Abbey Capital, find decision makers in healthcare and recent investments",
+    "company": "Abbey Capital",
+    "analysis_type": "healthcare_focus_analysis",
+    "confidence_score": 0.87
+  },
+  "executive_summary": "Abbey Capital has 3 key healthcare decision makers and completed 5 healthcare investments totaling $120M in the past 18 months, with strong focus on digital health and AI diagnostics.",
+  "actionable_intelligence": { /* structured data */ },
+  "recommendations": { /* specific next steps */ }
+}
+```
+
+## Standard Response Structure
+
+### Base Response Format
+```python
+@dataclass
+class QuestionDrivenResponse:
+    """Standard format for all question-driven intelligence responses"""
+    
+    # Query Context
+    query_analysis: QueryAnalysis
+    executive_summary: str
+    confidence_score: float
+    
+    # Core Intelligence
+    actionable_intelligence: Dict[str, Any]
+    key_insights: List[str]
+    
+    # Recommendations
+    immediate_actions: List[str]
+    follow_up_questions: List[str]
+    
+    # Metadata
+    data_sources: List[DataSource]
+    processing_time: float
+    generated_at: datetime
+
+@dataclass
+class QueryAnalysis:
+    """Analysis of the original query"""
+    original_question: str
+    company: str
+    question_type: str  # "executive_analysis", "investment_research", "gap_analysis"
+    sub_questions: List[str]
+    complexity_score: float
+    estimated_accuracy: float
+```
+
+## Response Templates by Question Type
+
+### 1. Executive/Decision Maker Analysis
+
+#### Input Question Types:
+- "Who are the decision makers at [Company]?"
+- "Find executives involved in [sector] at [Company]"
+- "Who makes investment decisions at [Company]?"
+
+#### Output Template:
+```json
+{
+  "query_analysis": {
+    "original_question": "Who are the healthcare decision makers at Abbey Capital?",
+    "company": "Abbey Capital",
+    "question_type": "executive_analysis",
+    "focus_area": "healthcare",
+    "confidence_score": 0.89
+  },
+  
+  "executive_summary": "Abbey Capital has 4 identified decision makers with healthcare involvement, led by Dr. Sarah Johnson (Healthcare Investment Director) who has direct authority over healthcare investments up to $50M.",
+  
+  "actionable_intelligence": {
+    "primary_decision_makers": [
+      {
+        "name": "Dr. Sarah Johnson",
+        "title": "Healthcare Investment Director",
+        "decision_authority": "Direct approval up to $50M healthcare investments",
+        "expertise_areas": ["Digital Health", "AI Diagnostics", "Biotech"],
+        "contact_priority": "high",
+        "contact_info": {
+          "email": "s.johnson@abbeycapital.com",
+          "linkedin": "linkedin.com/in/sarahjohnsonhealthcare",
+          "phone": "+1-555-0123"
+        },
+        "best_approach": "Focus on AI-driven healthcare innovations",
+        "recent_activity": "Led $30M investment in HealthAI Corp (Aug 2024)",
+        "connection_strength": "direct_contact_available"
+      }
+    ],
+    
+    "secondary_influencers": [
+      {
+        "name": "Michael Chen",
+        "title": "Partner",
+        "role_in_healthcare": "Committee member for healthcare deals >$25M",
+        "influence_level": "high",
+        "contact_info": { /* contact details */ }
+      }
+    ],
+    
+    "decision_process": {
+      "investment_committee_size": 5,
+      "healthcare_specialists": 2,
+      "typical_decision_timeline": "6-8 weeks",
+      "approval_thresholds": {
+        "individual_authority": "$10M",
+        "committee_required": "$10M+"
+      }
+    }
+  },
+  
+  "key_insights": [
+    "Dr. Johnson has final say on healthcare investments under $50M",
+    "Abbey prefers AI-enabled healthcare solutions over traditional medtech",
+    "Strong preference for Series A and B stage companies",
+    "Healthcare represents 23% of total portfolio allocation"
+  ],
+  
+  "immediate_actions": [
+    "Schedule 30-min intro call with Dr. Sarah Johnson",
+    "Prepare healthcare AI pitch deck focusing on diagnostics",
+    "Research HealthAI Corp partnership opportunities",
+    "Get warm introduction through mutual connection at Stanford Med"
+  ],
+  
+  "follow_up_questions": [
+    "What specific healthcare AI technologies is Abbey most interested in?",
+    "What was the decision criteria for the HealthAI Corp investment?",
+    "Are there geographic preferences for healthcare investments?"
+  ]
+}
+```
+
+### 2. Investment Analysis
+
+#### Input Question Types:
+- "What has [Company] invested in recently?"
+- "Show me [Company]'s [sector] investments"
+- "What is [Company]'s investment strategy?"
+
+#### Output Template:
+```json
+{
+  "query_analysis": {
+    "original_question": "What healthcare investments has Abbey Capital made recently?",
+    "company": "Abbey Capital",
+    "question_type": "investment_analysis",
+    "sector_focus": "healthcare",
+    "timeframe": "18_months",
+    "confidence_score": 0.92
+  },
+  
+  "executive_summary": "Abbey Capital completed 7 healthcare investments totaling $185M over 18 months, with strong focus on AI-driven diagnostics and digital health platforms. Average investment size $26.4M, primarily Series A/B stage.",
+  
+  "actionable_intelligence": {
+    "recent_investments": [
+      {
+        "company": "HealthAI Corp",
+        "investment_date": "2024-08-15",
+        "amount": "$30M",
+        "round_type": "Series B",
+        "abbey_role": "Lead Investor",
+        "subsector": "AI Diagnostics",
+        "technology_focus": "Computer vision for radiology",
+        "decision_maker": "Dr. Sarah Johnson",
+        "current_status": "Portfolio company, active board seat",
+        "exit_timeline": "3-5 years (IPO track)",
+        "follow_on_potential": "High - reserved $15M for Series C"
+      }
+    ],
+    
+    "investment_patterns": {
+      "preferred_stages": ["Series A: 43%", "Series B: 29%", "Seed: 28%"],
+      "average_investment_size": "$26.4M",
+      "typical_ownership": "8-15%",
+      "geographic_distribution": {
+        "US": "71%",
+        "Europe": "23%", 
+        "Asia": "6%"
+      },
+      "sector_breakdown": {
+        "AI_diagnostics": "35%",
+        "digital_therapeutics": "28%",
+        "healthcare_infrastructure": "22%",
+        "biotech_tools": "15%"
+      }
+    },
+    
+    "investment_thesis": {
+      "core_themes": [
+        "AI-enabled healthcare workflow automation",
+        "Point-of-care diagnostic solutions",
+        "Healthcare data infrastructure and interoperability"
+      ],
+      "key_criteria": [
+        "Proven clinical efficacy and regulatory pathway",
+        "Experienced healthcare management team",
+        "Scalable technology platform",
+        "Clear path to revenue within 18 months"
+      ],
+      "competitive_advantages_sought": [
+        "Proprietary datasets",
+        "Clinical partnerships",
+        "Regulatory moats",
+        "Network effects"
+      ]
+    }
+  },
+  
+  "key_insights": [
+    "Strong preference for AI-enabled solutions over traditional healthcare",
+    "Consistent $20-35M investment range indicates sweet spot",
+    "Geographic expansion into European healthcare markets (recent trend)",
+    "Follow-on investment rate of 67% indicates strong portfolio support"
+  ],
+  
+  "immediate_actions": [
+    "Position AI diagnostics solution aligned with Abbey's thesis",
+    "Prepare clinical efficacy data and regulatory pathway",
+    "Research potential synergies with HealthAI Corp",
+    "Develop European market expansion narrative"
+  ],
+  
+  "follow_up_questions": [
+    "What specific clinical areas is Abbey targeting next?",
+    "Are there partnership opportunities with existing portfolio companies?",
+    "What European healthcare markets are priorities?"
+  ]
+}
+```
+
+### 3. Gap Analysis
+
+#### Input Question Types:
+- "What investment gaps exist at [Company]?"
+- "What opportunities is [Company] missing?"
+- "Compare [Company]'s strategy to competitors"
+
+#### Output Template:
+```json
+{
+  "query_analysis": {
+    "original_question": "What healthcare investment gaps exist in Abbey Capital's portfolio?",
+    "company": "Abbey Capital",
+    "question_type": "gap_analysis",
+    "analysis_framework": "portfolio_optimization",
+    "confidence_score": 0.84
+  },
+  
+  "executive_summary": "Abbey Capital has 3 significant healthcare investment gaps: limited exposure to surgical robotics, minimal presence in Asian markets, and underweight position in mental health technologies. Combined opportunity size estimated at $200M+ market.",
+  
+  "actionable_intelligence": {
+    "identified_gaps": [
+      {
+        "gap_category": "Technology Segment",
+        "specific_gap": "Surgical Robotics and Automation",
+        "opportunity_description": "Growing $15B market with 12% CAGR, Abbey has zero exposure",
+        "market_size": "$15B (2024), projected $28B by 2029",
+        "competitive_landscape": "Dominated by Intuitive Surgical, emerging players gaining traction",
+        "investment_opportunity": {
+          "stage_focus": "Series A/B robotics startups",
+          "geographic_targets": ["US West Coast", "Switzerland", "Singapore"],
+          "key_technologies": ["Haptic feedback systems", "AI-guided surgery", "Microsurgical robots"],
+          "estimated_investment_size": "$25-40M per deal"
+        },
+        "strategic_rationale": "Natural extension of AI diagnostics portfolio, synergies with HealthAI Corp",
+        "recommended_timeline": "Next 6 months",
+        "priority": "High"
+      }
+    ],
+    
+    "competitive_comparison": {
+      "benchmark_funds": ["Andreessen Horowitz Bio Fund", "GV Healthcare", "Khosla Ventures"],
+      "abbey_position": {
+        "strengths": ["AI diagnostics leadership", "Strong clinical networks"],
+        "weaknesses": ["Geographic concentration", "Limited hardware exposure"],
+        "opportunity_gaps": ["Surgical robotics", "Asian markets", "Mental health tech"]
+      }
+    },
+    
+    "market_opportunities": [
+      {
+        "sector": "Mental Health Technology",
+        "market_size": "$6.6B",
+        "growth_rate": "23% CAGR",
+        "abbey_exposure": "0%",
+        "recommended_investment": "$15-25M",
+        "target_companies": ["Mindstrong", "Ginger", "Headspace Health"],
+        "rationale": "COVID-driven demand, strong clinical outcomes data"
+      }
+    ]
+  },
+  
+  "key_insights": [
+    "Surgical robotics represents biggest untapped opportunity ($200M+ investable market)",
+    "Asian healthcare market entry could unlock 3x portfolio expansion",
+    "Mental health tech has strongest near-term growth prospects",
+    "Current portfolio lacks hardware/device exposure (85% software-focused)"
+  ],
+  
+  "immediate_actions": [
+    "Schedule surgical robotics market deep-dive with Dr. Johnson",
+    "Research partnership opportunities with Asian healthcare funds",
+    "Identify 3-5 surgical robotics Series A targets",
+    "Develop thesis for mental health technology investments"
+  ],
+  
+  "follow_up_questions": [
+    "What specific surgical specialties is Abbey most interested in?",
+    "Are there geographic restrictions for international investments?",
+    "What clinical evidence standards does Abbey require for mental health tech?"
+  ]
+}
+```
+
+## Response Quality Standards
+
+### Confidence Scoring
+```python
+class ResponseQualityScorer:
+    """Calculate confidence scores for question-driven responses"""
+    
+    def calculate_response_confidence(self, response_data: Dict, sources: List[str]) -> float:
+        """Calculate overall confidence in the response"""
+        factors = {
+            "data_completeness": self._score_completeness(response_data),
+            "source_reliability": self._score_sources(sources),
+            "cross_validation": self._score_cross_validation(response_data),
+            "recency": self._score_data_recency(response_data),
+            "specificity": self._score_specificity(response_data)
+        }
+        
+        weights = {
+            "data_completeness": 0.25,
+            "source_reliability": 0.25,
+            "cross_validation": 0.20,
+            "recency": 0.15,
+            "specificity": 0.15
+        }
+        
+        return sum(factors[key] * weights[key] for key in factors)
+```
+
+### Action Prioritization
+```python
+class ActionPrioritizer:
+    """Prioritize recommended actions based on impact and feasibility"""
+    
+    def prioritize_actions(self, actions: List[str], context: Dict) -> List[PrioritizedAction]:
+        """Rank actions by priority"""
+        return [
+            PrioritizedAction(
+                action=action,
+                priority=self._calculate_priority(action, context),
+                estimated_impact=self._estimate_impact(action, context),
+                time_to_complete=self._estimate_time(action),
+                resources_required=self._estimate_resources(action)
+            )
+            for action in actions
+        ]
+```
+
+### Follow-up Question Generation
+```python
+class FollowUpGenerator:
+    """Generate intelligent follow-up questions"""
+    
+    def generate_follow_ups(self, original_question: str, response: Dict) -> List[str]:
+        """Generate relevant follow-up questions"""
+        # Use LLM to generate contextual follow-ups
+        prompt = f"""
+        Based on this intelligence response, generate 3-5 intelligent follow-up questions that would:
+        1. Deepen understanding of the topic
+        2. Uncover additional opportunities
+        3. Address potential concerns or risks
+        4. Provide actionable next steps
+        
+        Original Question: {original_question}
+        Response Summary: {response.get('executive_summary', '')}
+        """
+        
+        return self.llm_client.generate_follow_ups(prompt)
+```
+
+## Integration with Agent Responses
+
+### Agent Response Synthesis
+```python
+class ResponseSynthesizer:
+    """Synthesize multiple agent responses into cohesive answer"""
+    
+    async def synthesize_question_response(
+        self, 
+        question: str, 
+        company: str,
+        agent_responses: List[StructuredAnswer]
+    ) -> QuestionDrivenResponse:
+        """Convert agent responses into question-driven format"""
+        
+        # 1. Analyze question type
+        question_type = self._classify_question(question)
+        
+        # 2. Extract relevant data from agent responses
+        combined_data = self._combine_agent_data(agent_responses)
+        
+        # 3. Generate executive summary
+        summary = await self._generate_executive_summary(question, combined_data)
+        
+        # 4. Structure actionable intelligence
+        actionable_intel = self._structure_actionable_intelligence(combined_data, question_type)
+        
+        # 5. Generate insights and recommendations
+        insights = self._extract_key_insights(combined_data)
+        actions = self._generate_recommendations(question, combined_data)
+        follow_ups = self._generate_follow_up_questions(question, combined_data)
+        
+        # 6. Calculate confidence
+        confidence = self._calculate_overall_confidence(agent_responses)
+        
+        return QuestionDrivenResponse(
+            query_analysis=QueryAnalysis(
+                original_question=question,
+                company=company,
+                question_type=question_type,
+                confidence_score=confidence
+            ),
+            executive_summary=summary,
+            actionable_intelligence=actionable_intel,
+            key_insights=insights,
+            immediate_actions=actions,
+            follow_up_questions=follow_ups,
+            confidence_score=confidence
+        )
+```
+
+This format ensures responses are:
+- **Directly answerable**: Clear answers to specific questions
+- **Actionable**: Specific next steps and recommendations
+- **Contextual**: Relevant insights for the specific question
+- **Scalable**: Consistent format across different question types
+- **Intelligent**: LLM-enhanced synthesis and analysis

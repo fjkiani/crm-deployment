@@ -1,0 +1,15 @@
+{
+  "tavily_api_key": "",
+  "tavily_base_url": "https://api.tavily.com/search",
+  "tavily_timeout": 30,
+  "tavily_max_retries": 3,
+  "max_companies_per_batch": 5,
+  "search_results_per_query": 5,
+  "rate_limit_delay": 1.0,
+  "max_processing_time": 300,
+  "target_company": "",
+  "sender_company": "NeuroFlow AI",
+  "sender_name": "Alex Johnson",
+  "sender_title": "Chief AI Officer",
+  "sender_email": "alex.johnson@neuroflow.ai"
+}

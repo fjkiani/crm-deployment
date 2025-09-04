@@ -1,0 +1,97 @@
+---
+alwaysApply: true
+description: Core architecture and design philosophy for CRM Intelligence Platform
+---
+
+# 🏗️ CRM Intelligence Platform Architecture
+
+## Design Philosophy
+Our CRM Intelligence Platform follows a **component-based architecture** built on the proven success of our 3EDGE Asset Management analysis. The system is designed to be:
+
+- **Modular**: Separated into focused components
+- **Maintainable**: Each component has a single responsibility
+- **Configurable**: Environment-driven configuration
+- **Testable**: Components can be tested independently
+
+## Core Principles
+
+### 1. Component-Based Design
+```
+Each component has:
+✅ Single Responsibility - One clear job
+✅ Focused Scope - 50-200 lines maximum
+✅ Clean Interfaces - Clear input/output contracts
+✅ Configuration-Driven - External configuration
+✅ Independent Testing - Can be unit tested separately
+```
+
+### 2. Current Architecture
+```
+crm_intelligence/
+├── components/intelligence/     # 🧠 Modular intelligence system
+│   ├── intelligence_gatherer.py # 🔍 API calls & raw data
+│   ├── data_processor.py       # 🔄 Data extraction & cleaning
+│   ├── profile_builder.py      # 🏗️ Profile construction
+│   ├── lead_selector.py        # 🎯 Lead evaluation & selection
+│   ├── intelligence_orchestrator.py # 🎼 Component coordination
+│   ├── intelligence_runner.py  # 🚀 Main execution
+│   └── test_modular_intelligence.py # 🧪 Component tests
+├── core/                       # 🎯 Core business logic
+├── data/                       # 💾 Data management
+├── config/                     # ⚙️ Configuration
+├── templates/                  # 📧 Content generation
+├── api/                        # 🔗 External integrations
+└── cli/                        # 💻 User interface
+```
+
+### 3. Data Flow Pattern
+```
+Input → Intelligence → Personalization → Output
+   ↓        ↓            ↓            ↓
+ Raw    Gather/Analyze  Customize     Export
+Data    Intelligence     Content     Results
+```
+
+## What's Actually Implemented
+
+### ✅ Working Components
+- **Intelligence Engine**: Gathers company intelligence using API calls
+- **Data Manager**: Handles CSV/JSON input/output operations
+- **Template Engine**: Manages email templates and personalization
+- **Configuration Manager**: Loads and manages platform configuration
+- **CLI Interface**: Command-line interface for platform operations
+
+### ⚠️ Current Limitations
+- **Single-threaded**: No concurrent processing yet
+- **Basic error handling**: Simple try/catch, no advanced recovery
+- **No monitoring**: Basic logging only
+- **No scaling**: Processes companies sequentially
+- **No caching**: No performance optimization implemented
+
+## Development Approach
+
+### Current Status
+- **Architecture**: Component-based structure implemented
+- **Core Logic**: Intelligence gathering and email generation working
+- **Data Flow**: Input → processing → output pipeline established
+- **CLI**: Basic command-line interface functional
+
+### Next Steps (Not Yet Implemented)
+- **Concurrent Processing**: Multiple companies simultaneously
+- **Advanced Error Handling**: Retry logic and graceful degradation
+- **Performance Optimization**: Caching and connection pooling
+- **Monitoring**: Metrics and health checks
+- **Scaling**: Batch processing and resource management
+
+## Quality Assurance
+
+### Current Testing
+- **Basic Unit Tests**: Individual component testing
+- **Integration Tests**: End-to-end pipeline validation
+- **Configuration Tests**: Environment and settings validation
+
+### Code Quality
+- **Type Hints**: Full type annotation implemented
+- **Documentation**: Comprehensive docstrings
+- **Error Handling**: Basic exception handling
+- **Logging**: Structured logging with levels

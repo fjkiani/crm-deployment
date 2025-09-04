@@ -1,0 +1,351 @@
+---
+alwaysApply: true
+description: Data flow patterns and pipeline orchestration
+globs: crm_intelligence/**/*.py
+---
+
+# 🌊 Data Flow & Pipeline Patterns
+
+## Core Data Flow Architecture
+
+### Primary Flow: Intelligence → Personalization → Outreach
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Raw Company   │ -> │   Intelligence   │ -> │  Personalized   │
+│     Data        │    │    Gathering     │    │    Content      │
+│                 │    │                  │    │                 │
+│ • Company Name  │    │ • Leadership     │    │ • Role-specific │
+│ • Industry      │    │ • Focus Areas    │    │   Messaging     │
+│ • Basic Info    │    │ • Recent News    │    │ • Pain Points   │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                                       │
+                                                       v
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Outreach      │ <- │   Campaign       │ <- │   Multi-Channel │
+│   Execution     │    │   Generation     │    │    Delivery     │
+│                 │    │                  │    │                 │
+│ • Email Drafts  │    │ • Email Sequence │    │ • Email         │
+│ • Follow-ups    │    │ • Timing         │    │ • LinkedIn      │
+│ • Tracking      │    │ • A/B Tests      │    │ • Phone         │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+## Pipeline Orchestration
+
+### Main Processing Pipeline
+```python
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+
+class IntelligencePipeline:
+    """Main intelligence processing pipeline"""
+
+    def __init__(self, components: List[BaseComponent]):
+        self.components = components
+        self.logger = logging.getLogger("IntelligencePipeline")
+
+    def execute(self, targets: List[str]) -> Dict[str, Any]:
+        """Execute full intelligence pipeline"""
+
+        results = {
+            "pipeline": "IntelligencePipeline",
+            "targets_processed": len(targets),
+            "start_time": datetime.now(),
+            "component_results": [],
+            "final_results": [],
+            "errors": []
+        }
+
+        for target in targets:
+            target_result = self._process_target(target)
+            results["component_results"].append(target_result)
+
+            if "error" not in target_result:
+                results["final_results"].append(target_result)
+            else:
+                results["errors"].append(target_result)
+
+        results["end_time"] = datetime.now()
+        results["processing_time"] = (
+            results["end_time"] - results["start_time"]
+        ).total_seconds()
+
+        return results
+
+    def _process_target(self, target: str) -> Dict[str, Any]:
+        """Process single target through all components"""
+
+        current_data = {"target": target}
+
+        for component in self.components:
+            try:
+                self.logger.info(f"Executing {component.name} for {target}")
+
+                # Execute component
+                result = component.execute(current_data)
+
+                # Validate result
+                if not self._validate_component_result(result):
+                    return {
+                        "target": target,
+                        "error": "Invalid component result",
+                        "component": component.name
+                    }
+
+                # Merge results for next component
+                current_data.update(result)
+
+            except Exception as e:
+                self.logger.error(f"Component {component.name} failed: {e}")
+                return {
+                    "target": target,
+                    "error": str(e),
+                    "component": component.name,
+                    "stage": "execution"
+                }
+
+        return current_data
+
+    def _validate_component_result(self, result: Dict[str, Any]) -> bool:
+        """Validate component result format"""
+        required_fields = ["component", "target"]
+
+        for field in required_fields:
+            if field not in result:
+                return False
+
+        return True
+```
+
+## Component Data Flow Patterns
+
+### Intelligence Gathering Flow
+```python
+# 1. Company Research Component
+input: {"target": "3EDGE Asset Management"}
+output: {
+    "company_name": "3EDGE Asset Management",
+    "description": "Leading asset management firm...",
+    "industry": "Financial Services",
+    "headquarters": "New York, NY",
+    "founded": 2008,
+    "website": "https://www.3edge.com"
+}
+
+# 2. Contact Intelligence Component
+input: {
+    "target": "3EDGE Asset Management",
+    "company_name": "3EDGE Asset Management",
+    "description": "..."
+}
+output: {
+    "leadership": [
+        {"name": "Stephen Cucchiaro", "title": "CEO", "email": "..."},
+        {"name": "Eric Biegeleisen", "title": "Deputy CIO", "email": "..."}
+    ],
+    "contacts_found": 4,
+    "confidence_scores": {"Stephen Cucchiaro": 0.95, ...}
+}
+
+# 3. Industry Analysis Component
+input: {
+    "target": "3EDGE Asset Management",
+    "company_name": "...",
+    "leadership": [...],
+    "contacts_found": 4
+}
+output: {
+    "focus_areas": ["Multi-Asset Management", "ETF Strategies"],
+    "investment_style": "Active Management",
+    "aum": "$50B+",
+    "competitors": ["BlackRock", "Vanguard", "State Street"]
+}
+```
+
+### Personalization Flow
+```python
+# 4. Personalization Engine
+input: {
+    "target": "3EDGE Asset Management",
+    "leadership": [...],
+    "focus_areas": [...],
+    "investment_style": "Active Management"
+}
+output: {
+    "personalization_profiles": [
+        {
+            "contact": "Stephen Cucchiaro",
+            "title": "CEO",
+            "pain_points": ["Portfolio Optimization", "Market Prediction"],
+            "communication_style": "Strategic, ROI-focused",
+            "role_focus": "Strategic Direction"
+        },
+        {
+            "contact": "Eric Biegeleisen",
+            "title": "Deputy CIO",
+            "pain_points": ["Data Analysis", "Technology Integration"],
+            "communication_style": "Technical, innovation-focused",
+            "role_focus": "Technology & Innovation"
+        }
+    ]
+}
+```
+
+### Content Generation Flow
+```python
+# 5. Email Generator Component
+input: {
+    "target": "3EDGE Asset Management",
+    "personalization_profiles": [...],
+    "campaign_type": "executive_outreach"
+}
+output: {
+    "emails": [
+        {
+            "recipient": "Stephen Cucchiaro",
+            "subject": "AI-Powered Intelligence: Solving 3EDGE's Strategic Challenges",
+            "body": "Dear Stephen,\\n\\nAs CEO at 3EDGE Asset Management...",
+            "personalization_score": 0.92,
+            "generated_at": "2024-01-01T12:00:00Z"
+        }
+    ],
+    "campaign_metrics": {
+        "total_emails": 4,
+        "avg_personalization_score": 0.88,
+        "estimated_response_rate": 0.15
+    }
+}
+```
+
+## Error Handling & Recovery
+
+### Graceful Degradation
+```python
+def execute_with_fallback(self, component, input_data):
+    """Execute component with fallback options"""
+
+    try:
+        return component.execute(input_data)
+    except APIError:
+        # Try cached data
+        cached = self.cache.get(input_data["target"])
+        if cached:
+            return cached
+
+        # Use default/fallback data
+        return self._generate_fallback_data(input_data)
+    except Exception as e:
+        # Log error and continue
+        self.logger.error(f"Component failed: {e}")
+        return {"error": str(e), "component": component.name}
+```
+
+### Pipeline Resilience
+```python
+def execute_resilient_pipeline(self, targets):
+    """Execute pipeline with resilience patterns"""
+
+    results = []
+    batch_size = self.config.get("batch_size", 10)
+
+    for i in range(0, len(targets), batch_size):
+        batch = targets[i:i + batch_size]
+
+        try:
+            batch_results = self._execute_batch(batch)
+            results.extend(batch_results)
+        except Exception as e:
+            self.logger.error(f"Batch failed: {e}")
+            # Continue with next batch
+            continue
+
+    return results
+```
+
+## Data Validation Patterns
+
+### Input Validation
+```python
+def validate_target_input(self, target_data):
+    """Validate target input data"""
+
+    required_fields = ["target"]
+    optional_fields = ["industry", "region", "size"]
+
+    # Check required fields
+    for field in required_fields:
+        if field not in target_data:
+            raise ValueError(f"Missing required field: {field}")
+
+    # Validate target format
+    if not isinstance(target_data["target"], str):
+        raise ValueError("Target must be a string")
+
+    if len(target_data["target"].strip()) == 0:
+        raise ValueError("Target cannot be empty")
+
+    return True
+```
+
+### Output Validation
+```python
+def validate_component_output(self, output_data):
+    """Validate component output format"""
+
+    # Required fields for all components
+    required = ["component", "target", "timestamp"]
+
+    for field in required:
+        if field not in output_data:
+            return False, f"Missing required field: {field}"
+
+    # Type validation
+    if not isinstance(output_data["target"], str):
+        return False, "Target must be string"
+
+    # Timestamp format validation
+    try:
+        datetime.fromisoformat(output_data["timestamp"])
+    except ValueError:
+        return False, "Invalid timestamp format"
+
+    return True, "Valid"
+```
+
+## Performance Optimization
+
+### Caching Strategy
+```python
+class PipelineCache:
+    """Intelligent caching for pipeline optimization"""
+
+    def __init__(self, config):
+        self.cache = {}
+        self.ttl = config.get("cache_ttl_hours", 24)
+
+    def get(self, key):
+        """Get cached data if valid"""
+        if key in self.cache:
+            entry = self.cache[key]
+            if self._is_valid(entry):
+                return entry["data"]
+            else:
+                del self.cache[key]
+        return None
+
+    def set(self, key, data):
+        """Cache data with timestamp"""
+        self.cache[key] = {
+            "data": data,
+            "timestamp": datetime.now(),
+            "ttl": self.ttl
+        }
+
+    def _is_valid(self, entry):
+        """Check if cache entry is still valid"""
+        age = datetime.now() - entry["timestamp"]
+        return age.total_seconds() < (entry["ttl"] * 3600)
+```
+
+
+```
