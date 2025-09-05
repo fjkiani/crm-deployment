@@ -1,3 +1,0 @@
-"""Components package"""
-
-"""Package initialization"""
