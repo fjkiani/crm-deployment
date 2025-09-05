@@ -89,6 +89,127 @@ def preview(file_url: str | None = None, filedata: str | None = None, delimiter:
 
 
 @frappe.whitelist(allow_guest=False)
+def autogenerate_mapping(
+    profile_name: str,
+    source_type: str = "CSV",
+    file_url: str | None = None,
+    sheet_id: str | None = None,
+) -> dict:
+    """Create or update a CRM Import Column Map by inferring sensible defaults from headers.
+
+    - Reads headers via `preview` (CSV URL or Google Sheets export CSV)
+    - Applies simple heuristics to map common headers to target DocTypes/fields
+    - Upserts a `CRM Import Column Map` named `profile_name`
+
+    Returns a summary with created/updated status and the suggested items.
+    """
+    src = (source_type or "CSV").upper()
+    if src not in ("CSV", "GOOGLE_SHEETS"):
+        frappe.throw(_(f"Unsupported source_type: {src}"))
+
+    if src == "CSV":
+        if not file_url:
+            frappe.throw(_("Provide file_url for CSV"))
+        pv = preview(file_url=file_url, max_rows=5)
+    else:
+        if not sheet_id:
+            frappe.throw(_("Provide sheet_id for GOOGLE_SHEETS"))
+        export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+        pv = preview(file_url=export_url, max_rows=5)
+
+    headers: list[str] = pv.get("headers") or []
+    norm_headers: list[str] = pv.get("normalized_headers") or []
+
+    # Heuristic mapping rules: header → (target_doctype, target_field)
+    rules: dict[str, tuple[str, str]] = {
+        # Lead
+        "email": ("CRM Lead", "email"),
+        "email_id": ("CRM Lead", "email"),
+        "first_name": ("CRM Lead", "first_name"),
+        "lastname": ("CRM Lead", "last_name"),
+        "last_name": ("CRM Lead", "last_name"),
+        "phone": ("CRM Lead", "phone"),
+        "mobile": ("CRM Lead", "mobile_no"),
+        "mobile_no": ("CRM Lead", "mobile_no"),
+        "status": ("CRM Lead", "status"),
+        "source": ("CRM Lead", "lead_source"),
+        # Organization
+        "organization": ("CRM Organization", "organization_name"),
+        "organization_name": ("CRM Organization", "organization_name"),
+        "company": ("CRM Organization", "organization_name"),
+        "org": ("CRM Organization", "organization_name"),
+        "website": ("CRM Organization", "website"),
+        # Contact (optional)
+        "contact_email": ("Contact", "email_id"),
+        "contact_phone": ("Contact", "phone"),
+        "contact_first_name": ("Contact", "first_name"),
+        "contact_last_name": ("Contact", "last_name"),
+    }
+
+    # Build suggestions preserving original header text for readability
+    suggestions: list[dict] = []
+    for orig, norm in zip(headers, norm_headers):
+        key = norm
+        # try exact, else try simplified aliases
+        target = None
+        if key in rules:
+            target = rules[key]
+        else:
+            # soft aliases
+            if key.endswith("_email"):
+                target = ("CRM Lead", "email")
+            elif key in ("name", "full_name"):
+                target = ("CRM Lead", "first_name")
+            elif key in ("company_name", "employer"):
+                target = ("CRM Organization", "organization_name")
+
+        if target:
+            suggestions.append(
+                {
+                    "source_header": orig,
+                    "target_doctype": target[0],
+                    "target_field": target[1],
+                }
+            )
+
+    if not suggestions:
+        return {
+            "created": False,
+            "updated": False,
+            "message": _("No suggestions found from headers; create mapping manually."),
+            "headers": headers,
+        }
+
+    # Upsert mapping doc
+    created = False
+    updated = False
+    try:
+        doc = frappe.get_doc("CRM Import Column Map", profile_name)
+        doc.set("columns", [])
+        for s in suggestions:
+            doc.append("columns", s)
+        doc.save()
+        updated = True
+    except frappe.DoesNotExistError:
+        doc = frappe.get_doc(
+            {
+                "doctype": "CRM Import Column Map",
+                "title": profile_name,
+                "columns": suggestions,
+            }
+        )
+        doc.insert()
+        created = True
+
+    return {
+        "created": created,
+        "updated": updated,
+        "profile": profile_name,
+        "items": suggestions,
+    }
+
+
+@frappe.whitelist(allow_guest=False)
 def job_status(job_id: str) -> dict:
     """Placeholder ETL job status (to be backed by DocType in next step)."""
     return {"job_id": job_id, "status": "not_implemented"}
