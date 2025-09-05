@@ -1,0 +1,3 @@
+include LICENSE
+include README.md
+recursive-include crm *.py *.json *.js *.css *.html *.md *.txt *.po *.pot *.svg *.png *.jpg *.woff *.woff2

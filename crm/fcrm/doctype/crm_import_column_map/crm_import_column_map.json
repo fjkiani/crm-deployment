@@ -1,0 +1,20 @@
+{
+ "doctype": "DocType",
+ "name": "CRM Import Column Map",
+ "module": "FCRM",
+ "autoname": "field:title",
+ "naming_rule": "By fieldname",
+ "title_field": "title",
+ "engine": "InnoDB",
+ "field_order": ["title", "columns"],
+ "fields": [
+  {"fieldname": "title", "label": "Title", "fieldtype": "Data", "reqd": 1, "unique": 1},
+  {"fieldname": "columns", "label": "Columns", "fieldtype": "Table", "options": "CRM Import Column Map Item"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "create": 1, "read": 1, "write": 1, "delete": 1}
+ ]
+}
+
+
+

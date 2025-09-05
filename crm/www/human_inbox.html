@@ -1,0 +1,83 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="container">
+	<div class="row">
+		<div class="col-12">
+			<h2>🤖 Human Inbox - AI Drafts</h2>
+			<p class="text-muted">{{ total_drafts }} drafts</p>
+
+			<form class="form-inline mb-3" method="get">
+				<div class="form-group mr-2">
+					<label class="mr-2">Doctype</label>
+					<input type="text" class="form-control" name="doctype" value="{{ filter_doctype or '' }}" placeholder="CRM Lead / Contact" />
+				</div>
+				<div class="form-group mr-2">
+					<label class="mr-2">Docname</label>
+					<input type="text" class="form-control" name="docname" value="{{ filter_docname or '' }}" placeholder="Name" />
+				</div>
+				<div class="form-group mr-2">
+					<div class="form-check">
+						<input class="form-check-input" type="checkbox" name="only_drafts" id="only_drafts" {% if filter_only_drafts %}checked{% endif %}>
+						<label class="form-check-label" for="only_drafts">Only Drafts</label>
+					</div>
+				</div>
+				<div class="form-group mr-2">
+					<label class="mr-2">Limit</label>
+					<input type="number" min="1" max="200" class="form-control" name="limit" value="{{ filter_limit or 50 }}" />
+				</div>
+				<button type="submit" class="btn btn-primary">Apply</button>
+			</form>
+
+			{% if ai_drafts %}
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th>Subject</th>
+						<th>From</th>
+						<th>To</th>
+						<th>Status</th>
+						<th>Created</th>
+						<th>Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+				{% for d in ai_drafts %}
+					<tr>
+						<td>{{ d.subject }}</td>
+						<td>{{ d.sender or '-' }}</td>
+						<td>{{ d.recipients }}</td>
+						<td>{{ d.status }}</td>
+						<td>{{ frappe.format_date(d.creation) }}</td>
+						<td>
+							<a class="btn btn-sm btn-outline-primary" href="/app/communication/{{ d.name }}" target="_blank">Open</a>
+							<button type="button" class="btn btn-sm btn-outline-success" onclick="sendDraft('{{ d.name }}')">Send</button>
+						</td>
+					</tr>
+				{% endfor %}
+				</tbody>
+			</table>
+			{% else %}
+			<div class="text-muted">No drafts found.</div>
+			{% endif %}
+		</div>
+	</div>
+</div>
+
+<script>
+function sendDraft(name) {
+	frappe.call({
+		method: 'crm.api.agent.run',
+		args: { command: 'email.send', params: { communication_name: name } },
+		callback: function(r) {
+			if (r.message && r.message.ok) {
+				frappe.show_alert('Email sent!', 'success');
+				setTimeout(() => window.location.reload(), 800);
+			} else {
+				frappe.show_alert('Send failed', 'danger');
+			}
+		}
+	});
+}
+</script>
+{% endblock %}
