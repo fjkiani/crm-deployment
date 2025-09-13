@@ -81,6 +81,11 @@
    "fieldname": "exchange_rate",
    "fieldtype": "Float",
    "label": "Exchange Rate"
+  },
+  {
+   "fieldname": "additional_data",
+   "fieldtype": "JSON",
+   "label": "Additional Data"
   }
  ],
  "image_field": "organization_logo",

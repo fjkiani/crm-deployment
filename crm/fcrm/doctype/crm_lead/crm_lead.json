@@ -325,6 +325,11 @@
    "label": "Net Total",
    "options": "currency",
    "read_only": 1
+  },
+  {
+   "fieldname": "additional_data",
+   "fieldtype": "JSON",
+   "label": "Additional Data"
   }
  ],
  "grid_page_length": 50,

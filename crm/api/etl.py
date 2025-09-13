@@ -462,6 +462,8 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
                 lead_data["organization"] = org_name
 
             if lead_data:
+                # Capture unmapped columns into additional_data for audit
+                _capture_additional_data(lead_data, headers, r, mapping)
                 _upsert_lead(lead_data, dry_run=dry_run)
 
             if contact_entries:
@@ -627,6 +629,45 @@ def _ensure_lead_source_exists(source: str):
         "source_name": val,
     })
     doc.insert(ignore_permissions=True)
+
+
+def _capture_additional_data(lead_data: dict, headers: list[str], row: list[str], mapping: list[dict]):
+    """Store unmapped CSV columns into lead_data['additional_data'] as JSON.
+
+    - mapping: list of {source_header, target_doctype, target_field}
+    Only captures columns that were not mapped to any target field for the lead.
+    """
+    try:
+        mapped_headers = set()
+        for m in mapping:
+            if (m.get("target_doctype") or "").strip().lower() in ("crm lead", "lead"):
+                src = (m.get("source_header") or "").strip()
+                if src:
+                    mapped_headers.add(_normalize_header(src))
+
+        additional: dict[str, str] = {}
+        for idx, h in enumerate(headers):
+            norm = _normalize_header(h)
+            if norm in mapped_headers:
+                continue
+            if idx < len(row):
+                v = row[idx]
+                if v not in (None, ""):
+                    additional[h] = v
+
+        if additional:
+            existing = {}
+            try:
+                if isinstance(lead_data.get("additional_data"), str):
+                    existing = json.loads(lead_data.get("additional_data"))  # type: ignore[arg-type]
+                elif isinstance(lead_data.get("additional_data"), dict):
+                    existing = lead_data.get("additional_data")  # type: ignore[assignment]
+            except Exception:
+                existing = {}
+            existing.update(additional)
+            lead_data["additional_data"] = existing
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), title="ETL Capture additional_data failed")
 
 
 @frappe.whitelist()
