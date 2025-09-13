@@ -435,6 +435,17 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
                             val = val.strip().title()
                         lead_data[e["field"]] = val
 
+            # Ensure master values exist for Link fields before upsert
+            if lead_data:
+                try:
+                    if isinstance(lead_data.get("status"), str) and lead_data.get("status"):  # type: ignore[arg-type]
+                        _ensure_lead_status_exists(lead_data.get("status"))  # type: ignore[arg-type]
+                    if isinstance(lead_data.get("lead_source"), str) and lead_data.get("lead_source"):  # type: ignore[arg-type]
+                        _ensure_lead_source_exists(lead_data.get("lead_source"))  # type: ignore[arg-type]
+                except Exception:
+                    # soft-fail; row handler will catch on insert if still invalid
+                    frappe.log_error(frappe.get_traceback(), title="ETL Ensure Master Values Failed")
+
             org_name = None
             if org_entries:
                 org_data: dict = {}
@@ -584,6 +595,38 @@ def _ensure_contact_link(contact_name: str, link_doctype: str, link_name: str):
         contact.save()
     except Exception:
         frappe.log_error(frappe.get_traceback(), title="Contact link failed")
+
+
+def _ensure_lead_status_exists(status: str):
+    """Create a CRM Lead Status on-the-fly if missing."""
+    val = (status or "").strip()
+    if not val:
+        return
+    name = frappe.db.exists("CRM Lead Status", val)
+    if name:
+        return
+    doc = frappe.get_doc({
+        "doctype": "CRM Lead Status",
+        "lead_status": val,
+        "color": "gray",
+        "position": 0,
+    })
+    doc.insert(ignore_permissions=True)
+
+
+def _ensure_lead_source_exists(source: str):
+    """Create a CRM Lead Source on-the-fly if missing."""
+    val = (source or "").strip()
+    if not val:
+        return
+    name = frappe.db.exists("CRM Lead Source", val)
+    if name:
+        return
+    doc = frappe.get_doc({
+        "doctype": "CRM Lead Source",
+        "source_name": val,
+    })
+    doc.insert(ignore_permissions=True)
 
 
 @frappe.whitelist()
