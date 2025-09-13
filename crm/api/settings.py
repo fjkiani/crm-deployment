@@ -161,3 +161,36 @@ def seed_all_crm_defaults(force: int = 0) -> dict:
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), title="Seed All CRM Defaults Failed")
         frappe.throw(f"Seeding failed: {type(e).__name__}: {e}")
+
+
+@frappe.whitelist()
+def ensure_import_masters() -> dict:
+    """Ensure common import master values exist.
+
+    - CRM Lead Status: Open
+    - CRM Lead Source: Research
+    """
+    if not frappe.session.user or frappe.session.user == "Guest":
+        frappe.throw("Authentication required")
+
+    created = []
+
+    # Lead Status: Open
+    if not frappe.db.exists("CRM Lead Status", "Open"):
+        doc = frappe.new_doc("CRM Lead Status")
+        doc.lead_status = "Open"
+        doc.color = "gray"
+        # place it before New if needed
+        doc.position = 0
+        doc.insert(ignore_permissions=True)
+        created.append("CRM Lead Status: Open")
+
+    # Lead Source: Research
+    if not frappe.db.exists("CRM Lead Source", "Research"):
+        doc = frappe.new_doc("CRM Lead Source")
+        doc.source_name = "Research"
+        doc.insert(ignore_permissions=True)
+        created.append("CRM Lead Source: Research")
+
+    frappe.clear_cache()
+    return {"ok": True, "created": created}
