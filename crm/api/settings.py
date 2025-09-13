@@ -119,3 +119,45 @@ def seed_default_layouts() -> dict:
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), title="Seed Default Layouts Failed")
         frappe.throw(f"Seeding failed: {type(e).__name__}: {e}")
+
+
+@frappe.whitelist()
+def seed_all_crm_defaults(force: int = 0) -> dict:
+    """Seed all core CRM defaults (statuses, sources, industries, layouts, etc.).
+
+    Run via: POST /api/method/crm.api.settings.seed_all_crm_defaults
+    Args:
+        force: 1 to overwrite existing layouts
+    """
+    if not frappe.session.user or frappe.session.user == "Guest":
+        frappe.throw("Authentication required")
+
+    try:
+        from crm import install as crm_install
+        from crm.patches.v1_0.create_default_sidebar_fields_layout import (
+            execute as seed_sidebar,
+        )
+
+        # Master data
+        crm_install.add_default_lead_statuses()
+        crm_install.add_default_deal_statuses()
+        crm_install.add_default_communication_statuses()
+        crm_install.add_default_industries()
+        crm_install.add_default_lead_sources()
+        crm_install.add_default_lost_reasons()
+
+        # Layouts (quick entry, side panel, data fields)
+        crm_install.add_default_fields_layout(force=bool(force))
+        seed_sidebar()
+
+        # Property setters, dropdowns, scripts, dashboards
+        crm_install.add_property_setter()
+        crm_install.add_standard_dropdown_items()
+        crm_install.add_default_scripts()
+        crm_install.create_default_manager_dashboard(force=bool(force))
+
+        frappe.clear_cache()
+        return {"ok": True}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), title="Seed All CRM Defaults Failed")
+        frappe.throw(f"Seeding failed: {type(e).__name__}: {e}")
