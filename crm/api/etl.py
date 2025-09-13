@@ -209,6 +209,23 @@ def autogenerate_mapping(
     }
 
 
+def _transform_value(expr: str | None, value: t.Any) -> t.Any:
+    """Apply a simple Python expression transform with `value` in scope.
+    If expr is empty, return the value as-is. Expressions like `value.title()` are supported.
+    Safe-eval with no builtins.
+    """
+    if not expr:
+        return value
+    try:
+        return eval(expr, {"__builtins__": {}}, {"value": value})
+    except Exception:
+        # Fallback: best-effort title-case for common text
+        try:
+            return str(value)
+        except Exception:
+            return value
+
+
 @frappe.whitelist(allow_guest=False)
 def job_status(job_id: str) -> dict:
     """Placeholder ETL job status (to be backed by DocType in next step)."""
@@ -380,23 +397,25 @@ def _load_mapping(profile_name: str) -> list[dict]:
 def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dry_run: bool = False) -> tuple[int, list[tuple[int, str]]]:
     header_to_idx = {h: i for i, h in enumerate([_normalize_header(h) for h in headers])}
     mapping = _load_mapping(job.mapping_profile)
-    # Split mapping by target doctype
-    lead_maps = [m for m in mapping if m["target_doctype"].strip().lower() in ("crm lead", "lead")]
-    contact_maps = [m for m in mapping if m["target_doctype"].strip().lower() == "contact"]
-    org_maps = [m for m in mapping if m["target_doctype"].strip().lower() in ("crm organization", "organization")] 
 
-    # Build per-doctype field index maps
-    def build_index(maps: list[dict]) -> dict[str, int]:
-        idx_map: dict[str, int] = {}
-        for mm in maps:
-            src = _normalize_header(mm["source_header"])
-            if src in header_to_idx:
-                idx_map[mm["target_field"]] = header_to_idx[src]
-        return idx_map
+    # Build rich maps per doctype: [{field, col_idx, transform}]
+    def build_entries(tgt: str) -> list[dict]:
+        entries: list[dict] = []
+        for mm in mapping:
+            if mm["target_doctype"].strip().lower() not in (tgt,):
+                continue
+            src_norm = _normalize_header(mm["source_header"]) if mm.get("source_header") else None
+            if src_norm and src_norm in header_to_idx:
+                entries.append({
+                    "field": mm["target_field"],
+                    "col_idx": header_to_idx[src_norm],
+                    "transform": mm.get("transform"),
+                })
+        return entries
 
-    lead_idx = build_index(lead_maps)
-    contact_idx = build_index(contact_maps)
-    org_idx = build_index(org_maps)
+    lead_entries = build_entries("crm lead") + build_entries("lead")
+    contact_entries = build_entries("contact")
+    org_entries = build_entries("crm organization") + build_entries("organization")
 
     processed = 0
     failures: list[tuple[int, str]] = []
@@ -404,18 +423,27 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
         try:
             # Build candidate payloads
             lead_data: dict | None = None
-            if lead_idx:
+            if lead_entries:
                 lead_data = {"doctype": "CRM Lead"}
-                for target_field, col_idx in lead_idx.items():
+                for e in lead_entries:
+                    col_idx = e["col_idx"]
                     if col_idx < len(r):
-                        lead_data[target_field] = r[col_idx]
+                        raw_val = r[col_idx]
+                        val = _transform_value(e.get("transform"), raw_val)
+                        # friendly normalization for common fields
+                        if e["field"] in ("status", "lead_source") and isinstance(val, str):
+                            val = val.strip().title()
+                        lead_data[e["field"]] = val
 
             org_name = None
-            if org_idx:
+            if org_entries:
                 org_data: dict = {}
-                for target_field, col_idx in org_idx.items():
+                for e in org_entries:
+                    col_idx = e["col_idx"]
                     if col_idx < len(r):
-                        org_data[target_field] = r[col_idx]
+                        raw_val = r[col_idx]
+                        val = _transform_value(e.get("transform"), raw_val)
+                        org_data[e["field"]] = val
                 if org_data:
                     org_name = _upsert_org(org_data, dry_run=dry_run)
 
@@ -425,11 +453,14 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
             if lead_data:
                 _upsert_lead(lead_data, dry_run=dry_run)
 
-            if contact_idx:
+            if contact_entries:
                 contact_data: dict = {"doctype": "Contact"}
-                for target_field, col_idx in contact_idx.items():
+                for e in contact_entries:
+                    col_idx = e["col_idx"]
                     if col_idx < len(r):
-                        contact_data[target_field] = r[col_idx]
+                        raw_val = r[col_idx]
+                        val = _transform_value(e.get("transform"), raw_val)
+                        contact_data[e["field"]] = val
                 if org_name:
                     contact_data["_link_org_name"] = org_name
                 _upsert_contact(contact_data, dry_run=dry_run)

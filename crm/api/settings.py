@@ -97,3 +97,25 @@ email_service_config = {
 		"smtp_port": 587,
 	},
 }
+
+
+@frappe.whitelist()
+def seed_default_layouts() -> dict:
+    """Seed default quick-entry and sidebar field layouts for CRM doctypes.
+
+    Run via: POST /api/method/crm.api.settings.seed_default_layouts
+    """
+    if not frappe.session.user or frappe.session.user == "Guest":
+        frappe.throw("Authentication required")
+    try:
+        from crm.patches.v1_0.create_default_fields_layout import execute as seed_fields
+        from crm.patches.v1_0.create_default_sidebar_fields_layout import (
+            execute as seed_sidebar,
+        )
+        seed_fields()
+        seed_sidebar()
+        frappe.clear_cache()
+        return {"ok": True}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), title="Seed Default Layouts Failed")
+        frappe.throw(f"Seeding failed: {type(e).__name__}: {e}")
