@@ -228,8 +228,19 @@ def _transform_value(expr: str | None, value: t.Any) -> t.Any:
 
 @frappe.whitelist(allow_guest=False)
 def job_status(job_id: str) -> dict:
-    """Placeholder ETL job status (to be backed by DocType in next step)."""
-    return {"job_id": job_id, "status": "not_implemented"}
+    """Return current status for a CRM Import Job."""
+    try:
+        doc = frappe.get_doc("CRM Import Job", job_id)
+        return {
+            "job_id": doc.name,
+            "status": doc.status,
+            "total_rows": doc.get("total_rows"),
+            "processed_rows": doc.get("processed_rows"),
+            "error_file": doc.get("error_file"),
+            "log": doc.get("log"),
+        }
+    except frappe.DoesNotExistError:
+        frappe.throw(_(f"Job not found: {job_id}"))
 
 
 @frappe.whitelist(allow_guest=False)
