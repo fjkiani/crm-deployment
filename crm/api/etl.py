@@ -94,6 +94,7 @@ def autogenerate_mapping(
     source_type: str = "CSV",
     file_url: str | None = None,
     sheet_id: str | None = None,
+    filedata: str | None = None,
 ) -> dict:
     """Create or update a CRM Import Column Map by inferring sensible defaults from headers.
 
@@ -108,9 +109,12 @@ def autogenerate_mapping(
         frappe.throw(_(f"Unsupported source_type: {src}"))
 
     if src == "CSV":
-        if not file_url:
-            frappe.throw(_("Provide file_url for CSV"))
-        pv = preview(file_url=file_url, max_rows=5)
+        if not (file_url or filedata):
+            frappe.throw(_("Provide file_url or filedata for CSV"))
+        if filedata:
+            pv = preview(filedata=filedata, max_rows=5)
+        else:
+            pv = preview(file_url=file_url, max_rows=5)
     else:
         if not sheet_id:
             frappe.throw(_("Provide sheet_id for GOOGLE_SHEETS"))
@@ -257,6 +261,28 @@ def import_rows(payload: str) -> dict:
     if source_type not in ("CSV", "GOOGLE_SHEETS"):
         frappe.throw(_(f"Unsupported source_type: {source_type}"))
 
+    # If filedata provided, persist as a File and use its file_url
+    if data.get("filedata") and not data.get("file_url"):
+        try:
+            content = data.get("filedata")
+            # If base64-encoded data URLs are sent, strip prefix. Otherwise store raw text
+            if isinstance(content, str) and content.startswith("data:") and "," in content:
+                content = content.split(",", 1)[1]
+                import base64
+
+                content = base64.b64decode(content)
+            file_doc = frappe.get_doc(
+                {
+                    "doctype": "File",
+                    "file_name": (data.get("title") or "import").replace(" ", "_") + ".csv",
+                    "content": content,
+                    "is_private": 1,
+                }
+            ).insert()
+            data["file_url"] = file_doc.file_url
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), title="ETL Filedata save failed")
+
     # Create Import Job Doc
     job = frappe.get_doc(
         {
@@ -308,11 +334,27 @@ def process_job(job_name: str, options: dict | None = None):
         headers: list[str] = []
         data_rows: list[list[str]] = []
         if job.source_type == "CSV" and job.file_url:
-            import requests
+            # Try to read from local File doc first; if not found, fallback to HTTP
+            text_content = None
+            try:
+                from frappe.utils.file_manager import get_file
 
-            r = requests.get(job.file_url, timeout=30)
-            r.raise_for_status()
-            buf = io.StringIO(r.text)
+                _fname, _content = get_file(job.file_url)
+                if hasattr(_content, "decode"):
+                    text_content = _content.decode("utf-8", errors="ignore")
+                else:
+                    text_content = _content if isinstance(_content, str) else None
+            except Exception:
+                text_content = None
+
+            if text_content is None:
+                import requests
+
+                r = requests.get(job.file_url, timeout=30)
+                r.raise_for_status()
+                text_content = r.text
+
+            buf = io.StringIO(text_content or "")
             sniff = None
             try:
                 sniff = csv.Sniffer().sniff(buf.read(2048))
