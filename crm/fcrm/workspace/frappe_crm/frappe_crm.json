@@ -134,6 +134,13 @@
    "label": "Upload Leads",
    "type": "URL",
    "url": "/upload_leads"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "Human Inbox (AI)",
+   "type": "URL",
+   "url": "/crm/human_inbox"
   }
  ],
  "title": "Frappe CRM"
