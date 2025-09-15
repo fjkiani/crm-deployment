@@ -217,6 +217,14 @@
               <div style="margin-top:8px; font-size:13px;"><a href="/crm/human_inbox">Open Human Inbox</a></div>
             </div>
           </div>
+          <style>
+            #upload-leads-fab { position: fixed; right: 16px; bottom: 78px; z-index: 9999; }
+            #upload-leads-fab .btn { background: #2563eb; color: #fff; border-radius: 999px; padding: 10px 14px; box-shadow: 0 10px 20px rgba(0,0,0,.25); font-size: 14px; text-decoration: none; display: inline-block; }
+            #upload-leads-fab .btn:hover { background: #1e40af; }
+          </style>
+          <div id="upload-leads-fab">
+            <a class="btn" href="/crm/upload_leads">Upload Leads</a>
+          </div>
           <script>
             (function(){
               const toast = document.getElementById('ai-widget-toast');
