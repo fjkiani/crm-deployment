@@ -1,0 +1,73 @@
+<div class="p-6 max-w-xl mx-auto">
+	<h2 class="text-xl mb-4">Upload Leads CSV</h2>
+	<input id="file" type="file" accept=".csv,text/csv" class="mb-3" />
+	<div class="mb-3">
+		<button id="previewBtn" class="btn btn-primary">Preview</button>
+		<button id="importBtn" class="btn btn-secondary" disabled>Import</button>
+	</div>
+	<pre id="status" class="p-2 bg-gray-100 text-sm overflow-auto max-h-64"></pre>
+</div>
+
+<script>
+async function readFileAsText(file){
+	return new Promise((res, rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsText(file); });
+}
+
+async function api(method, payload){
+	const resp = await fetch(`/api/method/${method}`,{
+		method: 'POST',
+		headers: { 'Content-Type':'application/json', 'X-Frappe-CSRF-Token': '{{ csrf_token }}' },
+		body: JSON.stringify(payload||{})
+	});
+	const j = await resp.json();
+	if(!resp.ok || j.exc){ throw new Error(j.exc || j.message || 'API Error'); }
+	return j.message || j;
+}
+
+const $ = (s)=>document.querySelector(s);
+const statusEl = $('#status');
+const fileEl = $('#file');
+const previewBtn = $('#previewBtn');
+const importBtn = $('#importBtn');
+
+let lastFileData = null;
+let mappingProfile = 'Leads Quick Import';
+let lastJobId = null;
+
+previewBtn.onclick = async()=>{
+	try{
+		statusEl.textContent = 'Reading file...';
+		const f = fileEl.files && fileEl.files[0]; if(!f){ throw new Error('Choose a CSV first'); }
+		lastFileData = await readFileAsText(f);
+		statusEl.textContent = 'Previewing...';
+		const pv = await api('crm.api.etl.preview', { filedata: lastFileData, max_rows: 20 });
+		statusEl.textContent = 'Headers:\n' + (pv.headers||[]).join(', ') + '\n\nSample:\n' + JSON.stringify(pv.sample||[], null, 2);
+		importBtn.disabled = false;
+	}catch(e){ statusEl.textContent = 'Error: ' + e.message; }
+}
+
+importBtn.onclick = async()=>{
+	try{
+		if(!lastFileData) throw new Error('Preview first');
+		statusEl.textContent = 'Auto-mapping...';
+		await api('crm.api.etl.autogenerate_mapping', { profile_name: mappingProfile, source_type: 'CSV', filedata: lastFileData });
+		statusEl.textContent = 'Importing...';
+		const r = await api('crm.api.etl.import_rows', { payload: JSON.stringify({ title: 'Leads Upload', source_type: 'CSV', filedata: lastFileData, mapping_profile: mappingProfile, dedupe: true }) });
+		lastJobId = r.job_id; statusEl.textContent = 'Queued: ' + lastJobId + '\nPolling status...';
+		poll();
+	}catch(e){ statusEl.textContent = 'Error: ' + e.message; }
+}
+
+async function poll(){
+	if(!lastJobId) return;
+	try{
+		const s = await api('crm.api.etl.job_status', { job_id: lastJobId });
+		statusEl.textContent = JSON.stringify(s, null, 2);
+		if(s.status && s.status.startsWith('Completed')) return;
+		if(s.status === 'Failed') return;
+		setTimeout(poll, 2000);
+	}catch(e){ statusEl.textContent = 'Error: ' + e.message; }
+}
+</script>
+
+
