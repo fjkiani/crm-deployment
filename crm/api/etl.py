@@ -281,7 +281,7 @@ def import_rows(payload: str) -> dict:
             ).insert()
             data["file_url"] = file_doc.file_url
         except Exception:
-            frappe.log_error(frappe.get_traceback(), title="ETL Filedata save failed")
+            frappe.log_error(message=frappe.get_traceback(), title="ETL Filedata save failed")
 
     # Create Import Job Doc
     job = frappe.get_doc(
@@ -427,7 +427,7 @@ def process_job(job_name: str, options: dict | None = None):
                 ).insert()
                 job.db_set("error_file", file_doc.file_url)
             except Exception:
-                frappe.log_error(frappe.get_traceback(), title="ETL Error CSV write failed")
+                frappe.log_error(message=frappe.get_traceback(), title="ETL Error CSV write failed")
         if job.status != "Failed":
             job.db_set("status", "Completed" if not dry_run else "Completed (Dry Run)")
     except Exception as e:
@@ -502,7 +502,7 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
                         _ensure_lead_source_exists(lead_data.get("lead_source"))  # type: ignore[arg-type]
                 except Exception:
                     # soft-fail; row handler will catch on insert if still invalid
-                    frappe.log_error(frappe.get_traceback(), title="ETL Ensure Master Values Failed")
+                    frappe.log_error(message=frappe.get_traceback(), title="ETL Ensure Master Values Failed")
 
             org_name = None
             if org_entries:
@@ -513,7 +513,8 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
                         raw_val = r[col_idx]
                         val = _transform_value(e.get("transform"), raw_val)
                         org_data[e["field"]] = val
-                if org_data:
+                # Only create organization if we have a name
+                if org_data and (org_data.get("organization_name") or org_data.get("organization") or org_data.get("name")):
                     org_name = _upsert_org(org_data, dry_run=dry_run)
 
             if lead_data and org_name and not lead_data.get("organization"):
@@ -538,7 +539,7 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
             processed += 1
         except Exception:
             # Collecting row-level errors can be added (write error_file)
-            frappe.log_error(frappe.get_traceback(), title="ETL Row Error")
+            frappe.log_error(message=frappe.get_traceback(), title="ETL Row Error")
             failures.append((idx_row, str(frappe.get_traceback(limit=1))))
             continue
     return processed, failures
@@ -654,7 +655,7 @@ def _ensure_contact_link(contact_name: str, link_doctype: str, link_name: str):
         contact.append("links", {"link_doctype": link_doctype, "link_name": link_name})
         contact.save()
     except Exception:
-        frappe.log_error(frappe.get_traceback(), title="Contact link failed")
+        frappe.log_error(message=frappe.get_traceback(), title="Contact link failed")
 
 
 def _ensure_lead_status_exists(status: str):
@@ -725,7 +726,7 @@ def _capture_additional_data(lead_data: dict, headers: list[str], row: list[str]
             existing.update(additional)
             lead_data["additional_data"] = existing
     except Exception:
-        frappe.log_error(frappe.get_traceback(), title="ETL Capture additional_data failed")
+        frappe.log_error(message=frappe.get_traceback(), title="ETL Capture additional_data failed")
 
 
 @frappe.whitelist()
