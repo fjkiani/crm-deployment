@@ -52,7 +52,7 @@ importBtn.onclick = async()=>{
 		statusEl.textContent = 'Auto-mapping...';
 		await api('crm.api.etl.autogenerate_mapping', { profile_name: mappingProfile, source_type: 'CSV', filedata: lastFileData });
 		statusEl.textContent = 'Importing...';
-		const r = await api('crm.api.etl.import_rows', { payload: JSON.stringify({ title: 'Leads Upload', source_type: 'CSV', filedata: lastFileData, mapping_profile: mappingProfile, dedupe: true }) });
+		const r = await api('crm.api.etl.import_rows', { payload: JSON.stringify({ title: 'Leads Upload', source_type: 'CSV', filedata: lastFileData, mapping_profile: mappingProfile, dedupe: true, sync: true }) });
 		lastJobId = r.job_id; statusEl.textContent = 'Queued: ' + lastJobId + '\nPolling status...';
 		poll();
 	}catch(e){ statusEl.textContent = 'Error: ' + e.message; }
