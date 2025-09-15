@@ -301,6 +301,11 @@ def import_rows(payload: str) -> dict:
     )
     job.insert()
 
+    # Optionally run synchronously for small uploads / immediate UX
+    if bool(data.get("sync")):
+        process_job(job.name, options=data)
+        return {"accepted": True, "job_id": job.name}
+
     kwargs = {"job_name": job.name, "options": data}
     frappe.enqueue(
         method="crm.api.etl.process_job",
