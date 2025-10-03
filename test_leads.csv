@@ -1,0 +1,4 @@
+first_name,last_name,email,company,phone,status,source
+John,Doe,john@example.com,Test Company,555-0123,Open,Research
+Jane,Smith,jane@example.com,Another Company,555-0124,Open,Research
+Bob,Johnson,bob@example.com,Third Company,555-0125,Open,Research

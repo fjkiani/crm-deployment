@@ -23,3 +23,5 @@ logs/
 
 # OS
 Thumbs.db
+# Local dev ignore
+scripts/farfalle-main/venv*/
