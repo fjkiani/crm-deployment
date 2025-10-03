@@ -1,0 +1,386 @@
+---
+alwaysApply: true
+description: Intelligent Agent Architecture for Question-Driven Lead Intelligence
+---
+
+# Intelligent Agent Architecture for Question-Driven Lead Intelligence
+
+## Current Problem Analysis
+
+Based on the [3edge_focused_analysis.json](mdc:data/output/3edge_focused_analysis.json) output, the current system produces:
+- **12,080 lines** of repetitive, unstructured data
+- **Redundant information** with minimal actionable insights
+- **No question-specific targeting** - generic data extraction
+- **Manual sifting required** to find relevant information
+
+## New Architecture: Question-Driven Intelligence System
+
+### Core Philosophy
+Transform from **"gather everything"** to **"answer specific questions"** using:
+1. **Question Decomposition Engine** - Break complex queries into targeted sub-questions
+2. **Specialist Agent Routing** - Route sub-questions to domain expert agents
+3. **Structured Response Synthesis** - Combine agent responses into actionable answers
+4. **LLM Integration** - Use language models for intelligent analysis and gap identification
+
+## Architecture Components
+
+### 1. Question Processing Engine (`components/question_processing/`)
+
+#### QuestionDecomposer
+```python
+class QuestionDecomposer:
+    """Breaks complex questions into targeted, answerable sub-questions"""
+    
+    async def decompose_question(self, question: str, company: str) -> List[SubQuestion]:
+        # Example: "For Abbey Capital, find decision makers in healthcare, recent investments, gaps"
+        # Becomes:
+        # 1. "Who are the decision makers at Abbey Capital?"
+        # 2. "What healthcare investments has Abbey Capital made?"
+        # 3. "What are Abbey Capital's recent investment activities?"
+        # 4. "What investment gaps exist in Abbey Capital's portfolio?"
+```
+
+#### AgentRouter
+```python
+class AgentRouter:
+    """Routes sub-questions to appropriate specialist agents"""
+    
+    def route_question(self, sub_question: SubQuestion) -> List[str]:
+        # Maps questions to agent capabilities:
+        # "decision makers" -> ExecutiveIntelligenceAgent
+        # "healthcare investments" -> SectorInvestmentAgent + HealthcareAgent
+        # "recent investments" -> InvestmentActivityAgent
+        # "gaps" -> GapAnalysisAgent + LLMAnalysisAgent
+```
+
+### 2. Specialist Agent Network (`components/specialist_agents/`)
+
+#### ExecutiveIntelligenceAgent
+```python
+class ExecutiveIntelligenceAgent(SpecialistAgent):
+    """Expert in finding and analyzing decision makers"""
+    
+    expertise = ["executives", "leadership", "decision_makers", "board_members"]
+    
+    async def answer_question(self, question: str, company: str) -> StructuredAnswer:
+        # Returns structured data:
+        # {
+        #   "decision_makers": [
+        #     {
+        #       "name": "John Smith",
+        #       "title": "Managing Partner",
+        #       "focus_areas": ["healthcare", "biotech"],
+        #       "contact_info": {...},
+        #       "influence_level": "high"
+        #     }
+        #   ]
+        # }
+```
+
+#### SectorInvestmentAgent
+```python
+class SectorInvestmentAgent(SpecialistAgent):
+    """Expert in sector-specific investment analysis"""
+    
+    expertise = ["sector_investments", "portfolio_analysis", "investment_themes"]
+    
+    async def answer_question(self, question: str, company: str, sector: str) -> StructuredAnswer:
+        # Returns targeted investment data:
+        # {
+        #   "sector_investments": {
+        #     "healthcare": [
+        #       {
+        #         "company": "BioTech Inc",
+        #         "investment_date": "2024-03-15",
+        #         "amount": "$50M",
+        #         "stage": "Series B",
+        #         "subsector": "Digital Health"
+        #       }
+        #     ]
+        #   }
+        # }
+```
+
+#### InvestmentActivityAgent
+```python
+class InvestmentActivityAgent(SpecialistAgent):
+    """Expert in recent investment activities and trends"""
+    
+    expertise = ["recent_investments", "investment_activity", "portfolio_changes"]
+    
+    async def get_recent_activity(self, company: str, timeframe: str = "12_months") -> StructuredAnswer:
+        # Returns chronological investment activity:
+        # {
+        #   "recent_investments": [
+        #     {
+        #       "date": "2024-08-15",
+        #       "target": "HealthTech Solutions",
+        #       "type": "Series A Lead",
+        #       "amount": "$25M",
+        #       "rationale": "AI-driven diagnostics platform"
+        #     }
+        #   ]
+        # }
+```
+
+#### GapAnalysisAgent
+```python
+class GapAnalysisAgent(SpecialistAgent):
+    """Expert in identifying investment gaps and opportunities"""
+    
+    expertise = ["gap_analysis", "market_opportunities", "portfolio_optimization"]
+    
+    async def identify_gaps(self, company: str, current_portfolio: Dict) -> StructuredAnswer:
+        # Returns strategic gap analysis:
+        # {
+        #   "identified_gaps": [
+        #     {
+        #       "category": "Geographic",
+        #       "gap": "Limited presence in European healthcare market",
+        #       "opportunity_size": "high",
+        #       "rationale": "Growing healthtech sector, regulatory advantages"
+        #     }
+        #   ]
+        # }
+```
+
+### 3. LLM Integration Layer (`components/llm_integration/`)
+
+#### IntelligenceAnalyzer
+```python
+class IntelligenceAnalyzer:
+    """Uses LLM to analyze and synthesize intelligence data"""
+    
+    async def analyze_investment_patterns(self, company_data: Dict) -> AnalysisResult:
+        # Uses GPT-4/Claude to identify:
+        # - Investment thesis evolution
+        # - Sector preferences and timing
+        # - Decision maker preferences
+        # - Strategic gaps and opportunities
+```
+
+#### QuestionAnswerSynthesizer
+```python
+class QuestionAnswerSynthesizer:
+    """Combines agent responses into comprehensive answers"""
+    
+    async def synthesize_answer(self, question: str, agent_responses: List[Dict]) -> FinalAnswer:
+        # Combines specialist agent data into coherent, actionable answer
+        # Removes redundancy, highlights key insights, provides recommendations
+```
+
+### 4. Response Structure Engine (`components/response_structure/`)
+
+#### StructuredResponseBuilder
+```python
+class StructuredResponseBuilder:
+    """Builds targeted, actionable responses instead of data dumps"""
+    
+    def build_executive_response(self, decision_makers: List[Dict]) -> Dict:
+        return {
+            "summary": "3 key decision makers identified in healthcare",
+            "primary_contacts": [...],
+            "secondary_contacts": [...],
+            "approach_recommendations": [...],
+            "data_confidence": 0.92
+        }
+    
+    def build_investment_response(self, investments: List[Dict]) -> Dict:
+        return {
+            "summary": "5 healthcare investments in past 18 months",
+            "recent_activity": [...],
+            "investment_patterns": {...},
+            "future_opportunities": [...],
+            "data_confidence": 0.88
+        }
+```
+
+## Usage Example: Abbey Capital Healthcare Analysis
+
+### Input Question
+```
+"For Abbey Capital, find all their decision makers involved in healthcare, 
+what have they invested in recently in healthcare, and what are some gaps?"
+```
+
+### Question Decomposition
+```python
+sub_questions = [
+    {
+        "question": "Who are the decision makers at Abbey Capital with healthcare focus?",
+        "target_agents": ["ExecutiveIntelligenceAgent", "HealthcareExpertiseAgent"],
+        "priority": "high"
+    },
+    {
+        "question": "What healthcare investments has Abbey Capital made in the past 24 months?",
+        "target_agents": ["SectorInvestmentAgent", "InvestmentActivityAgent"],
+        "priority": "high"
+    },
+    {
+        "question": "What healthcare investment gaps exist in Abbey Capital's portfolio?",
+        "target_agents": ["GapAnalysisAgent", "LLMAnalysisAgent"],
+        "priority": "medium"
+    }
+]
+```
+
+### Structured Response Output
+```json
+{
+  "query": "Abbey Capital healthcare analysis",
+  "company": "Abbey Capital",
+  "analysis_timestamp": "2024-12-01T10:30:00Z",
+  "confidence_score": 0.89,
+  
+  "decision_makers": {
+    "summary": "4 key decision makers identified with healthcare involvement",
+    "contacts": [
+      {
+        "name": "Dr. Sarah Johnson",
+        "title": "Healthcare Investment Director",
+        "expertise": ["Digital Health", "Biotech", "MedTech"],
+        "contact_info": {
+          "email": "s.johnson@abbeycapital.com",
+          "linkedin": "linkedin.com/in/sarahjohnsonhealthcare"
+        },
+        "decision_authority": "Investment Committee Member",
+        "recent_activity": "Led $30M Series B in HealthAI Corp (Aug 2024)"
+      }
+    ],
+    "approach_strategy": "Focus on Dr. Johnson for digital health opportunities, emphasize AI/ML healthcare applications"
+  },
+  
+  "recent_investments": {
+    "summary": "7 healthcare investments totaling $180M in past 18 months",
+    "key_investments": [
+      {
+        "company": "HealthAI Corp",
+        "date": "2024-08-15",
+        "amount": "$30M",
+        "stage": "Series B",
+        "subsector": "AI Diagnostics",
+        "lead_investor": true,
+        "decision_maker": "Dr. Sarah Johnson"
+      }
+    ],
+    "investment_patterns": {
+      "preferred_stages": ["Series A", "Series B"],
+      "average_investment": "$25.7M",
+      "geographic_focus": ["US", "EU"],
+      "emerging_themes": ["AI-driven diagnostics", "Personalized medicine"]
+    }
+  },
+  
+  "identified_gaps": {
+    "summary": "3 strategic gaps identified with high opportunity potential",
+    "gaps": [
+      {
+        "category": "Geographic",
+        "description": "Limited exposure to Asian healthcare markets",
+        "opportunity": "Growing healthtech ecosystems in Singapore, South Korea",
+        "recommended_action": "Explore partnerships with regional funds",
+        "priority": "high"
+      },
+      {
+        "category": "Technology",
+        "description": "Minimal investment in healthcare robotics",
+        "opportunity": "Surgical robotics market growing 15% annually",
+        "recommended_action": "Consider robotics-focused healthcare startups",
+        "priority": "medium"
+      }
+    ]
+  },
+  
+  "recommendations": {
+    "immediate_actions": [
+      "Schedule intro call with Dr. Sarah Johnson",
+      "Prepare healthcare AI deck focusing on diagnostics",
+      "Research Asian healthcare market entry strategies"
+    ],
+    "follow_up_research": [
+      "Deep dive on Abbey's surgical robotics interest",
+      "Map remaining healthcare investment committee members"
+    ]
+  },
+  
+  "data_sources": [
+    "Abbey Capital website and press releases",
+    "Portfolio company announcements",
+    "LinkedIn executive profiles",
+    "Industry databases and reports"
+  ]
+}
+```
+
+## Implementation in Scalable Architecture
+
+### Integration with Current System
+```python
+# In orchestration/workflows/intelligent_qa_workflow.py
+class IntelligentQAWorkflow:
+    def __init__(self):
+        self.question_decomposer = QuestionDecomposer()
+        self.agent_router = AgentRouter()
+        self.specialist_agents = self._initialize_agents()
+        self.response_synthesizer = QuestionAnswerSynthesizer()
+    
+    async def answer_question(self, question: str, company: str) -> StructuredAnswer:
+        # 1. Decompose question
+        sub_questions = await self.question_decomposer.decompose_question(question, company)
+        
+        # 2. Route to specialist agents
+        agent_tasks = []
+        for sub_q in sub_questions:
+            agents = self.agent_router.route_question(sub_q)
+            for agent_name in agents:
+                agent = self.specialist_agents[agent_name]
+                task = agent.answer_question(sub_q.question, company)
+                agent_tasks.append((sub_q, agent_name, task))
+        
+        # 3. Execute in parallel
+        results = await asyncio.gather(*[task for _, _, task in agent_tasks])
+        
+        # 4. Synthesize final answer
+        return await self.response_synthesizer.synthesize_answer(question, results)
+```
+
+### CLI Integration
+```bash
+# New question-driven interface
+python3 -m api.cli.main ask "For Abbey Capital, find decision makers in healthcare and recent investments"
+
+# Multiple companies
+python3 -m api.cli.main ask "Compare healthcare investment strategies between Abbey Capital and 3EDGE Asset Management"
+
+# Follow-up questions
+python3 -m api.cli.main ask "What are the contact details for Abbey Capital's healthcare decision makers?" --context previous_analysis.json
+```
+
+## Benefits of This Architecture
+
+### 1. **Question-Driven Intelligence**
+- No more data dumps - only answers to specific questions
+- Targeted, actionable insights instead of raw information
+- Follow-up question capability for deeper investigation
+
+### 2. **Specialist Agent Expertise**
+- Each agent becomes an expert in their domain
+- Higher quality, more accurate responses
+- Ability to add new specialist agents as needed
+
+### 3. **LLM-Enhanced Analysis**
+- Pattern recognition and trend analysis
+- Gap identification and opportunity mapping
+- Natural language question processing
+
+### 4. **Structured, Actionable Output**
+- Clear recommendations and next steps
+- Confidence scoring for data reliability
+- Integrated contact information and approach strategies
+
+### 5. **Scalable Architecture**
+- Easy to add new agent specialists
+- Question complexity can grow over time
+- Multiple companies can be analyzed simultaneously
+
+This architecture transforms your intelligence system from a **data collection tool** into an **intelligent business advisor** that answers specific questions with actionable insights.

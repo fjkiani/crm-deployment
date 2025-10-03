@@ -1,0 +1,59 @@
+{
+ "doctype": "DocType",
+ "name": "CRM Import Job",
+ "module": "FCRM",
+ "autoname": "format:CRM-IM-{####}",
+ "naming_rule": "Expression",
+ "title_field": "title",
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "source_type",
+  "file_url",
+  "sheet_id",
+  "sheet_range",
+  "mapping_profile",
+  "options_section",
+  "dedupe",
+  "create_custom_fields",
+  "link_organization",
+  "status_section",
+  "status",
+  "total_rows",
+  "processed_rows",
+  "error_file",
+  "log",
+  "schedule_section",
+  "scheduled",
+  "interval_minutes",
+  "last_run"
+ ],
+ "fields": [
+  {"fieldname": "title", "label": "Title", "fieldtype": "Data"},
+  {"fieldname": "source_type", "label": "Source Type", "fieldtype": "Select", "options": "CSV\nGOOGLE_SHEETS", "reqd": 1, "default": "CSV"},
+  {"fieldname": "file_url", "label": "File URL", "fieldtype": "Data"},
+  {"fieldname": "sheet_id", "label": "Google Sheet ID", "fieldtype": "Data"},
+  {"fieldname": "sheet_range", "label": "Sheet Range", "fieldtype": "Data", "description": "e.g. Sheet1!A:Z"},
+  {"fieldname": "mapping_profile", "label": "Mapping Profile", "fieldtype": "Link", "options": "CRM Import Column Map"},
+  {"fieldname": "options_section", "fieldtype": "Section Break", "label": "Options"},
+  {"fieldname": "dedupe", "label": "Dedupe", "fieldtype": "Check", "default": "1"},
+  {"fieldname": "create_custom_fields", "label": "Create Custom Fields", "fieldtype": "Check", "default": "0"},
+  {"fieldname": "link_organization", "label": "Link Organization", "fieldtype": "Check", "default": "1"},
+  {"fieldname": "status_section", "fieldtype": "Section Break", "label": "Status"},
+  {"fieldname": "status", "label": "Status", "fieldtype": "Select", "options": "Queued\nRunning\nCompleted\nFailed", "read_only": 1},
+  {"fieldname": "total_rows", "label": "Total Rows", "fieldtype": "Int", "read_only": 1},
+  {"fieldname": "processed_rows", "label": "Processed Rows", "fieldtype": "Int", "read_only": 1},
+  {"fieldname": "error_file", "label": "Error CSV", "fieldtype": "Attach", "read_only": 1},
+  {"fieldname": "log", "label": "Log", "fieldtype": "Small Text", "read_only": 1}
+  ,
+  {"fieldname": "schedule_section", "fieldtype": "Section Break", "label": "Schedule"},
+  {"fieldname": "scheduled", "label": "Scheduled", "fieldtype": "Check", "default": "0"},
+  {"fieldname": "interval_minutes", "label": "Interval (minutes)", "fieldtype": "Int", "default": "60"},
+  {"fieldname": "last_run", "label": "Last Run", "fieldtype": "Datetime", "read_only": 1}
+ ],
+ "permissions": [
+  {"role": "System Manager", "create": 1, "read": 1, "write": 1, "delete": 1, "export": 1, "report": 1, "print": 1, "share": 1}
+ ]
+}
+
+

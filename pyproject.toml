@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crm"
+version = "1.0.0"
+description = "Kick-ass Open Source CRM"
+authors = [
+    {name = "Frappe Technologies Pvt. Ltd.", email = "shariq@frappe.io"}
+]
+dependencies = [
+    "twilio==8.5.0"
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.urls]
+Homepage = "https://github.com/frappe/crm"
+Repository = "https://github.com/frappe/crm"
+
+[tool.setuptools]
+packages = ["crm"]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.package-data]
+crm = ["**/*.json", "**/*.js", "**/*.html", "**/*.css", "**/*.md", "**/*.txt", "**/*.po", "**/*.pot"]

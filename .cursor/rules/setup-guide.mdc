@@ -1,0 +1,211 @@
+---
+alwaysApply: false
+description: Complete Frappe CRM development environment setup guide
+---
+
+# Frappe CRM Setup Guide Reference
+
+This rule contains the complete setup guide for Frappe CRM development environment. Use it as a reference when setting up new development environments or troubleshooting existing ones.
+
+## Quick Reference Links
+
+### Core Setup Steps
+1. [System Prerequisites](#system-prerequisites) - Homebrew, packages
+2. [Database Setup](#database-setup) - MySQL/MariaDB configuration
+3. [Redis Setup](#redis-setup) - Caching and background jobs
+4. [Python Environment](#python-environment) - Virtual environments, dependencies
+5. [Bench Installation](#frappe-bench-installation) - Frappe Bench setup
+6. [CRM Development](#crm-app-development) - App development workflow
+7. [Local Server](#local-development-server) - Development server setup
+8. [Cloud Deployment](#frappe-cloud-deployment) - Production deployment
+
+### Troubleshooting
+- [Common Issues](#troubleshooting) - Error resolution
+- [Command Reference](#common-commands-reference) - Essential commands
+- [Best Practices](#development-best-practices) - Development guidelines
+
+## Key Configuration Files
+
+### Bench Configuration
+- `~/frappe-bench/sites/common_site_config.json` - Global site settings
+- `~/frappe-bench/sites/crm.localhost/site_config.json` - Site-specific config
+- `~/frappe-bench/Procfile` - Process configuration
+- `~/frappe-bench/config/redis_*.conf` - Redis configurations
+
+### App Configuration
+- `crm/setup.py` - Python packaging (classic)
+- `crm/pyproject.toml` - Modern Python packaging
+- `crm/requirements.txt` - Dependencies
+- `crm/hooks.py` - Frappe hooks
+- `crm/modules.txt` - App modules
+
+## Development Workflow
+
+### Daily Development
+1. Make code changes in `crm/` directory
+2. Test changes locally: `bench serve --port 8000`
+3. Commit changes: `git add . && git commit -m "description"`
+4. Push to repository: `git push origin main`
+5. Deploy to Frappe Cloud or pull changes
+
+### Adding New Features
+1. Create new DocType in CRM app
+2. Generate migration files
+3. Test locally with `bench --site crm.localhost migrate`
+4. Update documentation
+5. Deploy to staging/production
+
+### Database Changes
+1. Modify DocType schemas
+2. Generate patches: `bench --site crm.localhost make-migration`
+3. Test migrations locally
+4. Deploy with caution in production
+
+## Environment Variables
+
+### Required for Production
+```bash
+# Database
+DB_HOST=localhost
+DB_NAME=crm_db
+DB_USER=fahadkiani
+DB_PASSWORD=your_password
+
+# Redis
+REDIS_CACHE_URL=redis://localhost:6379
+REDIS_QUEUE_URL=redis://localhost:6380
+
+# Site
+SITE_NAME=crm.localhost
+```
+
+### Optional
+```bash
+# Email
+MAIL_SERVER=smtp.example.com
+MAIL_PORT=587
+MAIL_USERNAME=user@example.com
+MAIL_PASSWORD=password
+
+# WhatsApp (Twilio)
+TWILIO_ACCOUNT_SID=your_sid
+TWILIO_AUTH_TOKEN=your_token
+TWILIO_PHONE_NUMBER=+1234567890
+```
+
+## Performance Monitoring
+
+### Check System Resources
+```bash
+# CPU and memory usage
+top -l 1
+
+# Disk usage
+df -h
+
+# Database connections
+mysql -u fahadkiani -e "SHOW PROCESSLIST;"
+
+# Redis memory usage
+redis-cli info memory
+```
+
+### Monitor Logs
+```bash
+# Web server logs
+tail -f ~/frappe-bench/sites/crm.localhost/logs/web.log
+
+# Background job logs
+tail -f ~/frappe-bench/sites/crm.localhost/logs/worker.log
+
+# Error logs
+tail -f ~/frappe-bench/sites/crm.localhost/logs/error.log
+```
+
+## Backup and Recovery
+
+### Database Backup
+```bash
+# Full backup
+bench --site crm.localhost backup
+
+# Custom backup
+mysqldump -u fahadkiani crm_db > crm_backup_$(date +%Y%m%d).sql
+```
+
+### File System Backup
+```bash
+# Backup site files
+tar -czf crm_files_backup_$(date +%Y%m%d).tar.gz ~/frappe-bench/sites/crm.localhost/
+```
+
+### Recovery
+```bash
+# Restore database
+mysql -u fahadkiani crm_db < crm_backup.sql
+
+# Restore files
+tar -xzf crm_files_backup.tar.gz
+```
+
+## Security Checklist
+
+- [ ] Database user has minimal privileges
+- [ ] Redis not exposed to public internet
+- [ ] Site config files not in version control
+- [ ] SSL/TLS enabled in production
+- [ ] Regular security updates applied
+- [ ] Firewall rules configured
+- [ ] Backup encryption enabled
+- [ ] Access logs monitored
+
+## Scaling Considerations
+
+### Vertical Scaling
+- Increase server resources (CPU, RAM)
+- Optimize database queries
+- Add Redis clustering
+- Implement CDN for static assets
+
+### Horizontal Scaling
+- Load balancer setup
+- Database read replicas
+- Microservices architecture
+- Multi-region deployment
+
+## Migration Strategy
+
+### From Development to Production
+1. Create production site on Frappe Cloud
+2. Migrate database schema
+3. Transfer data using Frappe's data import tools
+4. Update configurations for production
+5. Test all features thoroughly
+6. Switch DNS to production
+
+### Version Upgrades
+1. Test upgrades on staging environment
+2. Backup production data
+3. Schedule maintenance window
+4. Apply upgrades in sequence
+5. Run migrations
+6. Verify functionality
+7. Rollback plan ready
+
+## Support and Maintenance
+
+### Regular Tasks
+- Daily: Monitor logs and performance
+- Weekly: Database optimization
+- Monthly: Security updates and patches
+- Quarterly: Full system backup and recovery testing
+
+### Emergency Procedures
+1. Identify issue and impact
+2. Notify stakeholders
+3. Implement temporary fixes if needed
+4. Restore from backup if required
+5. Root cause analysis
+6. Preventative measures
+
+This comprehensive guide covers all aspects of Frappe CRM development and deployment. Refer to the full [FRAPPE_SETUP_GUIDE.md](mdc:FRAPPE_SETUP_GUIDE.md) for complete details.

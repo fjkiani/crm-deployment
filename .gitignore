@@ -1,0 +1,25 @@
+# Frappe
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+.DS_Store
+.vscode/
+.idea/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db

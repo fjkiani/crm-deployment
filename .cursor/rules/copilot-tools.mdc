@@ -1,0 +1,32 @@
+---
+alwaysApply: false
+description: Mapping of co-pilot commands to CRM backend methods and data
+---
+
+# Co‑Pilot Tools Mapping
+
+## CRUD + Query
+- doc.list/filter/group/linked: [crm/api/doc.py](mdc:crm/api/doc.py)
+- contacts: [crm/api/contact.py](mdc:crm/api/contact.py)
+- views: [crm/api/views.py](mdc:crm/api/views.py)
+
+## Leads
+- lead ops: [crm/fcrm/doctype/crm_lead/crm_lead.py](mdc:crm/fcrm/doctype/crm_lead/crm_lead.py)
+- statuses/sources/industry: JSONs under [crm/fcrm/doctype/*](mdc:crm/fcrm/doctype/crm_lead_status/crm_lead_status.json)
+
+## Deals & Pipeline
+- deal ops: [crm/fcrm/doctype/crm_deal/crm_deal.py](mdc:crm/fcrm/doctype/crm_deal/crm_deal.py)
+- status config: [crm/fcrm/doctype/crm_deal_status/crm_deal_status.json](mdc:crm/fcrm/doctype/crm_deal_status/crm_deal_status.json)
+
+## Comms
+- WhatsApp: [crm/api/whatsapp.py](mdc:crm/api/whatsapp.py)
+- Comments/Notes: [crm/api/comment.py](mdc:crm/api/comment.py)
+
+## Telephony
+- Twilio: [crm/integrations/twilio/api.py](mdc:crm/integrations/twilio/api.py)
+- Exotel: [crm/integrations/exotel/handler.py](mdc:crm/integrations/exotel/handler.py)
+
+## Settings
+- CRM settings: [crm/fcrm/doctype/fcrm_settings/fcrm_settings.py](mdc:crm/fcrm/doctype/fcrm_settings/fcrm_settings.py)
+- View layout: [crm/fcrm/doctype/crm_view_settings/crm_view_settings.py](mdc:crm/fcrm/doctype/crm_view_settings/crm_view_settings.py)
+- Fields layout: [crm/fcrm/doctype/crm_fields_layout/crm_fields_layout.py](mdc:crm/fcrm/doctype/crm_fields_layout/crm_fields_layout.py)

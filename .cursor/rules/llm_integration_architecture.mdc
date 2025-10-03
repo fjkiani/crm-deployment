@@ -1,0 +1,567 @@
+---
+globs: components/llm_integration/*.py,components/question_processing/*.py
+description: LLM integration patterns for intelligent question processing and analysis
+---
+
+# LLM Integration Architecture for Intelligent CRM
+
+## LLM Integration Strategy
+
+The CRM intelligence system uses LLMs as **intelligent coordinators and analyzers**, not just data collectors. LLMs handle:
+
+1. **Question Decomposition** - Break complex queries into specialist-answerable sub-questions
+2. **Agent Coordination** - Route questions to optimal agent combinations
+3. **Intelligence Synthesis** - Combine specialist responses into coherent answers
+4. **Gap Analysis** - Identify strategic opportunities and missing information
+5. **Pattern Recognition** - Discover trends and insights across data
+
+## Core LLM Components
+
+### 1. Question Intelligence Engine
+
+#### QuestionDecomposer
+```python
+class QuestionDecomposer:
+    """LLM-powered question decomposition and analysis"""
+    
+    def __init__(self, llm_client: LLMClient):
+        self.llm_client = llm_client
+        self.question_patterns = self._load_question_patterns()
+    
+    async def decompose_question(self, question: str, company: str, context: Dict = None) -> QuestionDecomposition:
+        """Break complex question into specialist-answerable sub-questions"""
+        
+        prompt = self._build_decomposition_prompt(question, company, context)
+        response = await self.llm_client.generate(prompt)
+        
+        return QuestionDecomposition(
+            original_question=question,
+            sub_questions=self._parse_sub_questions(response),
+            complexity_score=self._calculate_complexity(response),
+            estimated_time=self._estimate_processing_time(response),
+            required_agents=self._extract_required_agents(response)
+        )
+    
+    def _build_decomposition_prompt(self, question: str, company: str, context: Dict) -> str:
+        """Build intelligent decomposition prompt"""
+        return f"""
+        You are an expert business intelligence analyst. Break down this complex question into specific, answerable sub-questions.
+        
+        QUESTION: "{question}"
+        COMPANY: "{company}"
+        CONTEXT: {json.dumps(context, indent=2) if context else "None"}
+        
+        Available Specialist Agents:
+        - ExecutiveIntelligenceAgent: Decision makers, leadership, org structure
+        - InvestmentIntelligenceAgent: Portfolio, deals, investment activity
+        - SectorExpertiseAgent: Industry-specific analysis (healthcare, fintech, etc.)
+        - GapAnalysisAgent: Strategic gaps, opportunities, competitive analysis
+        - ContactDiscoveryAgent: Contact information, email, phone, LinkedIn
+        - RelationshipMappingAgent: Professional networks, introductions
+        - TrendAnalysisAgent: Market trends, investment patterns, timing
+        
+        Break the question into sub-questions that:
+        1. Can be answered by specific agents
+        2. Build upon each other logically
+        3. Cover all aspects of the original question
+        4. Are specific and actionable
+        
+        Return as JSON:
+        {{
+          "sub_questions": [
+            {{
+              "question": "specific sub-question",
+              "target_agents": ["agent1", "agent2"],
+              "priority": "high|medium|low",
+              "dependencies": ["other_sub_question_ids"],
+              "rationale": "why this sub-question is needed"
+            }}
+          ],
+          "execution_strategy": "sequential|parallel|hybrid",
+          "complexity_score": 0.0-1.0,
+          "estimated_time_minutes": 5-30
+        }}
+        """
+```
+
+#### AgentOrchestrator
+```python
+class IntelligentAgentOrchestrator:
+    """LLM-powered agent coordination and optimization"""
+    
+    async def optimize_agent_execution(self, sub_questions: List[SubQuestion]) -> ExecutionPlan:
+        """Create optimal execution plan for agent coordination"""
+        
+        prompt = f"""
+        You are an expert system architect. Design the optimal execution plan for these intelligence sub-questions.
+        
+        SUB-QUESTIONS:
+        {json.dumps([sq.to_dict() for sq in sub_questions], indent=2)}
+        
+        Consider:
+        1. Which questions can run in parallel vs sequential
+        2. Which agents complement each other
+        3. How to minimize redundant API calls
+        4. How to handle agent failures gracefully
+        5. Optimal order for dependency resolution
+        
+        Return execution plan as JSON:
+        {{
+          "execution_phases": [
+            {{
+              "phase_number": 1,
+              "parallel_tasks": [
+                {{
+                  "sub_question_id": "sq_1",
+                  "agents": ["ExecutiveIntelligenceAgent"],
+                  "timeout_minutes": 5,
+                  "retry_count": 2
+                }}
+              ],
+              "phase_dependencies": [],
+              "expected_duration_minutes": 5
+            }}
+          ],
+          "total_estimated_time": 15,
+          "failure_recovery_strategy": "continue|retry|abort",
+          "optimization_rationale": "explanation of execution strategy"
+        }}
+        """
+        
+        response = await self.llm_client.generate(prompt)
+        return self._parse_execution_plan(response)
+```
+
+### 2. Intelligence Synthesis Engine
+
+#### ResponseSynthesizer
+```python
+class IntelligentResponseSynthesizer:
+    """LLM-powered synthesis of specialist agent responses"""
+    
+    async def synthesize_final_answer(
+        self, 
+        original_question: str, 
+        agent_responses: List[StructuredAnswer],
+        company: str
+    ) -> SynthesizedIntelligence:
+        """Combine specialist responses into coherent, actionable answer"""
+        
+        prompt = self._build_synthesis_prompt(original_question, agent_responses, company)
+        response = await self.llm_client.generate(prompt)
+        
+        return SynthesizedIntelligence(
+            executive_summary=self._extract_summary(response),
+            key_insights=self._extract_insights(response),
+            actionable_intelligence=self._extract_actionable_data(response),
+            recommendations=self._extract_recommendations(response),
+            follow_up_questions=self._extract_follow_ups(response),
+            confidence_assessment=self._extract_confidence(response)
+        )
+    
+    def _build_synthesis_prompt(self, question: str, responses: List[StructuredAnswer], company: str) -> str:
+        """Build comprehensive synthesis prompt"""
+        agent_data = self._format_agent_responses(responses)
+        
+        return f"""
+        You are an expert business intelligence analyst synthesizing research from multiple specialist agents.
+        
+        ORIGINAL QUESTION: "{question}"
+        COMPANY: "{company}"
+        
+        SPECIALIST AGENT RESPONSES:
+        {agent_data}
+        
+        Synthesize this intelligence into a comprehensive, actionable response that:
+        
+        1. DIRECTLY ANSWERS the original question with specific details
+        2. PROVIDES EXECUTIVE SUMMARY (2-3 sentences) of key findings
+        3. IDENTIFIES KEY INSIGHTS that weren't obvious from individual responses
+        4. STRUCTURES ACTIONABLE INTELLIGENCE by importance and relevance
+        5. RECOMMENDS SPECIFIC NEXT STEPS with priorities and timelines
+        6. SUGGESTS INTELLIGENT FOLLOW-UP QUESTIONS for deeper investigation
+        7. ASSESSES CONFIDENCE LEVELS with rationale
+        
+        Focus on:
+        - Business relevance and actionability
+        - Specific names, numbers, and contact details
+        - Strategic opportunities and risks
+        - Concrete next steps and recommendations
+        - Cross-references and patterns between agent responses
+        
+        Return as structured JSON:
+        {{
+          "executive_summary": "concise 2-3 sentence summary",
+          "direct_answer": "specific answer to the original question",
+          "key_insights": [
+            "insight 1: pattern or finding not obvious from individual responses",
+            "insight 2: strategic implication or opportunity"
+          ],
+          "actionable_intelligence": {{
+            "primary_findings": {{ /* most important structured data */ }},
+            "supporting_data": {{ /* additional context and details */ }},
+            "data_quality": {{ /* confidence scores and source reliability */ }}
+          }},
+          "immediate_recommendations": [
+            {{
+              "action": "specific action to take",
+              "priority": "high|medium|low",
+              "timeline": "immediate|1-2 weeks|1 month",
+              "rationale": "why this action is recommended",
+              "resources_needed": "what's required to execute"
+            }}
+          ],
+          "strategic_opportunities": [
+            {{
+              "opportunity": "strategic opportunity identified",
+              "potential_value": "estimated value or impact",
+              "approach": "how to pursue this opportunity"
+            }}
+          ],
+          "follow_up_questions": [
+            "intelligent follow-up question 1",
+            "intelligent follow-up question 2"
+          ],
+          "confidence_assessment": {{
+            "overall_confidence": 0.0-1.0,
+            "data_completeness": 0.0-1.0,
+            "source_reliability": 0.0-1.0,
+            "limitations": ["limitation 1", "limitation 2"],
+            "recommendations_for_improvement": ["how to get better data"]
+          }}
+        }}
+        """
+```
+
+### 3. Gap Analysis Engine
+
+#### StrategicGapAnalyzer
+```python
+class StrategicGapAnalyzer:
+    """LLM-powered strategic gap identification and opportunity analysis"""
+    
+    async def analyze_strategic_gaps(
+        self, 
+        company: str, 
+        current_intelligence: Dict,
+        benchmark_data: Dict = None
+    ) -> GapAnalysis:
+        """Identify strategic gaps and opportunities using LLM analysis"""
+        
+        prompt = f"""
+        You are a strategic investment analyst. Analyze this company's current position and identify strategic gaps, opportunities, and areas for improvement.
+        
+        COMPANY: {company}
+        
+        CURRENT INTELLIGENCE:
+        {json.dumps(current_intelligence, indent=2)}
+        
+        BENCHMARK DATA (if available):
+        {json.dumps(benchmark_data, indent=2) if benchmark_data else "None provided"}
+        
+        Perform comprehensive gap analysis considering:
+        
+        1. PORTFOLIO GAPS: Missing sectors, geographies, stages, technologies
+        2. STRATEGIC GAPS: Capabilities, partnerships, market presence
+        3. OPERATIONAL GAPS: Team expertise, processes, infrastructure
+        4. MARKET OPPORTUNITIES: Emerging trends, underserved areas, timing
+        5. COMPETITIVE POSITIONING: Vs peers, market leaders, emerging players
+        
+        For each gap identified:
+        - Quantify the opportunity size and impact
+        - Assess feasibility and timeline
+        - Recommend specific actions to address
+        - Identify potential risks and mitigation strategies
+        
+        Return as JSON:
+        {{
+          "executive_summary": "2-3 sentence summary of key gaps and opportunities",
+          "strategic_gaps": [
+            {{
+              "gap_type": "portfolio|strategic|operational|market",
+              "gap_description": "specific description of the gap",
+              "opportunity_size": "quantified impact ($ or strategic value)",
+              "priority": "high|medium|low",
+              "timeline_to_address": "3 months|6 months|1 year|2+ years",
+              "feasibility": 0.0-1.0,
+              "recommended_actions": [
+                "specific action 1",
+                "specific action 2"
+              ],
+              "potential_risks": ["risk 1", "risk 2"],
+              "success_metrics": ["how to measure success"]
+            }}
+          ],
+          "market_opportunities": [
+            {{
+              "opportunity": "specific market opportunity",
+              "market_size": "TAM/SAM if estimable",
+              "growth_rate": "market growth rate",
+              "competitive_landscape": "competition analysis",
+              "entry_strategy": "how to enter this market",
+              "timeline": "when to act",
+              "investment_required": "estimated investment needed"
+            }}
+          ],
+          "competitive_analysis": {{
+            "strengths": ["competitive advantage 1"],
+            "weaknesses": ["area for improvement 1"],
+            "threats": ["external threat 1"],
+            "opportunities": ["external opportunity 1"]
+          }},
+          "prioritized_recommendations": [
+            {{
+              "recommendation": "top priority action",
+              "rationale": "why this should be priority #1",
+              "expected_roi": "estimated return on investment",
+              "timeline": "when to start and complete",
+              "resources_required": "what's needed to execute"
+            }}
+          ]
+        }}
+        """
+        
+        response = await self.llm_client.generate(prompt)
+        return self._parse_gap_analysis(response)
+```
+
+### 4. Pattern Recognition Engine
+
+#### InvestmentPatternAnalyzer
+```python
+class InvestmentPatternAnalyzer:
+    """LLM-powered pattern recognition for investment behavior analysis"""
+    
+    async def analyze_investment_patterns(
+        self, 
+        company: str, 
+        investment_data: List[Dict],
+        executive_data: List[Dict] = None
+    ) -> PatternAnalysis:
+        """Identify patterns in investment behavior and decision making"""
+        
+        prompt = f"""
+        You are an expert investment analyst. Analyze this investment data to identify patterns, preferences, and strategic insights.
+        
+        COMPANY: {company}
+        
+        INVESTMENT DATA:
+        {json.dumps(investment_data, indent=2)}
+        
+        EXECUTIVE DATA:
+        {json.dumps(executive_data, indent=2) if executive_data else "None provided"}
+        
+        Analyze for patterns in:
+        
+        1. INVESTMENT THEMES: Sectors, technologies, business models
+        2. TIMING PATTERNS: Seasonal trends, market cycle preferences
+        3. STAGE PREFERENCES: Seed, Series A/B/C, growth, etc.
+        4. GEOGRAPHIC PATTERNS: Regional preferences and expansion
+        5. DECISION MAKER PATTERNS: Who leads what types of deals
+        6. FOLLOW-ON BEHAVIOR: Support for portfolio companies
+        7. EXIT PATTERNS: Timing, methods, success rates
+        
+        For each pattern:
+        - Quantify the pattern strength (how consistent)
+        - Identify underlying drivers and rationale
+        - Predict future behavior based on patterns
+        - Suggest how to align with their preferences
+        
+        Return as JSON:
+        {{
+          "investment_thesis": {{
+            "core_themes": ["primary investment theme 1"],
+            "emerging_themes": ["new area of interest"],
+            "declining_themes": ["areas being deprioritized"],
+            "thesis_evolution": "how their strategy has changed over time"
+          }},
+          "behavioral_patterns": [
+            {{
+              "pattern_type": "sector|stage|geography|timing|decision_maker",
+              "pattern_description": "specific pattern observed",
+              "strength": 0.0-1.0,
+              "frequency": "how often this pattern occurs",
+              "underlying_drivers": ["reason 1", "reason 2"],
+              "predictive_value": "what this predicts about future behavior",
+              "strategic_implication": "how to leverage this pattern"
+            }}
+          ],
+          "decision_maker_insights": [
+            {{
+              "executive": "name",
+              "decision_patterns": ["pattern 1", "pattern 2"],
+              "preferred_sectors": ["sector 1"],
+              "typical_deal_size": "range",
+              "decision_criteria": ["criteria 1"],
+              "influence_factors": ["what influences their decisions"]
+            }}
+          ],
+          "future_predictions": [
+            {{
+              "prediction": "specific prediction about future behavior",
+              "confidence": 0.0-1.0,
+              "timeline": "when this is likely to happen",
+              "supporting_evidence": ["evidence 1", "evidence 2"],
+              "strategic_opportunity": "how to capitalize on this prediction"
+            }}
+          ],
+          "alignment_recommendations": [
+            {{
+              "recommendation": "how to align your approach with their patterns",
+              "rationale": "why this alignment makes sense",
+              "execution_strategy": "specific steps to take",
+              "success_probability": 0.0-1.0
+            }}
+          ]
+        }}
+        """
+        
+        response = await self.llm_client.generate(prompt)
+        return self._parse_pattern_analysis(response)
+```
+
+### 5. LLM Client Architecture
+
+#### UnifiedLLMClient
+```python
+class UnifiedLLMClient:
+    """Unified interface for multiple LLM providers"""
+    
+    def __init__(self, config: LLMConfig):
+        self.config = config
+        self.providers = self._initialize_providers()
+        self.fallback_chain = config.fallback_providers
+    
+    async def generate(self, prompt: str, provider: str = None, **kwargs) -> LLMResponse:
+        """Generate response with automatic fallback"""
+        target_provider = provider or self.config.primary_provider
+        
+        for attempt_provider in [target_provider] + self.fallback_chain:
+            try:
+                response = await self._call_provider(attempt_provider, prompt, **kwargs)
+                if self._validate_response(response):
+                    return response
+            except Exception as e:
+                self.logger.warning(f"Provider {attempt_provider} failed: {e}")
+                continue
+        
+        raise LLMGenerationError("All LLM providers failed")
+    
+    def _initialize_providers(self) -> Dict[str, LLMProvider]:
+        """Initialize configured LLM providers"""
+        providers = {}
+        
+        if self.config.openai_api_key:
+            providers['openai'] = OpenAIProvider(self.config.openai_api_key)
+        
+        if self.config.anthropic_api_key:
+            providers['anthropic'] = AnthropicProvider(self.config.anthropic_api_key)
+        
+        if self.config.azure_config:
+            providers['azure'] = AzureOpenAIProvider(self.config.azure_config)
+        
+        return providers
+
+@dataclass
+class LLMConfig:
+    """Configuration for LLM integration"""
+    primary_provider: str = "openai"
+    fallback_providers: List[str] = field(default_factory=lambda: ["anthropic", "azure"])
+    
+    # API Keys
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    azure_config: Dict[str, str] = field(default_factory=dict)
+    
+    # Model Configuration
+    models: Dict[str, str] = field(default_factory=lambda: {
+        "question_decomposition": "gpt-4",
+        "synthesis": "gpt-4",
+        "gap_analysis": "claude-3-opus",
+        "pattern_recognition": "gpt-4"
+    })
+    
+    # Generation Parameters
+    temperature: float = 0.1  # Low temperature for consistency
+    max_tokens: int = 4000
+    timeout_seconds: int = 30
+```
+
+### 6. LLM Integration Testing
+
+#### LLMTestFramework
+```python
+class LLMIntegrationTestCase(unittest.IsolatedAsyncioTestCase):
+    """Test framework for LLM integration components"""
+    
+    def setUp(self):
+        self.mock_llm_client = MockLLMClient()
+        self.test_question = "Find healthcare decision makers at Abbey Capital"
+        self.test_company = "Abbey Capital"
+    
+    async def test_question_decomposition(self):
+        """Test LLM-powered question decomposition"""
+        decomposer = QuestionDecomposer(self.mock_llm_client)
+        
+        # Mock LLM response
+        self.mock_llm_client.set_response({
+            "sub_questions": [
+                {
+                    "question": "Who are the decision makers at Abbey Capital?",
+                    "target_agents": ["ExecutiveIntelligenceAgent"],
+                    "priority": "high"
+                }
+            ],
+            "execution_strategy": "sequential",
+            "complexity_score": 0.6
+        })
+        
+        result = await decomposer.decompose_question(self.test_question, self.test_company)
+        
+        self.assertIsInstance(result, QuestionDecomposition)
+        self.assertGreater(len(result.sub_questions), 0)
+        self.assertIn("ExecutiveIntelligenceAgent", result.required_agents)
+    
+    async def test_synthesis_quality(self):
+        """Test quality of LLM synthesis"""
+        synthesizer = IntelligentResponseSynthesizer(self.mock_llm_client)
+        
+        # Mock agent responses
+        agent_responses = [
+            StructuredAnswer(
+                agent_type="ExecutiveIntelligenceAgent",
+                data={"decision_makers": [{"name": "John Smith", "title": "Partner"}]},
+                confidence_score=0.8
+            )
+        ]
+        
+        result = await synthesizer.synthesize_final_answer(
+            self.test_question, agent_responses, self.test_company
+        )
+        
+        self.assertIsInstance(result, SynthesizedIntelligence)
+        self.assertIsInstance(result.executive_summary, str)
+        self.assertGreater(len(result.key_insights), 0)
+        self.assertGreater(len(result.recommendations), 0)
+
+class MockLLMClient:
+    """Mock LLM client for testing"""
+    
+    def __init__(self):
+        self.responses = {}
+    
+    def set_response(self, response: Dict):
+        """Set mock response for testing"""
+        self.response = response
+    
+    async def generate(self, prompt: str, **kwargs) -> Dict:
+        """Return mock response"""
+        return self.response
+```
+
+This LLM integration architecture ensures:
+- **Intelligent Coordination**: LLMs orchestrate specialist agents optimally
+- **Natural Language Processing**: Complex questions are decomposed naturally
+- **Pattern Recognition**: LLMs identify insights across multiple data sources
+- **Quality Synthesis**: Multiple agent responses are combined intelligently
+- **Fallback Reliability**: Multiple LLM providers ensure system reliability

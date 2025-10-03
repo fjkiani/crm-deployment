@@ -1,0 +1,66 @@
+{
+  "platform": {
+    "name": "CRM Intelligence Platform",
+    "version": "1.0.0",
+    "environment": "development"
+  },
+  "components": {
+    "company_research": {
+      "name": "CompanyResearchComponent",
+      "api_key": "${TAVILY_API_KEY}",
+      "max_results": 5,
+      "enabled": true
+    },
+    "contact_intelligence": {
+      "name": "ContactIntelligenceComponent",
+      "api_key": "${TAVILY_API_KEY}",
+      "max_results": 3,
+      "enabled": true
+    },
+    "email_generator": {
+      "name": "EmailGeneratorComponent",
+      "sender_info": {
+        "name": "Your Name",
+        "title": "Your Title",
+        "company": "Your Company",
+        "email": "your@email.com"
+      },
+      "templates": {
+        "executive": "templates/executive_outreach.txt",
+        "manager": "templates/manager_outreach.txt"
+      }
+    },
+    "lead_cleaner": {
+      "name": "LeadCleanerComponent",
+      "batch_size": 100,
+      "cleaning_rules": [
+        "remove_duplicates",
+        "standardize_companies",
+        "extract_contacts"
+      ]
+    }
+  },
+  "pipelines": {
+    "intelligence": {
+      "components": ["company_research", "contact_intelligence"],
+      "parallel_execution": true,
+      "timeout_seconds": 60
+    },
+    "outreach": {
+      "components": ["email_generator"],
+      "personalization_threshold": 0.7,
+      "max_emails_per_target": 3
+    }
+  },
+  "performance": {
+    "max_concurrent_targets": 5,
+    "rate_limit_delay": 1.5,
+    "cache_enabled": true,
+    "cache_ttl_hours": 24
+  },
+  "logging": {
+    "level": "INFO",
+    "file_enabled": true,
+    "console_enabled": true
+  }
+}

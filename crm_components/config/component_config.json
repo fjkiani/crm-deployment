@@ -1,0 +1,31 @@
+{
+  "company_research": {
+    "search_queries": [
+      "\"${company}\" company overview background history",
+      "\"${company}\" leadership team executives management",
+      "\"${company}\" business model products services"
+    ],
+    "focus_areas": ["leadership", "products", "market_position"],
+    "data_sources": ["company_website", "news_articles", "industry_reports"]
+  },
+  "contact_intelligence": {
+    "search_queries": [
+      "\"${company}\" executive contacts leadership team",
+      "\"${company}\" key personnel decision makers"
+    ],
+    "contact_types": ["CEO", "CFO", "CTO", "VP", "Director"],
+    "enrichment_sources": ["linkedin", "company_website"]
+  },
+  "email_generator": {
+    "personalization_rules": {
+      "executive": ["pain_points", "recent_news", "role_specific"],
+      "manager": ["operational_challenges", "team_goals"],
+      "specialist": ["technical_challenges", "industry_trends"]
+    },
+    "subject_templates": {
+      "executive": "AI-Powered Intelligence: Solving {company}'s Strategic Challenges",
+      "manager": "Operational Excellence: How AI Can Transform {company}",
+      "specialist": "AI Innovation: Next-Gen Solutions for {company}"
+    }
+  }
+}

@@ -1,0 +1,503 @@
+---
+alwaysApply: true
+description: Configuration management and environment setup patterns
+globs: crm_intelligence/**/*.py, config/**/*.json
+---
+
+# ⚙️ Configuration Management
+
+## Configuration Hierarchy
+
+### Configuration Sources (Priority Order)
+```
+1. Environment Variables (Highest Priority)
+   ├── TAVILY_API_KEY
+   ├── PLATFORM_ENV
+   ├── LOG_LEVEL
+   └── DATABASE_URL
+
+2. Runtime Configuration
+   ├── Command-line arguments
+   ├── Dynamic settings
+   └── Feature flags
+
+3. File Configuration
+   ├── config/platform_config.json
+   ├── config/intelligence_config.json
+   ├── config/outreach_config.json
+   └── config/api_config.json
+
+4. Default Configuration (Lowest Priority)
+   ├── Built-in defaults
+   ├── Sensible fallbacks
+   └── Safe defaults
+```
+
+## Configuration Structure
+
+### Platform Configuration
+```json
+{
+  "platform": {
+    "name": "CRM Intelligence Platform",
+    "version": "1.0.0",
+    "environment": "development",
+    "debug_mode": false,
+    "max_concurrent_jobs": 10
+  }
+}
+```
+
+### Intelligence Configuration
+```json
+{
+  "intelligence": {
+    "max_companies_per_batch": 10,
+    "cache_enabled": true,
+    "cache_ttl_hours": 24,
+    "rate_limit_per_minute": 30,
+    "max_results_per_source": 5,
+    "confidence_threshold": 0.7,
+    "sources": {
+      "tavily": {
+        "enabled": true,
+        "priority": 1,
+        "max_results": 5
+      },
+      "news_api": {
+        "enabled": false,
+        "priority": 2,
+        "max_results": 3
+      }
+    }
+  }
+}
+```
+
+### Outreach Configuration
+```json
+{
+  "outreach": {
+    "max_emails_per_company": 5,
+    "personalization_threshold": 0.7,
+    "sender_name": "Your Name",
+    "sender_company": "Your Company",
+    "sender_email": "your.email@company.com",
+    "email_templates": {
+      "executive_outreach": "templates/executive_email.txt",
+      "president_outreach": "templates/president_email.txt",
+      "default_outreach": "templates/default_email.txt"
+    },
+    "channels": {
+      "email": {
+        "enabled": true,
+        "priority": 1
+      },
+      "linkedin": {
+        "enabled": false,
+        "priority": 2
+      }
+    }
+  }
+}
+```
+
+### API Configuration
+```json
+{
+  "api": {
+    "tavily": {
+      "base_url": "https://api.tavily.com/search",
+      "timeout": 30,
+      "max_retries": 3,
+      "retry_delay": 1.0,
+      "rate_limit": 30
+    },
+    "hunter": {
+      "base_url": "https://api.hunter.io/v2",
+      "timeout": 15,
+      "max_retries": 2
+    },
+    "clearbit": {
+      "base_url": "https://person.clearbit.com/v2",
+      "timeout": 10,
+      "max_retries": 2
+    }
+  }
+}
+```
+
+### Data Configuration
+```json
+{
+  "data": {
+    "input_path": "data/input",
+    "output_path": "data/output",
+    "cache_path": "data/cache",
+    "temp_path": "data/temp",
+    "backup_path": "data/backup",
+    "max_file_size_mb": 100,
+    "supported_formats": ["csv", "json", "xlsx"],
+    "encoding": "utf-8"
+  }
+}
+```
+
+### Logging Configuration
+```json
+{
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": {
+      "enabled": true,
+      "path": "logs/crm_intelligence.log",
+      "max_size_mb": 100,
+      "backup_count": 5
+    },
+    "console": {
+      "enabled": true,
+      "level": "INFO"
+    },
+    "performance": {
+      "enabled": true,
+      "path": "logs/performance.log"
+    }
+  }
+}
+```
+
+## Environment Setup
+
+### Development Environment
+```bash
+# .env.development
+PLATFORM_ENV=development
+LOG_LEVEL=DEBUG
+TAVILY_API_KEY=your_dev_api_key_here
+DATABASE_URL=sqlite:///dev.db
+DEBUG_MODE=true
+MAX_CONCURRENT_JOBS=2
+```
+
+### Production Environment
+```bash
+# .env.production
+PLATFORM_ENV=production
+LOG_LEVEL=WARNING
+TAVILY_API_KEY=your_prod_api_key_here
+DATABASE_URL=postgresql://user:pass@host:5432/db
+DEBUG_MODE=false
+MAX_CONCURRENT_JOBS=50
+```
+
+### Staging Environment
+```bash
+# .env.staging
+PLATFORM_ENV=staging
+LOG_LEVEL=INFO
+TAVILY_API_KEY=your_staging_api_key_here
+DATABASE_URL=postgresql://user:pass@host:5432/staging
+DEBUG_MODE=false
+MAX_CONCURRENT_JOBS=10
+```
+
+## Configuration Management Class
+
+### Configuration Manager Implementation
+```python
+import os
+import json
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+class ConfigurationManager:
+    """Centralized configuration management"""
+
+    def __init__(self):
+        self.config = {}
+        self.sources = []
+
+    def load_config(self) -> Dict[str, Any]:
+        """Load configuration from all sources"""
+
+        # Start with defaults
+        config = self._load_defaults()
+
+        # Merge environment variables
+        config = self._merge_env_vars(config)
+
+        # Merge file configurations
+        config = self._merge_files(config)
+
+        # Validate configuration
+        self._validate_config(config)
+
+        self.config = config
+        return config
+
+    def _load_defaults(self) -> Dict[str, Any]:
+        """Load default configuration"""
+        return {
+            "platform": {
+                "name": "CRM Intelligence Platform",
+                "version": "1.0.0",
+                "environment": "development"
+            },
+            "intelligence": {
+                "max_companies_per_batch": 10,
+                "cache_enabled": True,
+                "cache_ttl_hours": 24
+            },
+            "outreach": {
+                "max_emails_per_company": 5,
+                "personalization_threshold": 0.7
+            },
+            "api": {
+                "tavily": {
+                    "base_url": "https://api.tavily.com/search",
+                    "timeout": 30,
+                    "max_retries": 3
+                }
+            },
+            "logging": {
+                "level": "INFO",
+                "console_enabled": True,
+                "file_enabled": True
+            }
+        }
+
+    def _merge_env_vars(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge environment variables into config"""
+
+        env_mappings = {
+            'PLATFORM_ENV': 'platform.environment',
+            'LOG_LEVEL': 'logging.level',
+            'TAVILY_API_KEY': 'api.tavily.api_key',
+            'DEBUG_MODE': 'platform.debug_mode',
+            'MAX_CONCURRENT_JOBS': 'platform.max_concurrent_jobs'
+        }
+
+        for env_var, config_path in env_mappings.items():
+            env_value = os.getenv(env_var)
+            if env_value is not None:
+                config = self._set_nested_value(config, config_path, env_value)
+
+        return config
+
+    def _merge_files(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge configuration files"""
+
+        config_files = [
+            "config/platform.json",
+            "config/intelligence.json",
+            "config/outreach.json",
+            "config/api.json",
+            "config/data.json",
+            "config/logging.json"
+        ]
+
+        for config_file in config_files:
+            if Path(config_file).exists():
+                try:
+                    with open(config_file, 'r') as f:
+                        file_config = json.load(f)
+                    config = self._deep_merge(config, file_config)
+                    self.sources.append(config_file)
+                except Exception as e:
+                    print(f"Warning: Failed to load {config_file}: {e}")
+
+        return config
+
+    def _deep_merge(self, base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+        """Deep merge two dictionaries"""
+        result = base.copy()
+
+        for key, value in update.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = value
+
+        return result
+
+    def _set_nested_value(self, config: Dict[str, Any], path: str, value: Any) -> Dict[str, Any]:
+        """Set nested configuration value"""
+        keys = path.split('.')
+        current = config
+
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
+
+        current[keys[-1]] = value
+        return config
+
+    def _validate_config(self, config: Dict[str, Any]) -> None:
+        """Validate configuration"""
+        errors = []
+
+        # Check required API keys
+        if not self.get_value('api.tavily.api_key'):
+            errors.append("Missing TAVILY_API_KEY")
+
+        # Check data paths
+        if not self.get_value('data.input_path'):
+            errors.append("Missing data.input_path")
+
+        if errors:
+            raise ValueError(f"Configuration errors: {', '.join(errors)}")
+
+    def get_value(self, path: str, default: Any = None) -> Any:
+        """Get configuration value by path"""
+        keys = path.split('.')
+        current = self.config
+
+        try:
+            for key in keys:
+                current = current[key]
+            return current
+        except (KeyError, TypeError):
+            return default
+
+    def set_value(self, path: str, value: Any) -> None:
+        """Set configuration value by path"""
+        self.config = self._set_nested_value(self.config, path, value)
+
+    def save_config(self, filepath: str) -> None:
+        """Save current configuration to file"""
+        output_path = Path(filepath)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, 'w') as f:
+            json.dump(self.config, f, indent=2)
+
+    def get_environment(self) -> str:
+        """Get current environment"""
+        return self.get_value('platform.environment', 'development')
+
+    def is_development(self) -> bool:
+        """Check if running in development mode"""
+        return self.get_environment() == 'development'
+
+    def is_production(self) -> bool:
+        """Check if running in production mode"""
+        return self.get_environment() == 'production'
+```
+
+## Configuration Validation
+
+### Schema Validation
+```python
+import jsonschema
+from jsonschema import validate, ValidationError
+
+class ConfigurationValidator:
+    """Configuration schema validation"""
+
+    CONFIG_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "platform": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "version": {"type": "string"},
+                    "environment": {
+                        "type": "string",
+                        "enum": ["development", "staging", "production"]
+                    }
+                },
+                "required": ["name", "version"]
+            },
+            "intelligence": {
+                "type": "object",
+                "properties": {
+                    "max_companies_per_batch": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                    },
+                    "cache_enabled": {"type": "boolean"},
+                    "cache_ttl_hours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 168
+                    }
+                }
+            }
+        },
+        "required": ["platform"]
+    }
+
+    @classmethod
+    def validate(cls, config: Dict[str, Any]) -> List[str]:
+        """Validate configuration against schema"""
+        errors = []
+
+        try:
+            validate(instance=config, schema=cls.CONFIG_SCHEMA)
+        except ValidationError as e:
+            errors.append(f"Schema validation error: {e.message}")
+        except Exception as e:
+            errors.append(f"Validation error: {str(e)}")
+
+        return errors
+```
+
+## Environment-Specific Configuration
+
+### Feature Flags
+```python
+class FeatureManager:
+    """Manage feature flags and capabilities"""
+
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+
+    def is_feature_enabled(self, feature_name: str) -> bool:
+        """Check if feature is enabled"""
+        feature_config = self.config.get('features', {})
+        return feature_config.get(feature_name, False)
+
+    def get_feature_config(self, feature_name: str) -> Dict[str, Any]:
+        """Get feature-specific configuration"""
+        features = self.config.get('features', {})
+        return features.get(feature_name, {})
+
+# Usage in components
+if self.feature_manager.is_feature_enabled('advanced_analytics'):
+    # Enable advanced analytics
+    analytics_config = self.feature_manager.get_feature_config('advanced_analytics')
+    # Use analytics features
+```
+
+### Environment Overrides
+```python
+def apply_environment_overrides(config: Dict[str, Any], environment: str) -> Dict[str, Any]:
+    """Apply environment-specific overrides"""
+
+    overrides = {
+        "development": {
+            "logging": {"level": "DEBUG"},
+            "intelligence": {"max_companies_per_batch": 2},
+            "platform": {"debug_mode": True}
+        },
+        "staging": {
+            "logging": {"level": "INFO"},
+            "intelligence": {"max_companies_per_batch": 5},
+            "platform": {"debug_mode": False}
+        },
+        "production": {
+            "logging": {"level": "WARNING"},
+            "intelligence": {"max_companies_per_batch": 50},
+            "platform": {"debug_mode": False}
+        }
+    }
+
+    if environment in overrides:
+        config = deep_merge(config, overrides[environment])
+
+    return config
+```
