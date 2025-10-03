@@ -1,0 +1,80 @@
+2025-08-28 23:03:51,690 WARNING database DDL Query made to DB:
+create table `tabCRM Dropdown Item` (
+			name varchar(140) primary key,
+			creation datetime(6),
+			modified datetime(6),
+			modified_by varchar(140),
+			owner varchar(140),
+			docstatus tinyint not null default '0',
+			idx int not null default '0',
+			`name1` varchar(140) UNIQUE,
+`label` varchar(140),
+`type` varchar(140),
+`route` varchar(140),
+`open_in_new_window` tinyint(4) NOT NULL DEFAULT 1,
+`hidden` tinyint(4) NOT NULL DEFAULT 0,
+`is_standard` tinyint(4) NOT NULL DEFAULT 0,
+`icon` longtext,
+parent varchar(140),
+parentfield varchar(140),
+parenttype varchar(140),
+index parent(parent))
+			ENGINE=InnoDB
+			ROW_FORMAT=DYNAMIC
+			CHARACTER SET=utf8mb4
+			COLLATE=utf8mb4_unicode_ci
+2025-08-28 23:03:51,782 WARNING database DDL Query made to DB:
+create table `tabCRM Lead` (
+			name varchar(140) primary key,
+			creation datetime(6),
+			modified datetime(6),
+			modified_by varchar(140),
+			owner varchar(140),
+			docstatus tinyint not null default '0',
+			idx int not null default '0',
+			`organization` varchar(140),
+`website` varchar(140),
+`territory` varchar(140),
+`industry` varchar(140),
+`job_title` varchar(140),
+`source` varchar(140),
+`lead_owner` varchar(140),
+`salutation` varchar(140),
+`first_name` varchar(140),
+`last_name` varchar(140),
+`email` varchar(140),
+`mobile_no` varchar(140),
+`naming_series` varchar(140) DEFAULT 'CRM-LEAD-.YYYY.-',
+`lead_name` varchar(140),
+`middle_name` varchar(140),
+`gender` varchar(140),
+`phone` varchar(140),
+`status` varchar(140) DEFAULT 'New',
+`no_of_employees` varchar(140),
+`annual_revenue` decimal(21,9) NOT NULL DEFAULT 0.0,
+`image` text,
+`converted` tinyint(4) NOT NULL DEFAULT 0,
+`total` decimal(21,9) NOT NULL DEFAULT 0.0,
+`net_total` decimal(21,9) NOT NULL DEFAULT 0.0,
+`sla` varchar(140),
+`sla_creation` datetime(6),
+`sla_status` varchar(140),
+`communication_status` varchar(140) DEFAULT 'Open',
+`response_by` datetime(6),
+`first_response_time` decimal(21,9),
+`first_responded_on` datetime(6),
+`_user_tags` text,
+`_comments` text,
+`_assign` text,
+`_liked_by` text,
+index `email`(`email`),
+index `lead_name`(`lead_name`),
+index `status`(`status`),
+index creation(creation),
+index modified(modified))
+			ENGINE=InnoDB
+			ROW_FORMAT=DYNAMIC
+			CHARACTER SET=utf8mb4
+			COLLATE=utf8mb4_unicode_ci
+2025-08-28 23:03:52,269 WARNING database DDL Query made to DB:
+ALTER TABLE `tabEmail Template` ADD COLUMN `enabled` tinyint(4) NOT NULL DEFAULT 0, ADD COLUMN `reference_doctype` varchar(140)

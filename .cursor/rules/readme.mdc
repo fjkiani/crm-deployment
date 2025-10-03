@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+# CRM Deployment - Cursor Rules Master Index
+
+This master rule orients the assistant to project structure, AI copilot doctrine, tools, and sprint plan.
+
+- Project Structure & Apps: [structure.mdc](mdc:structure.mdc)
+- AI Copilot Doctrine (Farfalle integration): [copilot_doctrine.mdc](mdc:copilot_doctrine.mdc)
+- Copilot Tools → CRM API Mapping: [copilot_tools.mdc](mdc:copilot_tools.mdc)
+- Sprint Plan & Deliverables: [sprint_plan.mdc](mdc:sprint_plan.mdc)
+
+Use these rules to ground responses and implementation steps.

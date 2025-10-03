@@ -1,0 +1,34 @@
+---
+alwaysApply: false
+description: Support LLM agent workflow, interfaces, and guardrails (concrete)
+---
+# Support Agent Workflow (Concrete)
+
+## Working Directories
+- Backend: `crm-deployment/`
+- Frontend: `frappe-bench/apps/crm/frontend/`
+- Chatbot: `assistant/executive-ai-assistant-main/farfalle-main/`
+
+## Standard Steps
+1) Read scope
+   - Identify target files (e.g., `crm/api/email.py`, `frontend/src/...`)
+2) Implement
+   - Make minimal edits; preserve formatting
+   - Add new files under appropriate folders as specified in the task
+3) Validate
+   - For Python: run unit tests if present; else `flake8` style conformance (document if not available)
+   - For Vue: ensure build compiles (document commands but do not run automatically)
+4) Deliver
+   - Provide a short summary and a diff-like snippet showing exact changes
+
+## Commands (document for humans)
+- Python tests: `pytest crm-deployment/tests -v` (if tests are created in task)
+- Curl example: `curl -s https://<site>/api/method/crm.api.email.send -d '{"communication_name":"..."}'`
+
+## Guardrails
+- Do not introduce new public endpoints; use existing whitelisted API
+- No migrations/schema changes unless explicitly instructed
+- Keep unrelated changes out of diffs; small, reviewable edits only
+
+## Handoff
+- Output includes: modified file paths, rationale, test notes, and next steps

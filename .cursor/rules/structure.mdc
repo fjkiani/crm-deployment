@@ -1,0 +1,30 @@
+---
+alwaysApply: true
+---
+# Project Structure Overview
+
+## Repos and Roots
+- crm-deployment/ (Frappe app: published to Frappe Cloud)
+- frappe-bench/ (local bench; SPA under apps/crm/frontend)
+- assistant/executive-ai-assistant-main/farfalle-main (chatbot)
+
+## Frappe App (crm-deployment/crm)
+- hooks.py: routes, desk/client JS, scheduler, overrides
+- api/: backend endpoints (etl, doc, email, agent, settings, session)
+- fcrm/doctype/: CRM DocTypes (Lead, Deal, Organization, etc.)
+- fcrm/workspace/: Workspaces and sidebar shortcuts
+- public/js/: client JS (ai_actions.js)
+- www/: server-rendered pages (upload_leads, human_inbox)
+
+## SPA (frappe-bench/apps/crm/frontend)
+- src/pages/Leads.vue: list + Upload CSV modal
+- src/components/Modals/LeadsUploadModal.vue: ETL flow
+- src/router.js: routes under /crm
+
+## Chatbot (farfalle-main)
+- Orchestrator, tools, adapters; acts like Perplexity-style chat
+
+## Key Data Flows
+- CSV ETL: upload_leads → crm.api.etl → Lead/Org/Contact upsert
+- AI Email: form AI buttons → crm.api.agent.run → crm.api.email
+- Human Inbox: list and send AI drafts

@@ -1,0 +1,138 @@
+2025-08-28 22:20:26,779 DEBUG cd frappe-bench && python3 -m venv env
+2025-08-28 22:20:29,784 DEBUG cd frappe-bench && /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/env/bin/python -m pip install --quiet --upgrade pip
+2025-08-28 22:20:30,265 DEBUG cd frappe-bench && /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/env/bin/python -m pip install --quiet wheel
+2025-08-28 22:20:30,922 LOG Getting frappe
+2025-08-28 22:20:30,922 DEBUG cd frappe-bench/apps && git clone https://github.com/frappe/frappe.git  --depth 1 --origin upstream
+2025-08-28 22:20:34,203 LOG Installing frappe
+2025-08-28 22:20:34,242 DEBUG cd /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench && /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/env/bin/python -m pip install --quiet --upgrade -e /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/apps/frappe 
+2025-08-28 22:21:07,575 DEBUG cd /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/apps/frappe && yarn install --check-files
+2025-08-28 22:21:35,297 DEBUG cd frappe-bench && bench build
+2025-08-28 22:21:36,368 INFO /Users/fahadkiani/.local/bin/bench build
+2025-08-28 22:21:56,563 LOG setting up backups
+2025-08-28 22:21:56,926 LOG backups were set up
+2025-08-28 22:21:56,926 INFO Bench frappe-bench initialized
+2025-08-28 22:22:19,880 INFO /Users/fahadkiani/.local/bin/bench get-app crm https://github.com/frappe/crm.git
+2025-08-28 22:22:19,920 LOG Getting crm
+2025-08-28 22:22:19,920 DEBUG cd ./apps && git clone https://github.com/frappe/crm.git  --depth 1 --origin upstream
+2025-08-28 22:22:21,431 LOG Installing crm
+2025-08-28 22:22:21,431 DEBUG cd /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench && /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/env/bin/python -m pip install --quiet --upgrade -e /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/apps/crm 
+2025-08-28 22:22:28,832 DEBUG cd /Users/fahadkiani/Desktop/development/crm-develop/frappe-bench/apps/crm && yarn install --check-files
+2025-08-28 22:22:54,474 DEBUG bench build --app crm
+2025-08-28 22:22:55,317 INFO /Users/fahadkiani/.local/bin/bench build --app crm
+2025-08-28 22:24:01,489 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --install-app crm
+2025-08-28 22:39:26,629 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --install-app crm
+2025-08-28 22:47:02,246 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --install-app crm
+2025-08-28 22:47:07,055 INFO /Users/fahadkiani/.local/bin/bench list-sites
+2025-08-28 22:47:11,132 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:47:11,158 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:47:27,471 INFO /Users/fahadkiani/.local/bin/bench --site crm.localhost list-apps
+2025-08-28 22:47:45,022 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:47:45,026 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:48:09,806 INFO /Users/fahadkiani/.local/bin/bench --site crm.localhost console
+2025-08-28 22:48:17,716 INFO /Users/fahadkiani/.local/bin/bench --site crm.localhost install-app crm
+2025-08-28 22:48:23,911 INFO /Users/fahadkiani/.local/bin/bench drop-site crm.localhost --force
+2025-08-28 22:48:34,237 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --db-user fahadkiani --db-password  --install-app crm
+2025-08-28 22:49:30,146 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --db-root-user fahadkiani --db-root-password  --install-app crm
+2025-08-28 22:49:34,365 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --db-root-username fahadkiani --db-root-password  --install-app crm
+2025-08-28 22:49:38,936 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --db-root-username fahadkiani --db-root-password  --install-app crm --force
+2025-08-28 22:49:53,850 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --db-root-username fahadkiani --db-root-password  --install-app crm --force
+2025-08-28 22:50:09,227 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:50:09,233 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:50:35,428 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:50:35,434 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:51:05,296 INFO /Users/fahadkiani/.local/bin/bench list-sites
+2025-08-28 22:51:31,295 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:51:31,300 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:52:18,090 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:52:18,096 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:52:36,492 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:52:36,497 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:53:18,720 INFO /Users/fahadkiani/.local/bin/bench serve --port 8000
+2025-08-28 22:54:05,815 INFO /Users/fahadkiani/.local/bin/bench --site crm.localhost migrate
+2025-08-28 22:54:28,325 INFO /Users/fahadkiani/.local/bin/bench start
+2025-08-28 22:54:28,330 WARNING /Users/fahadkiani/.local/bin/bench start executed with exit code 1
+2025-08-28 22:54:42,034 INFO /Users/fahadkiani/.local/bin/bench --site crm.localhost migrate
+2025-08-28 22:56:58,702 INFO /Users/fahadkiani/.local/bin/bench --site crm.localhost migrate
+2025-08-28 22:57:12,977 INFO /Users/fahadkiani/.local/bin/bench new-site crm.localhost --db-name crm_db --db-root-username fahadkiani --db-root-password crmpassword --install-app crm --force
+2025-08-28 23:04:00,070 INFO /Users/fahadkiani/.local/bin/bench serve --port 8000
+2025-08-29 00:02:10,455 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-08-29 12:00:03,131 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-08-30 18:00:00,989 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-08-31 00:00:02,104 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-08-31 06:04:57,929 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-08-31 12:00:02,747 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-08-31 18:00:11,959 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-01 00:00:02,644 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-01 18:00:01,986 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-02 12:00:07,263 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-02 18:00:04,422 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-03 00:00:02,224 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-03 06:00:02,639 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-03 12:00:03,965 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-03 18:00:08,125 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-04 00:00:03,551 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-04 12:00:08,371 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-04 18:00:03,572 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-05 00:00:01,865 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-05 06:00:02,304 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-05 12:00:06,206 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-05 18:00:03,162 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-06 00:00:03,076 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-06 06:00:02,343 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-07 00:00:02,932 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-07 18:00:04,417 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-08 00:00:03,297 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-08 12:00:03,584 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-08 18:00:04,664 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-09 00:00:03,015 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-09 06:00:02,242 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-09 12:00:05,388 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-09 18:00:01,527 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-10 12:00:03,031 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-10 18:00:05,037 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-11 00:00:03,364 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-11 12:00:03,802 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-13 06:00:03,644 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-13 12:00:03,709 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-13 18:00:04,273 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-14 18:00:02,725 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-15 06:00:03,755 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-15 12:00:03,403 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-15 18:00:03,357 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-15 23:42:15,054 INFO /Users/fahadkiani/.local/bin/bench serve --port 8001
+2025-09-16 14:24:21,728 INFO /Users/fahadkiani/.local/bin/bench status
+2025-09-16 18:00:04,683 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-17 18:01:26,257 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-18 06:00:03,219 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-18 12:00:01,640 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-18 18:00:06,022 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-19 00:00:03,608 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-19 06:00:03,988 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-19 12:00:08,211 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-20 12:00:03,999 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-22 18:00:04,322 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-23 12:00:06,066 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-23 18:00:02,926 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-24 00:00:03,807 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-24 06:00:03,940 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-24 12:00:06,707 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-24 18:00:03,907 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-25 00:00:03,452 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-25 06:00:02,583 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-25 12:00:05,447 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-25 18:00:01,964 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-26 12:00:02,462 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-26 18:00:04,163 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-27 00:00:01,471 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-27 12:00:03,081 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-28 12:00:01,469 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-29 00:00:02,705 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-29 18:00:04,540 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-30 12:00:01,366 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-09-30 18:00:01,933 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-10-01 00:00:01,704 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-10-01 12:00:02,125 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-10-01 18:00:05,504 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-10-02 06:00:04,260 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-10-02 12:00:03,061 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup
+2025-10-02 18:00:07,541 INFO /Users/fahadkiani/.local/bin/bench --verbose --site all backup

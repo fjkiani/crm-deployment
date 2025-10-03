@@ -1,0 +1,6 @@
+{
+ "db_name": "crm_db",
+ "db_password": "b0i37lC0O1pr2fG4",
+ "db_type": "mariadb",
+ "db_user": "crm_db"
+}

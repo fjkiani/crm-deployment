@@ -1,0 +1,39 @@
+---
+alwaysApply: false
+description: Farfalle chatbot integration with CRM (architecture & adapters)
+---
+# Farfalle Integration
+
+## Farfalle Components (expected)
+- Orchestrator: intent routing, tool planner (chain-of-thought hidden)
+- Tools Layer: HTTP adapters to CRM endpoints
+- Providers: LLMs (OpenAI/Anthropic/Azure), embeddings (optional)
+- Webchat UI: Streaming chat interface
+
+## CRM Adapter
+- Base URL: https://<site>/api/method/
+- Auth: service account cookie + CSRF token; retry on 401 by re-login
+- Adapter Methods:
+  - list_docs → crm.api.doc.get_data
+  - get_doc → frappe.client.get
+  - insert_doc → crm.api.doc.insert
+  - set_value → crm.api.doc.set_value
+  - add_comment → crm.api.comment.add_comment
+  - email_draft/send → crm.api.agent.run
+  - import_rows/job_status/autogenerate_mapping → crm.api.etl.*
+
+## Streaming Answers
+- Execute tools first; synthesize concise answer with citations (links to /app/...)
+- For long ops, stream partials and post final summary when job completes
+
+## Context Grounding
+- Seed system prompt with CRM domain: roles, DocTypes, field names
+- Optional RAG over recent Communications/Notes using CRM endpoints
+
+## Security & Roles
+- Map Farfalle user → CRM role set; enforce at tool layer
+- Log every tool call with user, doctype, action, args hash
+
+## Deployment
+- Host Farfalle separately; allow origin(s) in Frappe CORS if needed
+- Embed webchat at /crm/ai or link from sidebar

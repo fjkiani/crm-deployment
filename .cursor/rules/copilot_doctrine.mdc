@@ -1,0 +1,42 @@
+---
+alwaysApply: false
+description: AI Copilot doctrine and Farfalle chatbot integration (technical)
+---
+# AI Copilot Doctrine (Technical)
+
+## Architecture
+- Chat UX: Farfalle (assistant/executive-ai-assistant-main/farfalle-main)
+- Tool Layer: Farfalle adapters → CRM whitelisted APIs
+- Data Plane: Frappe CRM (DocTypes: CRM Lead, CRM Deal, CRM Organization, Contact, Communication, ToDo)
+- Surfaces: Desk (forms + AI buttons), SPA (/crm), Server pages (/upload_leads, /crm/human_inbox), Chat (/crm/ai)
+
+## Message Flow
+1) User message → Farfalle intent + entities → tool plan
+2) Tools executed against CRM endpoints (auth cookie/API key)
+3) Responses aggregated → synthesized answer (+ links to CRM records)
+4) Optional follow-up tool calls (e.g., create task, send email)
+
+## Auth & CSRF
+- Server-to-server: Service account on Frappe Cloud; maintain session cookie; include X-Frappe-CSRF-Token when required
+- Delegated user: Farfalle operates on behalf of the logged-in user by forwarding session cookies via backend proxy
+- Rate-limiting + retry for 429/5xx; exponential backoff
+
+## Error Handling
+- Tool error schema: { error_code, message, details?, suggestion? }
+- Common errors: PERMISSION_DENIED, VALIDATION_ERROR, NOT_FOUND, CSRF_TOKEN, RATE_LIMIT, NETWORK
+
+## Data Privacy
+- Scope tools by role; redact PII in logs; encrypt provider tokens; avoid storing CSV contents beyond job scope
+
+## Limits
+- Max rows per sync import: 5k (configurable)
+- Tool timeouts: 30s default; long ops via job model and polling
+
+## Observability
+- CRM: structured logging via frappe.log_error, job logs; email draft realtime events (crm_email_draft_created)
+- Farfalle: tool latency metrics, success/error rates, token usage
+
+## Surfaces & Entry Points
+- Desk AI Buttons: `crm/public/js/ai_actions.js` → `crm.api.agent.run`
+- Human Inbox: `/crm/human_inbox` (review/send drafts)
+- SPA Copilot: `/crm/ai` (embed Farfalle webchat or proxy)
