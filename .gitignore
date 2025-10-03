@@ -23,3 +23,17 @@ logs/
 
 # OS
 Thumbs.db
+# Secrets and credentials
+.secrets/
+*.secrets.json
+client_secret_*.json
+token.json
+secrets.json
+
+# Database files
+mysql-data/
+*.ibd
+*.frm
+*.MYD
+*.MAI
+*.MAD
