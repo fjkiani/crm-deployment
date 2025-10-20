@@ -24,21 +24,11 @@ class CrmClient:
 			'pwd': pwd,
 		})
 		res.raise_for_status()
-		
-		# Get CSRF token - Frappe Cloud doesn't return it in login cookies
-		# We need to fetch it from the web page or use sid as CSRF
+		# CSRF cookie
 		for c in self.s.cookies:
 			if c.name == 'csrf_token':
 				self.csrf = c.value
 				break
-		
-		# If no csrf_token cookie, get it from the app page
-		if not self.csrf:
-			# Frappe uses 'sid' cookie as CSRF token in some cases
-			for c in self.s.cookies:
-				if c.name == 'sid':
-					self.csrf = c.value
-					break
 
 	def post(self, method: str, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 		if not self.csrf:

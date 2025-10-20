@@ -43,3 +43,5 @@ https://jedilabs2.v.frappe.cloud/api/method/crm.integrations.twilio.api.vapi_web
 
 This endpoint will receive call events (started, ended, transcripts).
 
+
+
