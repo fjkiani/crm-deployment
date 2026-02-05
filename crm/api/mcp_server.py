@@ -57,6 +57,26 @@ def cleanup_leads(confirm: bool = False):
     return f"Deleted {count} leads."
 
 @mcp.tool()
+def create_lead(first_name: str, last_name: str, organization: str, title: str = None, email: str = None, source: str = "Assistant"):
+    """
+    Creates a new Lead in the CRM.
+    """
+    try:
+        doc = frappe.get_doc({
+            "doctype": "CRM Lead",
+            "first_name": first_name,
+            "last_name": last_name,
+            "organization": organization,
+            "job_title": title,
+            "email_id": email,
+            "source": source
+        })
+        doc.insert(ignore_permissions=True)
+        return f"Created Lead: {doc.name} ({first_name} {last_name})"
+    except Exception as e:
+        return f"Error creating lead: {str(e)}"
+
+@mcp.tool()
 def echo(message: str):
     """Echoes back the message. Useful for testing connectivity."""
     return f"CRM Agent received: {message}"
