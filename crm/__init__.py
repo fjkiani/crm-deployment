@@ -1,4 +1,2 @@
-
-__version__ = "2.0.0-dev"
-__title__ = "Frappe CRM"
-
+__version__ = "1.0.1"
+print("Loaded CRM Deployment Module 1.0.1")
