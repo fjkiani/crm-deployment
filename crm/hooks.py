@@ -168,6 +168,9 @@ doc_events = {
 		"before_validate": ["crm.api.demo.validate_user"],
 		"validate_reset_password": ["crm.api.demo.validate_reset_password"],
 	},
+	"Communication": {
+		"after_insert": ["crm.api.email.auto_link_communication"],
+	},
 }
 
 # Scheduled Tasks
@@ -177,6 +180,17 @@ scheduler_events = {
     "hourly": [
         "crm.api.etl.run_scheduled_imports",
     ],
+    "daily": [
+        "crm.leadgen.scheduler.run_daily_collectors",
+        "crm.leadgen.scheduler.run_consolidation",
+        "crm.leadgen.scheduler.send_follow_ups",
+        "crm.leadgen.scheduler.run_enrichment_job",
+        "crm.leadgen.scheduler.check_job_health"
+    ],
+    "weekly": [
+        "crm.leadgen.scheduler.run_weekly_cleanup",
+        "crm.leadgen.scheduler.generate_weekly_report"
+    ]
 }
 
 # Testing

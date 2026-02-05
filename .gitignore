@@ -23,5 +23,22 @@ logs/
 
 # OS
 Thumbs.db
+<<<<<<< HEAD
+# Secrets and credentials
+.secrets/
+*.secrets.json
+client_secret_*.json
+token.json
+secrets.json
+
+# Database files
+mysql-data/
+*.ibd
+*.frm
+*.MYD
+*.MAI
+*.MAD
+=======
 # Local dev ignore
 scripts/farfalle-main/venv*/
+>>>>>>> fc6c54f (all)

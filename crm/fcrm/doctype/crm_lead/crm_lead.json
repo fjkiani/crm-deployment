@@ -55,7 +55,11 @@
   "first_response_time",
   "first_responded_on",
   "log_tab",
-  "status_change_log"
+  "status_change_log",
+  "leadgen_tab",
+  "tier",
+  "lead_score",
+  "prospect_ref"
  ],
  "fields": [
   {
@@ -330,6 +334,29 @@
    "fieldname": "additional_data",
    "fieldtype": "JSON",
    "label": "Additional Data"
+  },
+  {
+   "fieldname": "leadgen_tab",
+   "fieldtype": "Tab Break",
+   "label": "Lead Generation"
+  },
+  {
+   "fieldname": "tier",
+   "fieldtype": "Select",
+   "label": "Tier",
+   "options": "Tier 1\nTier 2\nTier 3"
+  },
+  {
+   "fieldname": "lead_score",
+   "fieldtype": "Float",
+   "label": "Lead Score",
+   "precision": "2"
+  },
+  {
+   "fieldname": "prospect_ref",
+   "fieldtype": "Link",
+   "label": "Prospect Reference",
+   "options": "Lead Prospect"
   }
  ],
  "grid_page_length": 50,

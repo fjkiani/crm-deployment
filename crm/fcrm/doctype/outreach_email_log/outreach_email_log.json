@@ -1,0 +1,97 @@
+{
+  "name": "Outreach Email Log",
+  "doctype": "DocType",
+  "module": "FCRM",
+  "autoname": "hash",
+  "fields": [
+    {
+      "fieldname": "email_name",
+      "fieldtype": "Link",
+      "label": "Email",
+      "options": "Email",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "step_number",
+      "fieldtype": "Int",
+      "label": "Step Number",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "sent_at",
+      "fieldtype": "Datetime",
+      "label": "Sent At",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Sent\nDelivered\nOpened\nClicked\nReplied\nBounced\nUnsubscribed",
+      "default": "Sent",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "opened_at",
+      "fieldtype": "Datetime",
+      "label": "Opened At"
+    },
+    {
+      "fieldname": "clicked_at",
+      "fieldtype": "Datetime",
+      "label": "Clicked At"
+    },
+    {
+      "fieldname": "replied_at",
+      "fieldtype": "Datetime",
+      "label": "Replied At"
+    },
+    {
+      "fieldname": "bounced_at",
+      "fieldtype": "Datetime",
+      "label": "Bounced At"
+    },
+    {
+      "fieldname": "unsubscribed_at",
+      "fieldtype": "Datetime",
+      "label": "Unsubscribed At"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Sales User",
+      "permlevel": 0,
+      "read": 1,
+      "write": 0,
+      "create": 0,
+      "delete": 0,
+      "if_owner": 1
+    },
+    {
+      "role": "Sales Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "System Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "title_field": "email_name",
+  "track_changes": 1,
+  "sort_field": "sent_at",
+  "sort_order": "DESC"
+}
+
+

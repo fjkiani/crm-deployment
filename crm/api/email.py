@@ -4,6 +4,176 @@ from frappe.utils import cstr
 from frappe import publish_realtime
 
 
+def _safe_get_email_settings() -> dict:
+	"""Return resolver settings with safe defaults if the Single DocType is missing."""
+	settings = {
+		"prefer_open_deal": False,
+		"auto_create_lead_for_unknown": False,
+		"domain_matching_enabled": True,
+	}
+	try:
+		if frappe.db.exists("CRM Email Settings"):
+			doc = frappe.get_single("CRM Email Settings")
+			settings["prefer_open_deal"] = bool(doc.get("prefer_open_deal"))
+			settings["auto_create_lead_for_unknown"] = bool(doc.get("auto_create_lead_for_unknown"))
+			settings["domain_matching_enabled"] = bool(doc.get("domain_matching_enabled", True))
+	except Exception:
+		# ignore if settings not present
+		pass
+	return settings
+
+
+def _match_contact_by_email(email: str) -> str | None:
+	"""Return Contact name matching the given email (primary or child emails)."""
+	if not email:
+		return None
+	# Primary field on Contact
+	name = frappe.db.get_value("Contact", {"email_id": email}, "name")
+	if name:
+		return name
+	# Child table Contact Email
+	parent = frappe.db.get_value("Contact Email", {"email_id": email}, "parent")
+	return parent
+
+
+def _prefer_open_deal_for_contact(contact: str) -> str | None:
+	"""Return an open CRM Deal linked to Contact if present."""
+	if not contact:
+		return None
+	deal = frappe.db.get_value(
+		"CRM Deal",
+		{"contact": contact, "status": ["in", ["Open", "Qualifying", "Negotiating"]]},
+		"name",
+	)
+	return deal
+
+
+def _match_lead_by_email(email: str) -> str | None:
+	"""Return CRM Lead name by common email fields."""
+	if not email:
+		return None
+	name = frappe.db.get_value("CRM Lead", {"email_id": email}, "name")
+	if name:
+		return name
+	name = frappe.db.get_value("CRM Lead", {"email": email}, "name")
+	return name
+
+
+def _match_org_by_domain(domain: str) -> str | None:
+	"""Heuristic: try matching Organization by website containing domain."""
+	if not domain:
+		return None
+	org = frappe.db.get_value("CRM Organization", {"website": ["like", f"%{domain}%"]}, "name")
+	return org
+
+
+@frappe.whitelist()
+def resolve_reference(emails: list[str] | None = None, in_reply_to: str | None = None) -> dict | None:
+	"""Smart resolver for linking Communications.
+
+	Priority: thread inheritance → Contact (optionally prefer open Deal) → Lead → Organization (by domain) → optional auto-create Lead.
+	"""
+	emails = emails or []
+	settings = _safe_get_email_settings()
+
+	# 1) Thread inheritance via in_reply_to → parent Communication
+	try:
+		if in_reply_to:
+			parent = frappe.db.get_value(
+				"Communication",
+				{"message_id": in_reply_to},
+				["reference_doctype", "reference_name"],
+				as_dict=True,
+			)
+			if parent and parent.reference_doctype and parent.reference_name:
+				return {"doctype": parent.reference_doctype, "name": parent.reference_name}
+	except Exception:
+		pass
+
+	# Normalize email list
+	flat_emails: list[str] = []
+	for e in emails:
+		if not e:
+			continue
+		for part in cstr(e).split(","):
+			addr = part.strip()
+			if addr and addr not in flat_emails:
+				flat_emails.append(addr)
+
+	# 2) Contact by email → optionally prefer open Deal
+	for em in flat_emails:
+		contact = _match_contact_by_email(em)
+		if contact:
+			if settings.get("prefer_open_deal"):
+				deal = _prefer_open_deal_for_contact(contact)
+				if deal:
+					return {"doctype": "CRM Deal", "name": deal}
+			return {"doctype": "Contact", "name": contact}
+
+	# 3) Lead by email
+	for em in flat_emails:
+		lead = _match_lead_by_email(em)
+		if lead:
+			return {"doctype": "CRM Lead", "name": lead}
+
+	# 4) Organization by domain
+	if settings.get("domain_matching_enabled"):
+		for em in flat_emails:
+			if "@" in em:
+				domain = em.split("@", 1)[1]
+				org = _match_org_by_domain(domain)
+				if org:
+					return {"doctype": "CRM Organization", "name": org}
+
+	# 5) Optional auto-create Lead from first email
+	if settings.get("auto_create_lead_for_unknown") and flat_emails:
+		try:
+			lead = frappe.get_doc(
+				{
+					"doctype": "CRM Lead",
+					"email_id": flat_emails[0],
+					"lead_name": cstr(flat_emails[0]).split("@")[0].title(),
+				}
+			)
+			lead.insert(ignore_permissions=True)
+			return {"doctype": "CRM Lead", "name": lead.name}
+		except Exception:
+			pass
+
+	return None
+
+
+def _collect_comm_emails(doc) -> list[str]:
+	"""Collect sender/recipients/cc/bcc from Communication doc into a flat list."""
+	emails: list[str] = []
+	for field in ("sender", "recipients", "cc", "bcc"):
+		val = doc.get(field)
+		if not val:
+			continue
+		for part in cstr(val).split(","):
+			addr = part.strip()
+			if addr and addr not in emails:
+				emails.append(addr)
+	return emails
+
+
+def auto_link_communication(doc, method: str | None = None):
+	"""Hook: auto-link newly created Communications lacking a reference."""
+	try:
+		# Only if not already linked
+		if doc.get("reference_doctype") and doc.get("reference_name"):
+			return
+		emails = _collect_comm_emails(doc)
+		result = resolve_reference(emails=emails, in_reply_to=doc.get("in_reply_to"))
+		if result and result.get("doctype") and result.get("name"):
+			# Persist reference
+			doc.db_set({
+				"reference_doctype": result["doctype"],
+				"reference_name": result["name"],
+			})
+	except Exception:
+		# Best-effort; don't interrupt inbound processing
+		pass
 def _notify_on_draft(reference_doctype: str, reference_name: str, communication_name: str, subject: str):
 	"""Notify the referenced doc owner and assignees about the new draft (best-effort)."""
 	try:
