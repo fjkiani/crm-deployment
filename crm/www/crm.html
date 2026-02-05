@@ -193,8 +193,8 @@
       href="/assets/crm/manifest/apple-splash-1136-640.jpg"
       media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"
     />
-    <script type="module" crossorigin src="/assets/crm/frontend/assets/index-6bb6ee33.js"></script>
-    <link rel="stylesheet" href="/assets/crm/frontend/assets/index-fd8fe6a1.css">
+    <script type="module" crossorigin src="/assets/crm/frontend/assets/index-730e4985.js"></script>
+    <link rel="stylesheet" href="/assets/crm/frontend/assets/index-c2349d5c.css">
   <link rel="manifest" href="/assets/crm/frontend/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/assets/crm/frontend/registerSW.js"></script></head>
   <body class="sm:overscroll-y-none no-scrollbar">
     <div id="app" class="h-full"></div>
@@ -205,67 +205,6 @@
               window["{{ key }}"] = {{ boot[key] | tojson }};
               {% endfor %}
           </script>
-          <style>
-            #ai-widget-toast { position: fixed; right: 16px; bottom: 16px; z-index: 9999; display: none; }
-            #ai-widget-toast .card { background: #111827; color: #e5e7eb; border-radius: 8px; padding: 12px 14px; box-shadow: 0 10px 20px rgba(0,0,0,.25); min-width: 220px; }
-            #ai-widget-toast a { color: #93c5fd; text-decoration: none; }
-          </style>
-          <div id="ai-widget-toast">
-            <div class="card">
-              <div id="ai-widget-title" style="font-weight:600; margin-bottom:6px;">AI Assistant</div>
-              <div id="ai-widget-counts" style="font-size:13px; opacity:.9;">Loading…</div>
-              <div style="margin-top:8px; font-size:13px;"><a href="/crm/human_inbox">Open Human Inbox</a></div>
-            </div>
-          </div>
-          <style>
-            #upload-leads-fab { position: fixed; right: 16px; bottom: 78px; z-index: 9999; }
-            #upload-leads-fab .btn { background: #2563eb; color: #fff; border-radius: 999px; padding: 10px 14px; box-shadow: 0 10px 20px rgba(0,0,0,.25); font-size: 14px; text-decoration: none; display: inline-block; }
-            #upload-leads-fab .btn:hover { background: #1e40af; }
-          </style>
-          <div id="upload-leads-fab">
-            <a class="btn" href="/upload_leads">Upload Leads</a>
-          </div>
-          <script>
-            (function(){
-              const toast = document.getElementById('ai-widget-toast');
-              const countsEl = document.getElementById('ai-widget-counts');
-              let hideTimer;
-              function showToast(message){
-                if (message) {
-                  document.getElementById('ai-widget-title').textContent = message;
-                } else {
-                  document.getElementById('ai-widget-title').textContent = 'AI Assistant';
-                }
-                toast.style.display = 'block';
-                clearTimeout(hideTimer);
-                hideTimer = setTimeout(()=>{ toast.style.display = 'none'; }, 6000);
-              }
-              async function fetchCounts(){
-                try {
-                  const r = await fetch('/api/method/crm.api.ai.get_counts');
-                  const j = await r.json();
-                  const m = j.message || {};
-                  countsEl.textContent = `Drafts: ${m.drafts||0} · Sent today: ${m.sent_today||0} · Recent: ${m.recent_total||0}`;
-                } catch(e){ /* ignore */ }
-              }
-              function onRealtime(){
-                try {
-                  if (window.frappe && frappe.realtime && typeof frappe.realtime.on === 'function'){
-                    frappe.realtime.on('crm_email_draft_created', function(data){
-                      fetchCounts();
-                      showToast('New AI Draft Ready');
-                    });
-                  }
-                } catch(e){ /* ignore */ }
-              }
-              // initial
-              fetchCounts();
-              onRealtime();
-              // poll fallback
-              setInterval(fetchCounts, 60000);
-            })();
-          </script>
-            <script src="/assets/crm/js/cockpit.js"></script>
-  </body>
+          </body>
           
 </html>
