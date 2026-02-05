@@ -14,7 +14,7 @@ def ask_nyx(message):
         frappe.throw("You must be logged in to access Intelligence.", frappe.PermissionError)
 
     # Configuration (Could be moved to site_config or settings)
-    AGENT_URL = "http://localhost:8000/chat"
+    AGENT_URL = "https://ninety-mugs-wear.loca.lt/chat"
     
     # Context: Provide basic user context
     user_context = {
