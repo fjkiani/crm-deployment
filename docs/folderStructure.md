@@ -1,3 +1,6 @@
+# 📂 Project Structure Reference
+# STATUS: Reference Snapshot (Verify against `docs/ingest.mdc` for live state)
+
 Directory structure:
 └── fjkiani-crm-deployment/
     ├── README.md

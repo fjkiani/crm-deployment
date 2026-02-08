@@ -1,0 +1,23 @@
+# Core MCP Framework
+fastmcp>=2.10.0
+
+# Existing MCP dependencies for PubMed
+biopython
+metapub
+httpx
+
+# Existing MCP dependencies for Clinical Trials  
+pytrials
+pandas
+requests
+bs4
+
+# LangGraph and LangChain dependencies
+langchain
+langchain-core
+langchain-openai
+langgraph
+
+# Utilities
+pydantic>=2.0.0
+python-dotenv

@@ -1,22 +1,35 @@
 """Core agent responsible for drafting email."""
 
 from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI as ChatOpenAI
+from langchain_cohere import ChatCohere
 from langgraph.store.base import BaseStore
 
 from eaia.schemas import (
     State,
     NewEmailDraft,
     ResponseEmailDraft,
+from eaia.skills.harvest_tool import run_harvest_mission
+
+tools = [
+    NewEmailDraft,
+    ResponseEmailDraft,
     Question,
     MeetingAssistant,
     SendCalendarInvite,
-    Ignore,
-    email_template,
-)
-from eaia.main.config import get_config
-
-EMAIL_WRITING_INSTRUCTIONS = """You are {full_name}'s executive assistant. You are a top-notch executive assistant who cares about {name} performing as well as possible.
+    delete_all_leads,
+    update_context,
+    list_leads,
+    research_company,
+    web_search,
+    brightdata_web_search,
+    brightdata_extract,
+    deep_audit_leads,
+    lead_hunter,
+    voice_call,
+    score_lead,
+    vapi_mcp_call,
+    run_harvest_mission
+]
 
 {background}
 
@@ -79,50 +92,77 @@ Here is the email thread. Note that this is the full email thread. Pay special a
 {email}"""
 
 
+tools = [
+    NewEmailDraft,
+    ResponseEmailDraft,
+    Question,
+    MeetingAssistant,
+    SendCalendarInvite,
+    delete_all_leads,
+    update_context,
+    list_leads,
+    research_company,
+    web_search,
+    brightdata_web_search,
+    brightdata_extract,
+    deep_audit_leads,
+    lead_hunter,
+    voice_call,
+    score_lead,
+    vapi_mcp_call,
+]
+
 async def draft_response(state: State, config: RunnableConfig, store: BaseStore):
     """Write an email to a customer."""
-    model = config["configurable"].get("model", "gemini-1.5-pro")
-    llm = ChatOpenAI(
+    model = config["configurable"].get("model", "command-r-08-2024")
+    llm = ChatCohere(
         model=model,
         temperature=0,
-        parallel_tool_calls=False,
-        tool_choice="required",
     )
-    tools = [
-        NewEmailDraft,
-        ResponseEmailDraft,
-        Question,
-        MeetingAssistant,
-        SendCalendarInvite,
-    ]
+    # tools is now global
+    my_tools = tools.copy()
     messages = state.get("messages") or []
     if len(messages) > 0:
-        tools.append(Ignore)
+        my_tools.append(Ignore)
     prompt_config = get_config(config)
-    namespace = (config["configurable"].get("assistant_id", "default"),)
-    key = "schedule_preferences"
-    result = await store.aget(namespace, key)
-    if result and "data" in result.value:
-        schedule_preferences = result.value["data"]
-    else:
-        await store.aput(namespace, key, {"data": prompt_config["schedule_preferences"]})
-        schedule_preferences = prompt_config["schedule_preferences"]
-    key = "random_preferences"
-    result = await store.aget(namespace, key)
-    if result and "data" in result.value:
-        random_preferences = result.value["data"]
-    else:
-        await store.aput(
-            namespace, key, {"data": prompt_config["background_preferences"]}
-        )
-        random_preferences = prompt_config["background_preferences"]
-    key = "response_preferences"
-    result = await store.aget(namespace, key)
-    if result and "data" in result.value:
-        response_preferences = result.value["data"]
-    else:
-        await store.aput(namespace, key, {"data": prompt_config["response_preferences"]})
-        response_preferences = prompt_config["response_preferences"]
+    
+    # Defaults in case store is missing
+    schedule_preferences = prompt_config["schedule_preferences"]
+    random_preferences = prompt_config["background_preferences"]
+    response_preferences = prompt_config["response_preferences"]
+    
+    # Store access (Robust)
+    if store:
+        try:
+            namespace = (config["configurable"].get("assistant_id", "default"),)
+            
+            # Schedule Config
+            key = "schedule_preferences"
+            result = await store.aget(namespace, key)
+            if result and "data" in result.value:
+                schedule_preferences = result.value["data"]
+            else:
+                await store.aput(namespace, key, {"data": schedule_preferences})
+            
+            # Random Config
+            key = "random_preferences"
+            result = await store.aget(namespace, key)
+            if result and "data" in result.value:
+                random_preferences = result.value["data"]
+            else:
+                await store.aput(namespace, key, {"data": random_preferences})
+
+            # Response Config
+            key = "response_preferences"
+            result = await store.aget(namespace, key)
+            if result and "data" in result.value:
+                response_preferences = result.value["data"]
+            else:
+                await store.aput(namespace, key, {"data": response_preferences})
+                
+        except Exception as e:
+            print(f"[WARN] Store access failed: {e}")
+
     _prompt = EMAIL_WRITING_INSTRUCTIONS.format(
         schedule_preferences=schedule_preferences,
         random_preferences=random_preferences,
@@ -141,7 +181,7 @@ async def draft_response(state: State, config: RunnableConfig, store: BaseStore)
         ),
     )
 
-    model = llm.bind_tools(tools)
+    model = llm.bind_tools(my_tools)
     messages = [{"role": "user", "content": input_message}] + messages
     i = 0
     while i < 5:
@@ -152,3 +192,15 @@ async def draft_response(state: State, config: RunnableConfig, store: BaseStore)
         else:
             break
     return {"draft": response, "messages": [response]}
+
+from langgraph.graph import StateGraph, END
+
+# Define the graph
+workflow = StateGraph(State)
+workflow.add_node("draft", draft_response)
+
+workflow.set_entry_point("draft")
+workflow.add_edge("draft", END)
+
+# Compile the graph
+graph = workflow.compile()

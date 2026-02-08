@@ -1,0 +1,41 @@
+# Biomed MCP Docker Compose
+# First principle: Provide complete deployment solution with proper configuration
+
+version: '3.8'
+
+services:
+  biomed-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: biomed-mcp-server
+    restart: unless-stopped
+    
+    # First principle: Security - Environment variable management
+    environment:
+      # Azure OpenAI Configuration (required)
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - OPENAI_API_VERSION=${OPENAI_API_VERSION:-2025-01-01-preview}
+      - AZURE_OPENAI_MODEL=${AZURE_OPENAI_MODEL:-azure_openai:o3}
+      
+      # PubMed Configuration (required)
+      - PUBMED_EMAIL=${PUBMED_EMAIL}
+      - PUBMED_API_KEY=${PUBMED_API_KEY}
+      
+      # Optional Configuration
+      - BIOMED_MAX_RESULTS=${BIOMED_MAX_RESULTS:-20}
+      - BIOMED_CACHE_TTL=${BIOMED_CACHE_TTL:-3600}
+    
+    
+    # First principle: Networking - Expose MCP port
+    ports:
+      - "8000:8000"
+    
+    # First principle: Reliability - Health checks
+    healthcheck:
+      test: ["CMD", "python", "-c", "from biomed_agents.server import health_check; result = health_check(); exit(0 if 'healthy' in result.lower() else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

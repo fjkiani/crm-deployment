@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biomed-mcp"
+version = "0.1.0"
+description = "Intelligent MCP server for biomedical research using LangGraph ReAct agents"
+readme = "README.md"
+authors = [
+    {name = "Joey Xue", email = "hsefzxuejoey@gmail.com"}
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # Core MCP Framework
+    "fastmcp>=2.10.0",
+    
+    # Existing MCP dependencies for PubMed
+    "biopython",
+    "metapub", 
+    "httpx",
+    
+    # Existing MCP dependencies for Clinical Trials
+    "pytrials",
+    "pandas",
+    "requests",
+    "bs4",
+    
+    # LangGraph and LangChain dependencies
+    "langgraph",
+    "langchain-core", 
+    "langchain-openai",
+    
+    # Utilities
+    "pydantic>=2.0.0",
+    "python-dotenv",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/biomed-mcp"
+Repository = "https://github.com/your-org/biomed-mcp"
+
+[project.scripts]
+biomed-mcp = "biomed_agents.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["biomed_agents*"]
