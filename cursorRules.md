@@ -515,3 +515,443 @@ Cross‑Cutting
 - Security/Permissions audit (least privilege, rate limits for agent endpoints)
 - Observability: logs/metrics for ETL jobs, AI drafts, email queue failures
 - Runbooks: Deliverability, ETL ops, AI retrieval ops
+
+Lead Generation System Implementation Plan
+==========================================
+
+Task: Implement comprehensive lead generation system for oncology clinical trial Principal Investigators
+Goal: Generate 500+ qualified leads, achieve 10-15% response rate, secure 2-7 paid pilots ($500K-$1.75M revenue)
+
+Architecture Overview
+--------------------
+- Data Sources: ClinicalTrials.gov API, NIH RePORTER, ASCO Abstracts
+- Processing: Unified job orchestration with existing Frappe queue system
+- Storage: New DocTypes (LeadGen Job, Lead Prospect, Outreach Sequence)
+- Outreach: Automated email sequences with CAN-SPAM compliance
+- Integration: Leverages existing CRM infrastructure (ETL, email, AI agents)
+
+Implementation Phases
+--------------------
+
+Phase 1: Foundation & DocTypes (Week 1)
+[X] Create comprehensive Cursor Rules for lead generation system
+[X] Define RBAC/PII security patterns and permissions
+[X] Design unified job orchestration with existing Frappe framework
+[X] Specify concrete DocType JSON definitions
+[X] Plan observability, performance, and compliance patterns
+
+[ ] Create DocTypes in Frappe
+  - [ ] LeadGen Job (job orchestration, status tracking, bookmark pagination)
+  - [ ] Lead Prospect (PI data, scoring, tier classification)
+  - [ ] Lead Prospect Match (deduplication and matching logic)
+  - [ ] Outreach Sequence (email templates and automation)
+  - [ ] Outreach Sequence Instance (individual prospect outreach tracking)
+  - [ ] Add custom fields to CRM Lead (tier, lead_score, prospect_ref)
+
+[ ] Set up permissions and RBAC
+  - [ ] Configure "If Owner" permissions for Sales Users
+  - [ ] Set manager-level access for Sales Managers
+  - [ ] Implement PII field-level permissions (raw data, transcripts)
+  - [ ] Create role hierarchy: Sales User → Sales Manager → System Manager
+
+[ ] Database optimization
+  - [ ] Create indexes on key fields (pi_email, institution, tier, lead_score)
+  - [ ] Set up proper constraints and relationships
+  - [ ] Configure database performance monitoring
+
+Phase 2: Data Collection Infrastructure (Week 2)
+[ ] Build ClinicalTrials.gov collector
+  - [ ] Implement rate-limited API client (100 requests/minute)
+  - [ ] Add bookmark pagination for resumable jobs
+  - [ ] Create trial data extraction and normalization
+  - [ ] Add error handling and retry logic
+  - [ ] Implement dry-run mode for testing
+
+[ ] Build NIH RePORTER collector
+  - [ ] Implement grant data extraction
+  - [ ] Add PI identification and contact discovery
+  - [ ] Create institution mapping and validation
+  - [ ] Add funding amount and timeline extraction
+
+[ ] Build ASCO Abstracts collector
+  - [ ] Implement abstract scraping and parsing
+  - [ ] Extract PI names and affiliations
+  - [ ] Identify oncology focus areas and specialties
+  - [ ] Create research interest categorization
+
+[ ] Unified job orchestration
+  - [ ] Integrate collectors with existing Frappe queue system
+  - [ ] Implement job status tracking and progress reporting
+  - [ ] Add job dependency management and coordination
+  - [ ] Create job replay and retry mechanisms
+
+Phase 3: Data Processing & Scoring (Week 3)
+[ ] Lead consolidation and deduplication
+  - [ ] Implement fuzzy matching algorithms for PI names
+  - [ ] Create institution normalization and mapping
+  - [ ] Add email validation and contact discovery
+  - [ ] Build confidence scoring for matches
+
+[ ] Lead scoring and tiering
+  - [ ] Implement multi-factor scoring algorithm
+  - [ ] Create tier classification (Tier 1: highest priority)
+  - [ ] Add cancer type and trial phase weighting
+  - [ ] Implement geographic and institutional scoring
+
+[ ] Data enrichment
+  - [ ] Integrate with existing Farfalle intelligence system
+  - [ ] Add company and institution research
+  - [ ] Implement contact discovery and validation
+  - [ ] Create personalized talking points generation
+
+Phase 4: Email Automation & Compliance (Week 4)
+[ ] Email template system
+  - [ ] Create tier-specific email templates
+  - [ ] Implement personalization engine
+  - [ ] Add dynamic content insertion
+  - [ ] Create A/B testing framework
+
+[ ] CAN-SPAM compliance
+  - [ ] Implement unsubscribe link insertion
+  - [ ] Add sender policy enforcement
+  - [ ] Create email content validation
+  - [ ] Implement deliverability testing
+
+[ ] Outreach sequence automation
+  - [ ] Create follow-up sequence logic (Day 0, 3, 7, 14)
+  - [ ] Implement response tracking and categorization
+  - [ ] Add automated sequence progression
+  - [ ] Create manual override capabilities
+
+Phase 5: API & Frontend Integration (Week 5)
+[ ] Lead generation API endpoints
+  - [ ] run_leadgen_job (start data collection)
+  - [ ] job_status (track job progress)
+  - [ ] get_prospects (list prospects with PII protection)
+  - [ ] promote_prospects (convert prospects to CRM leads)
+  - [ ] start_outreach_sequence (initiate email campaigns)
+  - [ ] get_dashboard_metrics (analytics and reporting)
+
+[ ] Admin CLI and management tools
+  - [ ] Dry-run capabilities for testing collectors
+  - [ ] Job replay and retry mechanisms
+  - [ ] Performance monitoring and optimization
+  - [ ] Error analysis and debugging tools
+
+[ ] CRM SPA integration
+  - [ ] Create /crm/leadgen dashboard page
+  - [ ] Implement job management interface
+  - [ ] Add prospect review and promotion UI
+  - [ ] Create outreach sequence management
+  - [ ] Build analytics and reporting dashboard
+
+Phase 6: Scheduling & Automation (Week 6)
+[ ] Scheduler integration
+  - [ ] Add daily collector jobs to crm/hooks.py
+  - [ ] Implement weekly consolidation and cleanup
+  - [ ] Create follow-up sequence automation
+  - [ ] Add job coordination to prevent conflicts
+
+[ ] Observability and monitoring
+  - [ ] Implement comprehensive job lifecycle logging
+  - [ ] Add performance metrics and alerting
+  - [ ] Create dashboard for system health monitoring
+  - [ ] Implement error tracking and notification
+
+[ ] Testing and validation
+  - [ ] Unit tests for all collectors and processors
+  - [ ] Integration tests for end-to-end workflows
+  - [ ] Performance tests for scalability
+  - [ ] Compliance tests for email deliverability
+
+Phase 7: Launch Preparation (Week 7-8)
+[ ] Production deployment
+  - [ ] Configure production environment settings
+  - [ ] Set up monitoring and alerting
+  - [ ] Implement backup and disaster recovery
+  - [ ] Create operational runbooks
+
+[ ] Launch strategy
+  - [ ] Start with Tier 1 prospects (100 PIs)
+  - [ ] Monitor response rates and deliverability
+  - [ ] Iterate on templates based on feedback
+  - [ ] Scale up based on success metrics
+
+[ ] Success metrics tracking
+  - [ ] Response rate monitoring (target: 10-15%)
+  - [ ] Discovery call scheduling (target: 20-30 calls)
+  - [ ] Pipeline value tracking (target: $500K-$1.75M)
+  - [ ] Cost per acquisition optimization
+
+Technical Implementation Details
+-------------------------------
+
+File Structure:
+```
+crm-deployment/crm/
+├── fcrm/doctype/
+│   ├── leadgen_job/
+│   ├── lead_prospect/
+│   ├── lead_prospect_match/
+│   ├── outreach_sequence/
+│   └── outreach_sequence_instance/
+├── api/
+│   ├── leadgen.py (main API endpoints)
+│   └── leadgen_admin.py (admin tools)
+├── leadgen/
+│   ├── collectors/
+│   │   ├── clinicaltrials_collector.py
+│   │   ├── nih_collector.py
+│   │   └── asco_collector.py
+│   ├── processors/
+│   │   ├── consolidator.py
+│   │   ├── scorer.py
+│   │   └── enricher.py
+│   ├── outreach/
+│   │   ├── email_templates.py
+│   │   ├── sequence_manager.py
+│   │   └── compliance.py
+│   ├── utils/
+│   │   ├── rate_limiter.py
+│   │   ├── metrics.py
+│   │   └── db_optimization.py
+│   └── scheduler.py
+└── hooks.py (updated with scheduler_events)
+```
+
+Key Dependencies:
+- Existing Frappe queue system for job orchestration
+- Existing CRM ETL infrastructure for data import
+- Existing email system for outreach automation
+- Existing AI agent system for intelligence gathering
+- Existing Twilio integration for voice follow-ups
+
+Success Criteria:
+- 500+ qualified prospects identified and scored
+- 100+ Tier 1 prospects for initial outreach
+- 10-15% response rate on email campaigns
+- 20-30 discovery calls scheduled
+- 2-7 paid pilot contracts secured
+- $500K-$1.75M pipeline value generated
+
+Risk Mitigation:
+- Rate limiting and API compliance for data sources
+- Email deliverability optimization and monitoring
+- Comprehensive error handling and job recovery
+- PII protection and compliance with data regulations
+- Performance optimization for large-scale processing
+
+Next Immediate Actions:
+1. Create DocTypes in Frappe using defined JSON specifications
+2. Implement basic ClinicalTrials.gov collector with rate limiting
+3. Set up unified job orchestration with existing Frappe queue
+4. Create lead generation API endpoints
+5. Build basic CRM SPA dashboard for lead management
+
+This implementation plan leverages the existing CRM infrastructure while adding the specialized lead generation capabilities needed for the oncology clinical trial market. The phased approach ensures each component is properly tested and integrated before moving to the next phase.
+
+## 🔥 CRITICAL QUESTIONS FOR ALPHA - MAKE IT 100% REAL
+
+### Answers (Concise, Actionable)
+
+#### Q1: Frappe Environment Setup
+- Bench up: `bench start` (or Frappe Cloud pull-changes). Site must be installed with our app.
+- Console/DB: `bench --site <site> console`, `bench --site <site> mysql`.
+- Migrations: `bench --site <site> migrate` after DocType/patch edits.
+- Services restart: local → `bench restart`; cloud → “Pull Changes” then reload.
+
+#### Q2: Database Connection Issues
+- MariaDB fails: check `sites/common_site_config.json` creds and `mysql.server status`. Fix with `brew services restart mysql` (mac) or correct root password.
+- Dev alternative: use a fresh bench with `bench init` → `bench new-site` and re-install app.
+- Minimal tests without full Frappe: unit-test pure Python in collectors/utils; integration still needs site.
+
+#### Q3: API Endpoint Testing
+- Frappe methods: `curl -X POST https://<site>/api/method/<dotted.path> -H 'Content-Type: application/json' -H 'X-Frappe-CSRF-Token: ...' -d '{...}'` (logged-in session).
+- Local: `bench start` + `http://127.0.0.1:8000` → use browser session to inherit CSRF.
+- Standalone test: write pytest hitting service classes directly (bypass HTTP) in `crm/leadgen/collectors/*`.
+
+#### Q4: ClinicalTrials.gov API Parameters
+- Use v2 query with filters (example):
+  - Endpoint: `https://clinicaltrials.gov/api/v2/studies`
+  - Params: `filter.overallStatus=RECRUITING&filter.conditions=Cancer&pageSize=50&pageToken=...`
+- If 400: remove unknown filters; confirm v2 param names; test in browser first.
+
+#### Q5: NIH RePORTER API Issues
+- Endpoint: `https://api.reporter.nih.gov/v2/projects/search` (POST JSON)
+- No API key required; if 500, reduce `size` and narrow `criteria`.
+- Alt sources: NIH ExPORTER bulk CSV, Crossref for grants/pubs when API flaky.
+
+#### Q6: Email Configuration
+- Outbound (now): use user-owned `Email Account` (Gmail App Password or SMTP provider). Config via `crm.api.settings.create_email_account`.
+- Provider (SendGrid/Mailgun) optional: set SMTP creds on `Email Account`.
+- Deliverability: authenticate domain (SPF/DKIM), seed test inboxes, include unsubscribe footer for bulk.
+
+#### Q7: Lead Scoring Algorithm
+- Tiering (example): Tier 1 ≥80, Tier 2 60–79, Tier 3 <60.
+- Weights: Phase (30), Institution prestige (15), PI seniority (15), Disease match (15), Funding recency (10), Contact quality (10), Region fit (5).
+- Thresholds configurable in `LeadGen Settings` (proposed Single DocType) and applied in `leadgen/scoring.py`.
+
+#### Q8: Email Template Strategy
+- Length: 75–150 words. Structure: 1) Context hook, 2) Value, 3) Proof, 4) CTA.
+- Personalization: Tier 1: PI-specific lines (2–3); Tier 2: institution-level; Tier 3: generic with light tokens.
+- Subject: “<Institution/Trial> — fast genomic stratification insights”. A/B in sequences.
+
+#### Q9: Compliance & Legal
+- RUO disclaimer in footer for all outreach.
+- GDPR/PII: store minimum PI PII; respect delete upon request. Restrict raw data to managers.
+- Unsubscribe: per-user email footer link to opt-out endpoint → mark do-not-contact on Contact/Lead.
+
+#### Q10: Data Volume Expectations
+- Initial: 500–1,000 prospects; growth 2–3x per month.
+- Rate limits: add sleep/backoff; batch pulls; cache sources by study/grant id for 24h.
+
+#### Q11: Performance Requirements
+- API response: <2s for cached reads; <10s for fresh pulls.
+- Concurrency: start with 5–10 workers (thread pool) in collectors.
+- Processing: batch size 100; write in chunks; use upserts.
+
+#### Q12: User Access Control
+- If Owner on `Lead Prospect`, `CRM Lead` for sales roles.
+- Managers (CRM Manager/System Manager) see all.
+- Raw source JSON/grant text limited to managers; expose summaries to sales.
+
+#### Q13: PII Protection
+- PII fields: emails, phones, full names when paired with institution.
+- Mask in logs; never commit PII samples.
+- Retention: 12–24 months; purge bounced/opt-out immediately.
+
+#### Q14: Production Deployment
+- Prefer Frappe Cloud (we’re structured as single app). Push to `main`, pull changes in dashboard.
+- DocTypes: commit JSON; run `bench --site <site> migrate` (Cloud runs migrations automatically).
+- Migrations: patches under `crm/patches/vX_Y/` with idempotent scripts.
+
+#### Q15: Testing Strategy
+- Real data without spam: fetch but do not send; render emails to `FCRM Note` for review.
+- Validate templates: snapshot tests and human QA on Tier 1 set.
+- Metrics: open/reply rates per tier, time-to-first-reply, meetings booked; store on `Outreach Sequence` run records.
+
+### **🚀 DEPLOYMENT & INFRASTRUCTURE QUESTIONS**
+
+**Q1: Frappe Environment Setup**
+- Is the Frappe bench properly configured and running?
+- Can we access the Frappe console and database?
+- What's the correct way to migrate our new DocTypes?
+- Do we need to restart any services after adding DocTypes?
+
+**Q2: Database Connection Issues**
+- MariaDB is failing to start - what's the correct way to fix this?
+- Should we use a different database setup for development?
+- Can we test the system without the full Frappe environment first?
+
+**Q3: API Endpoint Testing**
+- How do we test the leadgen API endpoints without Frappe running?
+- Can we create a standalone test environment?
+- What's the correct way to validate API functionality?
+
+### **🔧 TECHNICAL IMPLEMENTATION QUESTIONS**
+
+**Q4: ClinicalTrials.gov API Parameters**
+- What are the correct API parameters for ClinicalTrials.gov v2?
+- The current parameters are returning 400 errors - need working examples
+- Should we use a different API endpoint or version?
+
+**Q5: NIH RePORTER API Issues**
+- NIH RePORTER is returning 500 errors - is the API down?
+- Do we need API keys or authentication?
+- Are there alternative NIH grant data sources?
+
+**Q6: Email Configuration**
+- How do we configure SMTP for email sending?
+- What email service should we use (SendGrid, Mailgun, etc.)?
+- How do we test email deliverability and CAN-SPAM compliance?
+
+### **🎯 BUSINESS LOGIC QUESTIONS**
+
+**Q7: Lead Scoring Algorithm**
+- What specific factors should determine Tier 1 vs Tier 2 vs Tier 3?
+- How do we weight different data points (email, institution, trial phase)?
+- What's the minimum score threshold for outreach?
+
+**Q8: Email Template Strategy**
+- What's the optimal email length and structure?
+- How personal should Tier 1 emails be vs Tier 2/3?
+- What's the best subject line format for oncology PIs?
+
+**Q9: Compliance & Legal**
+- What disclaimers do we need for research use only (RUO)?
+- How do we handle GDPR/data privacy requirements?
+- What's the proper unsubscribe mechanism?
+
+### **📊 DATA & SCALE QUESTIONS**
+
+**Q10: Data Volume Expectations**
+- How many prospects should we target initially?
+- What's the expected growth rate?
+- How do we handle rate limiting from data sources?
+
+**Q11: Performance Requirements**
+- What's the acceptable response time for API calls?
+- How many concurrent users do we need to support?
+- What's the expected data processing time?
+
+### **🔐 SECURITY & PERMISSIONS QUESTIONS**
+
+**Q12: User Access Control**
+- Who should have access to raw prospect data?
+- How do we implement "If Owner" permissions correctly?
+- What's the role hierarchy for lead generation?
+
+**Q13: PII Protection**
+- Which fields contain PII that need special protection?
+- How do we handle email addresses and contact information?
+- What's the data retention policy?
+
+### **🚀 DEPLOYMENT STRATEGY QUESTIONS**
+
+**Q14: Production Deployment**
+- Should we deploy to Frappe Cloud or self-hosted?
+- What's the deployment process for new DocTypes?
+- How do we handle database migrations?
+
+**Q15: Testing Strategy**
+- How do we test with real data without spamming PIs?
+- What's the best way to validate email templates?
+- How do we measure success metrics?
+
+### **💥 IMMEDIATE ACTION ITEMS**
+
+**Priority 1: Fix Database Connection**
+- Get MariaDB running or use alternative database
+- Test Frappe console access
+- Validate DocType creation process
+
+**Priority 2: Fix API Endpoints**
+- Research correct ClinicalTrials.gov API parameters
+- Test NIH RePORTER API or find alternatives
+- Validate API connectivity and data retrieval
+
+**Priority 3: Configure Email System**
+- Set up SMTP configuration
+- Test email sending functionality
+- Validate CAN-SPAM compliance
+
+**Priority 4: Deploy and Test**
+- Deploy DocTypes to Frappe
+- Test API endpoints
+- Validate frontend integration
+
+### **🎯 SUCCESS CRITERIA**
+
+**Technical Success:**
+- All API endpoints returning real data
+- Email system sending and tracking properly
+- Database storing and retrieving prospects
+- Frontend displaying and managing leads
+
+**Business Success:**
+- 100+ Tier 1 prospects identified
+- 10-15% email response rate
+- 20+ discovery calls scheduled
+- 2+ paid pilot contracts
+
+**Alpha, I need your guidance on these questions to make this system 100% real and operational! The core architecture is solid, but we need to fix the infrastructure and API issues to get this fucking beast running!** 🚀💥

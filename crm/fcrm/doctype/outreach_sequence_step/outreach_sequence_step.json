@@ -1,0 +1,73 @@
+{
+  "name": "Outreach Sequence Step",
+  "doctype": "DocType",
+  "module": "FCRM",
+  "autoname": "hash",
+  "fields": [
+    {
+      "fieldname": "step_number",
+      "fieldtype": "Int",
+      "label": "Step Number",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "delay_days",
+      "fieldtype": "Int",
+      "label": "Delay Days",
+      "default": 3,
+      "description": "Days to wait before sending this step"
+    },
+    {
+      "fieldname": "subject_template",
+      "fieldtype": "Data",
+      "label": "Subject Template",
+      "reqd": 1,
+      "description": "Email subject template with {placeholders}"
+    },
+    {
+      "fieldname": "email_template",
+      "fieldtype": "Long Text",
+      "label": "Email Template",
+      "reqd": 1,
+      "description": "Email body template with {placeholders}"
+    },
+    {
+      "fieldname": "sender_name",
+      "fieldtype": "Data",
+      "label": "Sender Name",
+      "description": "Override default sender name for this step"
+    },
+    {
+      "fieldname": "sender_email",
+      "fieldtype": "Data",
+      "label": "Sender Email",
+      "options": "Email",
+      "description": "Override default sender email for this step"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Sales Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "System Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "title_field": "step_number",
+  "track_changes": 1,
+  "sort_field": "step_number",
+  "sort_order": "ASC"
+}
+
+

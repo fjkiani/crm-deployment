@@ -316,6 +316,18 @@ def get_data(
 		default_filters = frappe.parse_json(default_filters)
 		filters.update(default_filters)
 
+	# Enforce owner scoping for CRM Lead for non-manager roles
+	# (prevents new users from seeing all leads by default)
+	try:
+		if doctype == "CRM Lead":
+			roles = set(frappe.get_roles())
+			if ("System Manager" not in roles) and ("CRM Manager" not in roles):
+				# Only apply if no explicit owner filter was provided
+				if "owner" not in filters:
+					filters["owner"] = frappe.session.user
+	except Exception:
+		pass
+
 	is_default = True
 	data = []
 	_list = get_controller(doctype)

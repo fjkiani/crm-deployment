@@ -1,244 +1,68 @@
 ---
+description: 🛑 MASTER INDEX: The Single Source of Truth for Codebase Reality vs. Future Plans
 alwaysApply: true
-<<<<<<< HEAD
----
-# CRM Deployment - Cursor Rules Master Index
-
-This master rule orients the assistant to project structure, AI copilot doctrine, tools, and sprint plan.
-
-- Project Structure & Apps: [structure.mdc](mdc:structure.mdc)
-- AI Copilot Doctrine (Farfalle integration): [copilot_doctrine.mdc](mdc:copilot_doctrine.mdc)
-- Copilot Tools → CRM API Mapping: [copilot_tools.mdc](mdc:copilot_tools.mdc)
-- Sprint Plan & Deliverables: [sprint_plan.mdc](mdc:sprint_plan.mdc)
-
-Use these rules to ground responses and implementation steps.
-=======
-description: Overview of all Cursor Rules and how to use them
 ---
 
-# 📚 CRM Intelligence Platform - Cursor Rules Guide
+# 🛑 CRM Intelligence Platform: The Rules of Reality
 
-## 🎯 Rules Overview
+> [!CAUTION]
+> **CRITICAL CONTEXT**: This project contains both **Active Code** (Reality) and **Future Blueprints** (Plans).
+> You MUST check this file to determine if a rule describes existing code or a future requirement.
+> **DO NOT** hallucinate missing modules (`crm_intelligence`, `leadgen`, `farfelle`) as existing components.
 
-This comprehensive set of Cursor Rules documents our **component-based CRM Intelligence Platform** that scales from development to enterprise production.
+## 🗺️ The Map of Reality
+**Source of Truth**: [`docs/ingest.mdc`](mdc:docs/ingest.mdc) describes the *actual* file structure.
 
-## 📋 Available Rules
+### ✅ Class A: Active Framework (Reality)
+*These rules describe code that exists and runs today.*
 
-### Core Architecture Rules
+| Rule File | Description | Scope |
+| :--- | :--- | :--- |
+| [`structure.mdc`](mdc:.cursor/rules/structure.mdc) | Real Project Structure (Partially Valid - Check `ingest.mdc`) | `*` |
+| [`crm-doctrine.mdc`](mdc:.cursor/rules/crm-doctrine.mdc) | Core CRM Philosophy & Business Logic | `crm/*` |
+| [`setup-guide.mdc`](mdc:.cursor/rules/setup-guide.mdc) | Frappe Environment Setup | `bench` |
+| [`copilot-commands.mdc`](mdc:.cursor/rules/copilot-commands.mdc) | Valid Terminal Commands | `Terminal` |
+| [`agent_workflow.mdc`](mdc:.cursor/rules/agent_workflow.mdc) | Verified Workflow Steps | `Workflow` |
 
-#### 1. **Architecture Overview** (`architecture_overview.mdc`)
-```
-Purpose: Core architecture and design philosophy
-Applies To: All project files
-Key Concepts:
-✅ Component-based design (50-200 lines per component)
-✅ Single responsibility principle
-✅ Configuration-driven architecture
-✅ Basic error handling and logging
-✅ Modular structure for maintainability
-```
+### ⚠️ Class B: Blueprints (Future State)
+*The following specifications describe features that are **NOT YET IMPLEMENTED**. They have been moved to [`blueprints/`](mdc:.cursor/rules/blueprints/) to avoid confusion.*
 
-#### 2. **Component Patterns** (`component_patterns.mdc`)
-```
-Purpose: Component design patterns and implementation guidelines
-Applies To: crm_intelligence/**/*.py
-Key Concepts:
-✅ Base component structure with ABC
-✅ Intelligence, Data, and Content component types
-✅ Dependency injection patterns
-✅ Error handling and validation
-✅ Testing patterns and fixtures
-```
+#### Intelligence & Agents
+- [`architecture_overview.mdc`](mdc:.cursor/rules/blueprints/architecture_overview.mdc)
+- [`component_patterns.mdc`](mdc:.cursor/rules/blueprints/component_patterns.mdc)
+- [`data_flow_patterns.mdc`](mdc:.cursor/rules/blueprints/data_flow_patterns.mdc)
+- [`agent_doctrine_plan.mdc`](mdc:.cursor/rules/blueprints/agent_doctrine_plan.mdc)
+- [`intel_sprint_doctrine.mdc`](mdc:.cursor/rules/blueprints/intel_sprint_doctrine.mdc)
+- [`copilot_doctrine.mdc`](mdc:.cursor/rules/blueprints/copilot_doctrine.mdc)
+- [`copilot_mcp_doctrine.mdc`](mdc:.cursor/rules/blueprints/copilot_mcp_doctrine.mdc)
+- [`intelligent_agent_architecture.mdc`](mdc:.cursor/rules/blueprints/intelligent_agent_architecture.mdc)
+- [`llm_integration_architecture.mdc`](mdc:.cursor/rules/blueprints/llm_integration_architecture.mdc)
 
-#### 3. **Data Flow Patterns** (`data_flow_patterns.mdc`)
-```
-Purpose: Data flow patterns and pipeline orchestration
-Applies To: crm_intelligence/**/*.py
-Key Concepts:
-✅ Intelligence → Personalization → Outreach pipeline
-✅ Component data contracts and validation
-✅ Basic error recovery
-✅ Sequential processing patterns
-```
+#### Lead Generation
+- [`leadgen-doctrine.mdc`](mdc:.cursor/rules/blueprints/leadgen-doctrine.mdc)
+- [`leadgen-doctypes.mdc`](mdc:.cursor/rules/blueprints/leadgen-doctypes.mdc)
+- [`leadgen-integration.mdc`](mdc:.cursor/rules/blueprints/leadgen-integration.mdc)
+- [`leadgen-patterns.mdc`](mdc:.cursor/rules/blueprints/leadgen-patterns.mdc)
+- [`leadgen-scripts.mdc`](mdc:.cursor/rules/blueprints/leadgen-scripts.mdc)
 
-#### 4. **Configuration Management** (`configuration_management.mdc`)
-```
-Purpose: Configuration management and environment setup
-Applies To: crm_intelligence/**/*.py, config/**/*.json
-Key Concepts:
-✅ JSON-based configuration files
-✅ Environment variable support
-✅ Configuration validation
-✅ Basic settings management
-```
+#### DevOps & Workflow
+- [`configuration_management.mdc`](mdc:.cursor/rules/blueprints/configuration_management.mdc)
+- [`development_workflow.mdc`](mdc:.cursor/rules/blueprints/development_workflow.mdc)
+- [`implementation_roadmap.mdc`](mdc:.cursor/rules/blueprints/implementation_roadmap.mdc)
+- [`scaling_deployment.mdc`](mdc:.cursor/rules/blueprints/scaling_deployment.mdc)
+- [`testing_patterns.mdc`](mdc:.cursor/rules/blueprints/testing_patterns.mdc)
+- [`farfelle.mdc`](mdc:.cursor/rules/blueprints/farfelle.mdc)
 
-#### 5. **Development Workflow** (`development_workflow.mdc`)
-```
-Purpose: Development workflow patterns and best practices
-Applies To: crm_intelligence/**/*.py, tests/**/*.py
-Key Concepts:
-✅ Component development lifecycle
-✅ Basic testing strategies
-✅ Code quality standards
-✅ Development best practices
-```
+### 🔬 Class C: Research & Contex
+*Raw logs, research notes, and external references are now in [`blueprints/`](mdc:.cursor/rules/blueprints/).*
 
-#### 6. **Testing Patterns** (`testing_patterns.mdc`)
-```
-Purpose: Testing patterns and quality assurance guidelines
-Applies To: tests/**/*.py, crm_intelligence/**/*.py
-Key Concepts:
-✅ Unit testing with pytest
-✅ Component testing patterns
-✅ Basic integration testing
-✅ Test fixtures and mocking
-```
+- [`scap_working.mdc`](mdc:.cursor/rules/blueprints/scap_working.mdc)
+- [`vapi_twilio_playbook.mdc`](mdc:.cursor/rules/blueprints/vapi_twilio_playbook.mdc)
+- [`question_driven_output_format.mdc`](mdc:.cursor/rules/blueprints/question_driven_output_format.mdc)
 
-#### 7. **Scaling & Deployment** (`scaling_deployment.mdc`)
-```
-Purpose: Current deployment and future scaling considerations
-Applies To: crm_intelligence/**/*.py
-Key Concepts:
-✅ Local development deployment
-✅ Future scaling considerations
-✅ Basic performance optimization
-✅ Realistic scaling roadmap
-```
+## 🛑 How to Use This Knowledge
+1. **Check `docs/ingest.mdc` First**: If a file isn't there, it doesn't exist.
+2. **Treat Blueprints as Specs**: If user asks to "implement leadgen", read Class B rules as the spec to write *new* code.
+3. **Do Not Import Missing Modules**: Do not try to `import crm_intelligence` or `from crm.leadgen import ...`.
 
-## 🚀 How to Use These Rules
-
-### For New Development
-
-#### Adding a New Component
-```python
-# 1. Refer to component_patterns.mdc for base structure
-# 2. Follow the component template provided
-# 3. Use dependency injection pattern
-# 4. Include basic error handling
-# 5. Add corresponding unit tests
-
-# Example: Creating a new intelligence gatherer
-class NewIntelligenceComponent(BaseComponent):
-    """New intelligence gathering component - ~80 lines"""
-
-    def __init__(self, config, dependencies):
-        super().__init__(config)
-        self.api_client = dependencies.get('api_client')
-        self._validate_dependencies()
-
-    def execute(self, input_data):
-        # Implementation following patterns from component_patterns.mdc
-        pass
-```
-
-#### Testing Components
-```python
-# 1. Refer to testing_patterns.mdc for test structure
-# 2. Use fixtures for test data and dependencies
-# 3. Test both success and failure scenarios
-# 4. Follow naming conventions and patterns
-
-# Example: Component unit test
-def test_component_success(component, mock_dependencies):
-    """Test successful component execution"""
-    # Arrange
-    input_data = {"target": "Test Company"}
-
-    # Act
-    result = component.execute(input_data)
-
-    # Assert
-    assert result["component"] == "TestComponent"
-    assert "timestamp" in result
-```
-
-### For Current Development
-
-#### What Works Now
-```bash
-# Current working functionality:
-cd crm_intelligence
-python3 -c "from data.data_manager import DataManager; print('DataManager works')"
-```
-
-#### What Needs Fixing
-```bash
-# These have issues that need to be resolved:
-python3 cli/main.py --help  # Import issues in CLI
-```
-
-## 🎯 CURRENT STATUS:
-
-### **What's Actually Working:**
-- ✅ **Component Architecture**: Modular structure implemented
-- ✅ **Core Intelligence**: Basic API integration and data processing
-- ✅ **Data Management**: CSV/JSON input/output handling
-- ✅ **Basic CLI**: Command-line interface structure
-- ✅ **Configuration**: JSON-based settings management
-
-### **What's NOT Yet Implemented:**
-- ❌ **Advanced Scaling**: No auto-scaling or concurrent processing
-- ❌ **Production Monitoring**: Only basic logging
-- ❌ **Enterprise Deployment**: No containers or orchestration
-- ❌ **Performance Optimization**: No caching or optimization
-- ❌ **CI/CD Pipelines**: No automated testing or deployment
-
----
-
-## 📋 PRACTICAL NEXT STEPS:
-
-### **Immediate Priorities:**
-1. **Fix CLI Imports**: Resolve relative import issues in command-line interface
-2. **Add Error Handling**: Implement proper try/catch blocks throughout
-3. **Sequential Processing**: Ensure reliable single-company processing
-4. **Basic Testing**: Set up pytest and write component unit tests
-
-### **Short-term Goals:**
-1. **Concurrent Processing**: Multi-threaded company processing
-2. **Configuration Management**: Environment-based settings
-3. **Logging**: Structured logging with levels and file output
-4. **Input Validation**: Proper data validation and error messages
-
-### **Long-term Considerations:**
-1. **Performance Optimization**: Caching and memory management
-2. **Containerization**: Docker deployment
-3. **Monitoring**: Basic health checks and metrics
-4. **Batch Processing**: Handle larger datasets efficiently
-
----
-
-## 🔧 DEVELOPMENT WORKFLOW:
-
-### **Current Process:**
-```bash
-# What works now:
-cd crm_intelligence
-python3 -c "from data.data_manager import DataManager; print('Works')"
-
-# What needs fixing:
-python3 cli/main.py --help  # Has import issues
-```
-
-### **Recommended Approach:**
-1. **Fix core issues** before adding advanced features
-2. **Test each component** individually before integration
-3. **Start simple** and add complexity incrementally
-4. **Document as you go** - keep these Cursor Rules updated
-
----
-
-## 💡 HONEST ASSESSMENT:
-
-**This is a solid foundation** with good architectural thinking, but it's **not enterprise-ready yet**. The Cursor Rules now accurately reflect:
-
-- ✅ **What's implemented and working**
-- ⚠️ **Current limitations and issues**
-- 📋 **Practical next steps**
-- 🎯 **Realistic goals and scope**
-
-**No more hallucination - just honest, actionable development guidance!** 🤝
-
----
-
-*These rules now accurately reflect our current implementation status and provide realistic guidance for future development.*
->>>>>>> 3772a8dc0b2f26bc9c820767ae8ef912d83d8da3
+**Mars Rules Active.** Truth is the only foundation for growth.

@@ -18,9 +18,12 @@ class TavilySimple:
         }
         if exclude_domains:
             payload["exclude_domains"] = exclude_domains
-        resp = self.session.post(self.base_url, json=payload, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = self.session.post(self.base_url, json=payload, timeout=30)
+            resp.raise_for_status()
+            return resp.json() or {}
+        except Exception:
+            return {"results": [], "answer": ""}
 
 
 class DiffbotSimple:

@@ -27,7 +27,7 @@ add_to_apps_screen = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/crm/css/crm.css"
-# app_include_js = "/assets/crm/js/crm.js"
+app_include_js = "/assets/crm/js/cockpit.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/crm/css/crm.css"
@@ -66,6 +66,7 @@ doctype_js = {
 website_route_rules = [
 	# Serve in-app Human Inbox server page explicitly before SPA catch-all
 	{"from_route": "/crm/human_inbox", "to_route": "crm/human_inbox"},
+	{"from_route": "/crm/nyx", "to_route": "crm/nyx"},
 	# SPA catch-all for the Vue app
 	{"from_route": "/crm/<path:app_path>", "to_route": "crm"},
 ]
@@ -168,6 +169,9 @@ doc_events = {
 		"before_validate": ["crm.api.demo.validate_user"],
 		"validate_reset_password": ["crm.api.demo.validate_reset_password"],
 	},
+	"Communication": {
+		"after_insert": ["crm.api.email.auto_link_communication"],
+	},
 }
 
 # Scheduled Tasks
@@ -177,6 +181,17 @@ scheduler_events = {
     "hourly": [
         "crm.api.etl.run_scheduled_imports",
     ],
+    "daily": [
+        "crm.leadgen.scheduler.run_daily_collectors",
+        "crm.leadgen.scheduler.run_consolidation",
+        "crm.leadgen.scheduler.send_follow_ups",
+        "crm.leadgen.scheduler.run_enrichment_job",
+        "crm.leadgen.scheduler.check_job_health"
+    ],
+    "weekly": [
+        "crm.leadgen.scheduler.run_weekly_cleanup",
+        "crm.leadgen.scheduler.generate_weekly_report"
+    ]
 }
 
 # Testing

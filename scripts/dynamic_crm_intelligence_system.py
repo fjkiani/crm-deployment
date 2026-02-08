@@ -15,6 +15,46 @@ from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass, asdict
 import argparse
+import asyncio
+import shutil
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from mcp.client.sse import sse_client
+
+
+class MCPClientParams:
+    def __init__(self, command: str = None, args: List[str] = None, env: Optional[Dict[str, str]] = None, 
+                 transport: str = 'stdio', sse_url: str = None):
+        self.command = command
+        self.args = args or []
+        self.env = env
+        self.transport = transport
+        self.sse_url = sse_url
+
+class MCPManager:
+    """Manages connections to MCP servers via stdio or SSE."""
+    @asynccontextmanager
+    async def connect(self, params: MCPClientParams):
+        if params.transport == 'sse':
+             async with sse_client(params.sse_url) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    yield session
+        else:
+            if not shutil.which(params.command):
+                 raise FileNotFoundError(f"Command not found: {params.command}")
+            server_params = StdioServerParameters(command=params.command, args=params.args, env=params.env)
+            async with stdio_client(server_params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    yield session
+
+    def get_brightdata_params(self, api_key: str = None) -> MCPClientParams:
+        base_url = "https://mcp.brightdata.com/sse"
+        tools = "web_data_linkedin_person_profile,web_data_linkedin_company_profile,web_data_linkedin_job_listings,web_data_linkedin_posts,web_data_linkedin_people_search,web_data_x_posts"
+        sse_url = f"{base_url}?token={api_key}&groups=advanced_scraping&tools={tools}"
+        return MCPClientParams(transport='sse', sse_url=sse_url)
+
 
 @dataclass
 class SystemConfig:
@@ -25,6 +65,9 @@ class SystemConfig:
     tavily_base_url: str = "https://api.tavily.com/search"
     tavily_timeout: int = 30
     tavily_max_retries: int = 3
+    
+    # BrightData Configuration
+    brightdata_api_key: str = ""
 
     # File Paths (dynamically determined)
     base_dir: Path = Path.cwd()
@@ -56,6 +99,7 @@ class SystemConfig:
 
         # Load API key from environment
         self.tavily_api_key = os.getenv('TAVILY_API_KEY', '')
+        self.brightdata_api_key = os.getenv('BRIGHTDATA_API_KEY', '')
 
     def load_company_config(self, company_name: str) -> Dict[str, Any]:
         """Load company-specific configuration dynamically"""
@@ -357,7 +401,18 @@ class DynamicCRMIntelligenceSystem:
         }
 
         for query in queries:
+            # Primary: Tavily
             results = self._search_api(query, search_type="news", max_results=5)
+            
+            # Secondary: BrightData (Enhancement)
+            bd_results = self._search_brightdata(query)
+            if bd_results:
+                self.logger.info(f"✨ Enhanced '{query}' with {len(bd_results)} BrightData results")
+                # Append to 'results' list if structure matches, or process separately
+                # Here we just treat them as results to process
+                if "results" not in results: results["results"] = []
+                results["results"].extend(bd_results)
+
             for result in results.get("results", []):
                 news_item = self._process_news_item(result)
 
@@ -516,6 +571,47 @@ Best regards,
             score += 0.15
 
         return min(score, 1.0)
+
+    
+    def _search_brightdata(self, query: str) -> List[Dict[str, Any]]:
+        """Search using BrightData MCP"""
+        if not self.config.brightdata_api_key:
+            return []
+
+        async def run_mcp_search():
+            mcp = MCPManager()
+            params = mcp.get_brightdata_params(self.config.brightdata_api_key)
+            try:
+                async with mcp.connect(params) as session:
+                    tools = await session.list_tools()
+                    # Look for search-like tool
+                    search_tool = next((t for t in tools.tools if "search" in t.name), None)
+                    if not search_tool:
+                        return []
+                    
+                    result = await session.call_tool(search_tool.name, arguments={"query": query})
+                    
+                    # Convert MCP specific result to our dict format
+                    # result.content is list of TextContent/ImageContent etc.
+                    text_content = "\n".join([c.text for c in result.content if c.type == "text"])
+                    
+                    # For now, return as a single 'result' since structure is unknown without testing
+                    return [{
+                        "title": "BrightData Result",
+                        "content": text_content,
+                        "url": "brightdata://mcp", # Placeholder
+                        "published_date": datetime.now().isoformat()
+                    }]
+            except Exception as e:
+                self.logger.error(f"BrightData inner error: {e}")
+                return []
+
+        try:
+             # Run async loop
+             return asyncio.run(run_mcp_search())
+        except Exception as e:
+             self.logger.error(f"BrightData search failed: {e}")
+             return []
 
     def _search_api(self, query: str, search_type: str = "general", max_results: int = 5) -> Dict[str, Any]:
         """Unified API search method"""

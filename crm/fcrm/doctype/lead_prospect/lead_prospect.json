@@ -1,0 +1,311 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2024-12-01 10:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "details",
+  "naming_series",
+  "pi_name",
+  "pi_email",
+  "institution",
+  "section_break_1",
+  "cancer_type",
+  "trial_phase",
+  "column_break_1",
+  "tier",
+  "lead_score",
+  "section_break_2",
+  "source",
+  "source_ref_id",
+  "column_break_2",
+  "raw",
+  "enriched_data",
+  "section_break_3",
+  "outreach_status",
+  "last_contacted",
+  "column_break_3",
+  "response_rate",
+  "notes",
+  "section_break_4",
+  "owner",
+  "assigned_to",
+  "column_break_4",
+  "created_by_job",
+  "promoted_to_lead"
+ ],
+ "fields": [
+  {
+   "default": "LP-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "LP-.YYYY.-"
+  },
+  {
+   "fieldname": "pi_name",
+   "fieldtype": "Data",
+   "label": "PI Name",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "pi_email",
+   "fieldtype": "Data",
+   "label": "PI Email",
+   "options": "Email",
+   "search_index": 1
+  },
+  {
+   "fieldname": "institution",
+   "fieldtype": "Data",
+   "label": "Institution",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break",
+   "label": "Clinical Details"
+  },
+  {
+   "fieldname": "cancer_type",
+   "fieldtype": "Select",
+   "label": "Cancer Type",
+   "options": "Breast Cancer\nLung Cancer\nColorectal Cancer\nProstate Cancer\nPancreatic Cancer\nOvarian Cancer\nLeukemia\nLymphoma\nMelanoma\nOther"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "trial_phase",
+   "fieldtype": "Select",
+   "label": "Trial Phase",
+   "options": "Phase 1\nPhase 2\nPhase 3\nPhase 4\nPre-clinical"
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break",
+   "label": "Scoring & Classification"
+  },
+  {
+   "default": "Tier 3",
+   "fieldname": "tier",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Tier",
+   "options": "Tier 1\nTier 2\nTier 3",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "lead_score",
+   "fieldtype": "Float",
+   "label": "Lead Score",
+   "precision": "2",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "ClinicalTrials.gov\nNIH RePORTER\nASCO Abstracts\nManual Entry",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "source_ref_id",
+   "fieldtype": "Data",
+   "label": "Source Reference ID",
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_3",
+   "fieldtype": "Section Break",
+   "label": "Data & Intelligence"
+  },
+  {
+   "fieldname": "raw",
+   "fieldtype": "JSON",
+   "label": "Raw Source Data",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "enriched_data",
+   "fieldtype": "JSON",
+   "label": "Enriched Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Not Contacted",
+   "fieldname": "outreach_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Outreach Status",
+   "options": "Not Contacted\nEmail Sent\nEmail Opened\nEmail Replied\nCall Scheduled\nCall Completed\nInterested\nNot Interested\nUnsubscribed",
+   "search_index": 1
+  },
+  {
+   "fieldname": "last_contacted",
+   "fieldtype": "Datetime",
+   "label": "Last Contacted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_4",
+   "fieldtype": "Section Break",
+   "label": "Engagement"
+  },
+  {
+   "default": "0",
+   "fieldname": "response_rate",
+   "fieldtype": "Percent",
+   "label": "Response Rate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "owner",
+   "fieldtype": "Link",
+   "label": "Owner",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assigned To",
+   "options": "User"
+  },
+  {
+   "fieldname": "created_by_job",
+   "fieldtype": "Link",
+   "label": "Created By Job",
+   "options": "LeadGen Job",
+   "read_only": 1
+  },
+  {
+   "fieldname": "promoted_to_lead",
+   "fieldtype": "Link",
+   "label": "Promoted To Lead",
+   "options": "CRM Lead",
+   "read_only": 1
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-12-01 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Lead Prospect",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1,
+   "if_owner": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 0,
+   "report": 0,
+   "role": "Sales User",
+   "share": 0,
+   "write": 0,
+   "if_owner": 1,
+   "permlevel": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "report": 0,
+   "role": "Sales Manager",
+   "share": 0,
+   "write": 1,
+   "if_owner": 0,
+   "permlevel": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "pi_name",
+ "track_changes": 1
+}
+
+
