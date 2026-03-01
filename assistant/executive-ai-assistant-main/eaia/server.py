@@ -223,6 +223,33 @@ async def chat_endpoint(request: FarfalleChatRequest):
                         except Exception as tool_e:
                             tool_output = f"❌ Harvest Failed: {str(tool_e)}\n"
 
+                    elif name == 'distill_signals':
+                        msg = "🔬 Distilling research signals...\n"
+                        yield f"data: {json.dumps({'event': 'text-chunk', 'data': {'text': msg}})}\n\n"
+                        from eaia.skills.signal_distiller import distill_signals
+                        try:
+                            raw_intel = args.get('raw_intel', '')
+                            result = distill_signals.invoke({"raw_intel": raw_intel})
+                            tool_output = f"{result}\n"
+                        except Exception as tool_e:
+                            tool_output = f"❌ Signal Distillation Failed: {str(tool_e)}\n"
+
+                    elif name == 'write_challenger_email':
+                        msg = "✍️ Two-pass email generation (Think → Write)...\n"
+                        yield f"data: {json.dumps({'event': 'text-chunk', 'data': {'text': msg}})}\n\n"
+                        from eaia.skills.challenger_email_writer import write_challenger_email
+                        try:
+                            result = write_challenger_email.invoke({
+                                "prospect_name": args.get('prospect_name', ''),
+                                "company_name": args.get('company_name', ''),
+                                "distilled_signals_json": args.get('distilled_signals_json', '{}'),
+                                "prospect_summary": args.get('prospect_summary', ''),
+                                "framework_override": args.get('framework_override', '')
+                            })
+                            tool_output = f"{result}\n"
+                        except Exception as tool_e:
+                            tool_output = f"❌ Challenger Email Writer Failed: {str(tool_e)}\n"
+
                     else:
                         tool_output = f"⚠️ Skill '{name}' is not wired.\n"
                         

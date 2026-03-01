@@ -21,6 +21,8 @@ from eaia.skills.lead_scoring_tool import score_lead
 from eaia.skills.vapi_mcp_tool import vapi_mcp_call
 from eaia.skills.harvest_tool import run_harvest_mission
 from eaia.skills.deep_audit_tool import deep_audit_leads
+from eaia.skills.signal_distiller import distill_signals
+from eaia.skills.challenger_email_writer import write_challenger_email
 
 tools = [
     NewEmailDraft,
@@ -40,7 +42,9 @@ tools = [
     voice_call,
     score_lead,
     vapi_mcp_call,
-    run_harvest_mission
+    run_harvest_mission,
+    distill_signals,
+    write_challenger_email
 ]
 
 EMAIL_WRITING_INSTRUCTIONS = """{background}
@@ -67,6 +71,19 @@ Never use the Question tool to ask {name} when they are free - instead, just ask
 Next, if you have enough information to respond, you can draft an email for {name}. Use the `ResponseEmailDraft` tool for this.
 
 ALWAYS draft emails as if they are coming from {name}. Never draft them as "{name}'s assistant" or someone else.
+
+*** CRITICAL EMAIL COPYWRITING RULES (THE CHALLENGER METHOD) ***
+When drafting an email via ResponseEmailDraft or NewEmailDraft, you MUST follow these rules or you will be penalized:
+
+1. **NO BUZZWORDS**: Do not use "cutting-edge", "innovative", "leverage", "synergy", "unlock", "revolutionize", "unique", "advanced", "comprehensive", "robust", "holistic", or "transform".
+2. **THE TEASE**: Reference a structural blind spot in their specific strategy. (e.g., Systematic ETFs rely on macro data but miss biological mechanism reality).
+3. **THE INSIGHT**: Introduce an asymmetric insight from Zeta's real capabilities that solves their blind spot.
+4. **THE PROOF / CAPABILITIES TO CITE** (Pick ONE that fits):
+   - **PARP Inhibitor Resistance Signal**: Quantifies clinical trial failure risk 6 months before earnings (predicted AstraZeneca Q3 miss on Lynparza).
+   - **KELIM Genotype Convergence**: Scores tumor mutational pathways to predict competitor drug synergy/failure.
+   - **Targeted Sector Rotation**: Translates biological trial data into macro signals for broad healthcare/biotech ETFs.
+5. **THE ASK**: Low friction. End with "Open to seeing the math?" or "Worth a 10 min look?".
+6. **Tone**: Speak peer-to-peer like a sharp account executive. No fluff. Maximum 75 words.
 
 When adding new recipients - only do that if {name} explicitly asks for it and you know their emails. If you don't know the right emails to add in, then ask {name}. You do NOT need to add in people who are already on the email! Do NOT make up emails.
 
