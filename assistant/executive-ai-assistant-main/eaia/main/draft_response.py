@@ -14,15 +14,31 @@ from eaia.schemas import (
 )
 from eaia.frappe_tool import delete_all_leads, update_context, list_leads
 from eaia.research_tool import research_company, web_search
-from eaia.brightdata_tool import brightdata_web_search, brightdata_extract
-from eaia.skills.lead_hunter_tool import lead_hunter
 from eaia.skills.voice_tool import voice_call
 from eaia.skills.lead_scoring_tool import score_lead
 from eaia.skills.vapi_mcp_tool import vapi_mcp_call
 from eaia.skills.harvest_tool import run_harvest_mission
-from eaia.skills.deep_audit_tool import deep_audit_leads
 from eaia.skills.signal_distiller import distill_signals
 from eaia.skills.challenger_email_writer import write_challenger_email
+
+# MCP-dependent imports — require Python 3.10+ (mcp package)
+# These are optional and the core pipeline works without them
+_mcp_tools = []
+try:
+    from eaia.brightdata_tool import brightdata_web_search, brightdata_extract
+    _mcp_tools.extend([brightdata_web_search, brightdata_extract])
+except ImportError:
+    pass
+try:
+    from eaia.skills.lead_hunter_tool import lead_hunter
+    _mcp_tools.append(lead_hunter)
+except ImportError:
+    pass
+try:
+    from eaia.skills.deep_audit_tool import deep_audit_leads
+    _mcp_tools.append(deep_audit_leads)
+except ImportError:
+    pass
 
 tools = [
     NewEmailDraft,
@@ -35,17 +51,13 @@ tools = [
     list_leads,
     research_company,
     web_search,
-    brightdata_web_search,
-    brightdata_extract,
-    deep_audit_leads,
-    lead_hunter,
     voice_call,
     score_lead,
     vapi_mcp_call,
     run_harvest_mission,
     distill_signals,
-    write_challenger_email
-]
+    write_challenger_email,
+] + _mcp_tools
 
 EMAIL_WRITING_INSTRUCTIONS = """{background}
 
