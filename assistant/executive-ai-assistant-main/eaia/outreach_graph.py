@@ -145,26 +145,59 @@ def _apollo_match(name: str, org: str) -> Optional[Dict]:
     return None
 
 
+def _brightdata_linkedin(name: str, company: str) -> str:
+    """Pull LinkedIn signals via BrightData Web Unlocker API."""
+    key = os.getenv("BRIGHTDATA_API_KEY")
+    if not key:
+        return ""
+    try:
+        r = requests.post(
+            "https://api.brightdata.com/request",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={
+                "zone": "web_unlocker1",
+                "url": f"https://www.linkedin.com/search/results/people/?keywords={name.replace(' ','+')}&company_ids=&origin=SWITCH_SEARCH_VERTICAL&sid=gBJ",
+                "format": "raw"
+            },
+            timeout=15
+        )
+        if r.status_code == 200:
+            import re
+            text = r.text
+            headlines = re.findall(r'"headline":"([^"]{5,150})"', text)
+            titles = re.findall(r'"title":\{"text":"([^"]{5,100})"', text)
+            if headlines or titles:
+                return f"\n\n[BRIGHTDATA LINKEDIN]\nHeadlines: {headlines[:3]}\nTitles: {titles[:3]}"
+    except Exception as e:
+        logger.debug(f"BrightData LinkedIn: {e}")
+    return ""
+
+
 async def research_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
-    """Node 1: Research prospect via Tavily + Apollo."""
+    """Node 1: Research prospect via Tavily + Apollo + BrightData LinkedIn (parallel)."""
     cb = config.get("configurable", {}).get("callback")
     name = state["prospect_name"]
     company = state["company_name"]
     logger.info(f"🔍 RESEARCH: {name} @ {company}")
 
-    if cb: await cb("research", "thought", {"message": f"Searching Tavily + Apollo for {name} at {company}..."})
+    if cb: await cb("research", "thought", {"message": f"Searching Tavily + Apollo + LinkedIn for {name} at {company}..."})
 
-    # Tavily — company intelligence
-    tavily_results = _tavily_search(f"{company} {name} investment strategy AUM portfolio")
-    raw = "\n\n".join([
-        f"[{r['url']}]\n{r['content'][:600]}" for r in tavily_results
-    ])
+    # Run all 3 sources in parallel
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        t_fut = loop.run_in_executor(executor, _tavily_search, f"{company} {name} investment strategy AUM portfolio")
+        a_fut = loop.run_in_executor(executor, _apollo_match, name, company)
+        l_fut = loop.run_in_executor(executor, _brightdata_linkedin, name, company)
+        tavily_results, apollo, linkedin_raw = await asyncio.gather(t_fut, a_fut, l_fut)
 
-    # Apollo — contact data
-    apollo = _apollo_match(name, company)
+    raw = "\n\n".join([f"[{r['url']}]\n{r['content'][:600]}" for r in tavily_results])
 
     if apollo:
         raw += f"\n\n[APOLLO CONTACT DATA]\nEmail: {apollo.get('email')}\nTitle: {apollo.get('title')}\nLinkedIn: {apollo.get('linkedin_url')}\nHeadline: {apollo.get('headline')}"
+
+    if linkedin_raw:
+        raw += linkedin_raw
 
     state["raw_research"] = raw
     state["apollo_data"] = apollo or {}
@@ -451,6 +484,24 @@ async def sync_node(state: OutreachState, config: RunnableConfig) -> OutreachSta
         state["crm_prospect_id"] = prospect_id or ""
         logger.info(f"💾 SYNC: {'✅ Saved' if prospect_id else '❌ Failed'} — {prospect_id}")
 
+        # ── Auto-enroll in outreach sequence (Day 1 = email already queued via send_email_node) ──
+        if prospect_id:
+            try:
+                import requests as _req
+                enroll_r = _req.post(
+                    f"{client.base_url}/api/method/crm.api.sequence_manager.enroll_prospect",
+                    headers=client.headers,
+                    json={"prospect_id": prospect_id, "sequence_name": "Nyx Default"},
+                    timeout=5
+                )
+                enroll_data = enroll_r.json().get("message", {})
+                if enroll_data.get("success"):
+                    logger.info(f"📅 SEQUENCE: Enrolled {prospect_id} — next step: {enroll_data.get('next_step')} on {enroll_data.get('next_step_date')}")
+                else:
+                    logger.debug(f"Sequence enroll skipped: {enroll_data.get('error', 'unknown')}")
+            except Exception as seq_e:
+                logger.debug(f"Sequence enroll failed (non-fatal): {seq_e}")
+
     except Exception as e:
         logger.error(f"💾 SYNC ERROR: {e}")
         state["crm_synced"] = False
@@ -458,6 +509,7 @@ async def sync_node(state: OutreachState, config: RunnableConfig) -> OutreachSta
         state["error"] = str(e)
 
     return state
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
