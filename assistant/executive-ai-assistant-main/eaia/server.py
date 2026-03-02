@@ -22,11 +22,69 @@ app = FastAPI(title="EAIA Agent Service (Farfalle Compatible)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
+    allow_origins=[
+        "http://localhost:3000", "http://localhost:3001", "http://localhost:3002",
+        "http://127.0.0.1:3000", "http://127.0.0.1:3001",
+        "http://crm.localhost:8000", "http://localhost:8000",
+        "http://127.0.0.1:8000", "*"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Outreach Pipeline ────────────────────────────────────────────────────────
+from eaia.outreach_graph import run_pipeline
+
+class PipelineRequest(BaseModel):
+    prospect_name: str
+    company_name: str
+
+@app.post("/pipeline")
+async def pipeline_endpoint(request: PipelineRequest):
+    """Autonomous outreach pipeline — streams node progress via SSE."""
+    events = []
+
+    async def collect_progress(node: str, status: str, data: dict):
+        events.append({"node": node, "status": status, **data})
+
+    async def event_generator():
+        yield f"data: {json.dumps({'event': 'pipeline-start', 'prospect': request.prospect_name, 'company': request.company_name})}\n\n"
+
+        # Run the pipeline with progress callback
+        result = await run_pipeline(
+            request.prospect_name,
+            request.company_name,
+            callback=collect_progress
+        )
+
+        # Stream each node event
+        for evt in events:
+            yield f"data: {json.dumps({'event': 'node-complete', 'data': evt})}\n\n"
+            await asyncio.sleep(0.05)  # Small delay for smooth streaming
+
+        # Final result
+        final = {
+            "prospect_name": result.get("prospect_name"),
+            "company_name": result.get("company_name"),
+            "score": result.get("score"),
+            "framework": result.get("framework"),
+            "score_reasoning": result.get("score_reasoning"),
+            "distilled_signals": result.get("distilled_signals"),
+            "email_draft": result.get("email_draft"),
+            "ab_subjects": result.get("ab_subjects"),
+            "review_result": result.get("review_result"),
+            "review_feedback": result.get("review_feedback"),
+            "apollo_data": result.get("apollo_data"),
+            "attempt": result.get("attempt"),
+        }
+        yield f"data: {json.dumps({'event': 'pipeline-complete', 'data': final})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 # Farfalle Request Model
 class Message(BaseModel):
