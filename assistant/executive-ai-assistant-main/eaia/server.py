@@ -93,6 +93,90 @@ async def pipeline_endpoint(request: PipelineRequest):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
 
+# ── CALL ENDPOINT (Phase 2: Vapi Voice Chain) ────────────────────────────
+class CallRequest(BaseModel):
+    phone_number: str
+    prospect_name: str = ""
+    company_name: str = ""
+    crm_prospect_id: str = ""
+    pipeline_context: dict = {}
+
+@app.post("/call")
+async def call_endpoint(request: CallRequest):
+    """
+    Place a Vapi call with pipeline intelligence as context.
+    Creates a Vapi Call Log in CRM, then triggers the call.
+    """
+    import os
+    from eaia.agents.zo import CRMClient
+
+    # Build dossier from pipeline context
+    ctx = request.pipeline_context
+    signals = ctx.get("distilled_signals", {})
+    email = ctx.get("email_draft", {}).get("email", {})
+
+    dossier = f"""
+TARGET DOSSIER — {request.prospect_name} @ {request.company_name}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCORE: {ctx.get('score', 'N/A')}/100 ({ctx.get('framework', 'N/A')} framework)
+KEY SIGNAL: {signals.get('specific_number', 'N/A')}
+BLIND SPOT: {signals.get('blind_spot', 'N/A')[:200]}
+EMAIL SUBJECT: {email.get('subject', 'N/A')}
+
+OBJECTIVE: Reference the email we sent about "{email.get('subject', 'strategic insights')}".
+Ask to schedule a 15-min call to show them the data. Use the blind spot as a hook.
+If they say no, ask who on their team handles alt-data sourcing.
+"""
+
+    # Build system message for Vapi
+    system_message = f"""You are Nyx, an AI Executive Assistant for Zeta Intelligence.
+You are calling {request.prospect_name} at {request.company_name}.
+
+{dossier}
+
+RULES:
+- Be professional, concise, and confident
+- Never say "I'm an AI" — say "I'm calling on behalf of our research team"
+- If voicemail: leave a 20-second message referencing the email subject
+- If they answer: use the blind spot hook to open, then ask for 15 min
+- If they say no: ask who handles alt-data/quant strategy decisions
+"""
+
+    try:
+        # Try Vapi MCP call
+        from eaia.skills.vapi_mcp_tool import _invoke_mcp_create_call
+        result = await _invoke_mcp_create_call(
+            phone_number=request.phone_number,
+            objective=f"Follow up with {request.prospect_name}",
+            override_context=system_message
+        )
+
+        # Update CRM prospect status
+        if request.crm_prospect_id:
+            try:
+                client = CRMClient()
+                import requests as req
+                update_url = f"{client.base_url}/api/resource/Lead Prospect/{request.crm_prospect_id}"
+                req.put(update_url, headers=client.headers, json={"outreach_status": "Email Sent"})
+            except Exception as e:
+                logger.warning(f"CRM status update failed: {e}")
+
+        return {
+            "status": "call_initiated",
+            "phone_number": request.phone_number,
+            "prospect": request.prospect_name,
+            "vapi_result": str(result)[:500]
+        }
+
+    except Exception as e:
+        logger.error(f"Call failed: {e}")
+        return {
+            "status": "call_failed",
+            "error": str(e),
+            "phone_number": request.phone_number
+        }
+
+
 # Farfalle Request Model
 class Message(BaseModel):
     role: str

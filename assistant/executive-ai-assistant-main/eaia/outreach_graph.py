@@ -396,6 +396,7 @@ async def sync_node(state: OutreachState, config: RunnableConfig) -> OutreachSta
             "pi_email": apollo.get("email") or "",
             "institution": state["company_name"],
             "source": "Nyx Pipeline",
+            "cancer_type": "General",
             "lead_score": state.get("score", 0),
             "tier": "Tier 1" if state.get("score", 0) > 75 else "Tier 2" if state.get("score", 0) > 40 else "Tier 3",
             "notes": json.dumps({

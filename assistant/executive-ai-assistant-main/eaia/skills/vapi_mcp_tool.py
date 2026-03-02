@@ -8,9 +8,11 @@ from eaia.skills.context_manager import ContextManager
 VAPI_MCP_URL = "https://mcp.vapi.ai/mcp"
 VAPI_API_KEY = os.getenv("VAPI_API_KEY", "53593b76-8c70-46e2-b01a-d2996afec5ba")
 
-async def _invoke_mcp_create_call(phone_number: str, objective: str):
+async def _invoke_mcp_create_call(phone_number: str, objective: str, override_context: str = None):
     """
     Internal async function to invoke the MCP tool.
+    If override_context is provided, uses it as the system message directly
+    (skipping ContextManager RAG lookup).
     """
     client = MCPClient(
         command="npx",
@@ -21,16 +23,20 @@ async def _invoke_mcp_create_call(phone_number: str, objective: str):
         ]
     )
     
-    # RAG: Fetch Intelligence Dossier
-    try:
-        ctx = ContextManager() 
-        dossier = ctx.get_dossier(phone_number=phone_number)
-    except Exception as e:
-        print(f"RAG Error: {e}")
-        dossier = "No dossier available."
+    if override_context:
+        # Use the pre-built context from /call endpoint
+        system_message = override_context
+    else:
+        # RAG: Fetch Intelligence Dossier
+        try:
+            ctx = ContextManager() 
+            dossier = ctx.get_dossier(phone_number=phone_number)
+        except Exception as e:
+            print(f"RAG Error: {e}")
+            dossier = "No dossier available."
 
-    # Construct System Message with RAG
-    system_message = f"""
+        # Construct System Message with RAG
+        system_message = f"""
     You are Nyx, an AI Executive Assistant. 
     You are calling to achieve a specific objective: {objective}
     
