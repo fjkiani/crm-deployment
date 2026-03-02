@@ -38,6 +38,8 @@ class OutreachState(TypedDict, total=False):
     error: str
     crm_synced: bool
     crm_prospect_id: str
+    email_sent: bool
+    email_error: str
 
 
 # ── SHARED LLM CALLER (Cohere → OpenAI fallback) ───────────────────────────
@@ -459,6 +461,113 @@ async def sync_node(state: OutreachState, config: RunnableConfig) -> OutreachSta
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# NODE 7: SEND EMAIL (Gmail API → SMTP fallback)
+# ═══════════════════════════════════════════════════════════════════════════
+async def send_email_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
+    """Node 7: Actually fire the email via Gmail API or SMTP."""
+    cb = config.get("configurable", {}).get("callback")
+    logger.info("📧 SEND: Firing email")
+    if cb: await cb("send", "thought", {"message": "Sending email to prospect..."})
+
+    apollo = state.get("apollo_data", {})
+    to_email = apollo.get("email")
+    email_draft = state.get("email_draft", {})
+    email_data = email_draft.get("email", {})
+    subject = email_data.get("subject", "")
+    body = email_data.get("body", "")
+    ps = email_data.get("ps", "")
+    full_body = body + (f"\n\nPS: {ps}" if ps else "")
+
+    if not to_email:
+        logger.warning("📧 SEND: No prospect email — skipping")
+        state["email_sent"] = False
+        state["email_error"] = "No prospect email (Apollo returned no email)"
+        return state
+
+    # ── Try Gmail API ─────────────────────────────────────────────────────
+    secrets_dir = os.path.join(os.path.dirname(__file__), ".secrets")
+    token_path = os.path.join(secrets_dir, "token.json")
+    gmail_user = os.getenv("GMAIL_USER", "")
+
+    if os.path.exists(token_path) and gmail_user:
+        try:
+            from eaia.gmail import get_credentials
+            from googleapiclient.discovery import build
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            import base64
+            import email as emaillib
+            creds = await get_credentials(gmail_user)
+            service = build("gmail", "v1", credentials=creds)
+            msg = MIMEMultipart()
+            msg["To"] = to_email
+            msg["From"] = gmail_user
+            msg["Subject"] = subject
+            msg["Message-ID"] = emaillib.utils.make_msgid()
+            msg.attach(MIMEText(full_body, "plain"))
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
+            state["email_sent"] = True
+            state["email_error"] = ""
+            logger.info(f"📧 SEND: ✅ Gmail API → {to_email} (id={result.get('id')})")
+            if state.get("crm_prospect_id"):
+                try:
+                    import requests as _req
+                    from eaia.agents.zo import CRMClient
+                    _c = CRMClient()
+                    _req.put(f"{_c.base_url}/api/resource/Lead Prospect/{state['crm_prospect_id']}",
+                             headers=_c.headers, json={"outreach_status": "Email Sent"})
+                except Exception:
+                    pass
+            return state
+        except Exception as e:
+            logger.warning(f"Gmail API failed: {e} → trying SMTP...")
+
+    # ── SMTP fallback ─────────────────────────────────────────────────────
+    smtp_user = os.getenv("GMAIL_USER", os.getenv("SMTP_USER", ""))
+    smtp_pass = os.getenv("GMAIL_APP_PASSWORD", os.getenv("SMTP_PASS", ""))
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+
+    if smtp_user and smtp_pass:
+        try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            msg = MIMEMultipart()
+            msg["From"] = smtp_user
+            msg["To"] = to_email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(full_body, "plain"))
+            with smtplib.SMTP(smtp_host, smtp_port) as s:
+                s.starttls()
+                s.login(smtp_user, smtp_pass)
+                s.sendmail(smtp_user, [to_email], msg.as_string())
+            state["email_sent"] = True
+            state["email_error"] = ""
+            logger.info(f"📧 SEND: ✅ SMTP → {to_email}")
+            if state.get("crm_prospect_id"):
+                try:
+                    import requests as _req
+                    from eaia.agents.zo import CRMClient
+                    _c = CRMClient()
+                    _req.put(f"{_c.base_url}/api/resource/Lead Prospect/{state['crm_prospect_id']}",
+                             headers=_c.headers, json={"outreach_status": "Email Sent"})
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"📧 SMTP FAILED: {e}")
+            state["email_sent"] = False
+            state["email_error"] = str(e)
+    else:
+        logger.warning("📧 SEND: No credentials. Set GMAIL_USER + GMAIL_APP_PASSWORD in .secrets/.env")
+        state["email_sent"] = False
+        state["email_error"] = "No send credentials configured"
+
+    return state
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # GRAPH ASSEMBLY
 # ═══════════════════════════════════════════════════════════════════════════
 try:
@@ -473,13 +582,15 @@ try:
         graph.add_node("write", write_node)
         graph.add_node("review", review_node)
         graph.add_node("sync", sync_node)
+        graph.add_node("send", send_email_node)
 
         graph.set_entry_point("research")
         graph.add_edge("research", "distill")
         graph.add_edge("distill", "score")
         graph.add_edge("score", "write")
         graph.add_edge("write", "review")
-        graph.add_edge("sync", END)
+        graph.add_edge("sync", "send")
+        graph.add_edge("send", END)
 
         graph.add_conditional_edges(
             "review",

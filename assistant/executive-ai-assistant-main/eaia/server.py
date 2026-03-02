@@ -84,6 +84,8 @@ async def pipeline_endpoint(request: PipelineRequest):
             "attempt": result.get("attempt"),
             "crm_synced": result.get("crm_synced", False),
             "crm_prospect_id": result.get("crm_prospect_id", ""),
+            "email_sent": result.get("email_sent", False),
+            "email_error": result.get("email_error", ""),
         }
         yield f"data: {json.dumps({'event': 'pipeline-complete', 'data': final})}\n\n"
 
@@ -124,8 +126,14 @@ BLIND SPOT: {signals.get('blind_spot', 'N/A')[:200]}
 EMAIL SUBJECT: {email.get('subject', 'N/A')}
 
 OBJECTIVE: Reference the email we sent about "{email.get('subject', 'strategic insights')}".
-Ask to schedule a 15-min call to show them the data. Use the blind spot as a hook.
-If they say no, ask who on their team handles alt-data sourcing.
+
+IF THEY AGREE TO MEET:
+- Mention available times from the calendar below
+- Say: "I'll send a calendar invite right now"
+- The booking system will auto-confirm
+
+IF THEY SAY NO: ask who handles alt-data/quant strategy decisions
+{calendar_context}
 """
 
     # Build system message for Vapi
@@ -143,6 +151,43 @@ RULES:
 """
 
     try:
+        # Fetch caller's calendar to give Vapi real availability
+        calendar_context = ""
+        calendar_email = os.getenv("CALENDAR_EMAIL", os.getenv("GMAIL_USER", ""))
+        if calendar_email:
+            try:
+                from eaia.gmail import get_credentials, get_events_for_days, print_events
+                from googleapiclient.discovery import build
+                from datetime import datetime, timedelta
+                secrets_dir = os.path.join(os.path.dirname(__file__), ".secrets")
+                token_path = os.path.join(secrets_dir, "token.json")
+                if os.path.exists(token_path):
+                    creds = await get_credentials(calendar_email)
+                    cal_service = build("calendar", "v3", credentials=creds)
+                    today = datetime.utcnow().date()
+                    next_days = [(today + timedelta(days=i)).strftime("%d-%m-%Y") for i in range(1, 4)]
+                    import asyncio
+                    # Build availability snippet for next 3 business days
+                    avail_lines = []
+                    for d in next_days:
+                        day_obj = datetime.strptime(d, "%d-%m-%Y").date()
+                        start = f"{day_obj.isoformat()}T00:00:00Z"
+                        end = f"{day_obj.isoformat()}T23:59:59Z"
+                        events_result = cal_service.events().list(
+                            calendarId="primary", timeMin=start, timeMax=end,
+                            singleEvents=True, orderBy="startTime"
+                        ).execute()
+                        events = events_result.get("items", [])
+                        if events:
+                            busy_times = ", ".join([e["start"].get("dateTime", "")[:16] for e in events[:3]])
+                            avail_lines.append(f"{d}: BUSY at {busy_times}")
+                        else:
+                            avail_lines.append(f"{d}: OPEN")
+                    calendar_context = "\nCALENDAR AVAILABILITY (next 3 days):\n" + "\n".join(avail_lines)
+                    calendar_context += "\nWhen prospect agrees to meet: offer these open slots."
+            except Exception as cal_e:
+                logger.warning(f"Calendar context failed: {cal_e}")
+
         # Try Vapi MCP call
         from eaia.skills.vapi_mcp_tool import _invoke_mcp_create_call
         result = await _invoke_mcp_create_call(
