@@ -1,0 +1,833 @@
+---
+globs: crm/leadgen/*.py,crm/api/leadgen.py,crm/fcrm/doctype/leadgen_*
+description: Lead Generation Implementation Patterns - Code patterns and standards for lead generation system
+---
+
+# 🔧 Lead Generation Implementation Patterns
+> [!IMPORTANT]
+> **STATUS: BLUEPRINT / FUTURE STATE**
+> Describes implementation patterns for the future LeadGen module.
+
+## File Structure Standards
+
+### Lead Generation Module Structure
+```
+crm/leadgen/
+├── __init__.py
+├── collectors/
+│   ├── __init__.py
+│   ├── clinicaltrials_collector.py
+│   ├── nih_collector.py
+│   └── asco_collector.py
+├── processors/
+│   ├── __init__.py
+│   ├── consolidate.py
+│   ├── scorer.py
+│   └── matcher.py
+├── outreach/
+│   ├── __init__.py
+│   ├── email_templates.py
+│   ├── sequence_manager.py
+│   └── follow_up_scheduler.py
+└── utils/
+    ├── __init__.py
+    ├── api_client.py
+    └── data_validators.py
+```
+
+## DocType Patterns
+
+### LeadGen Job DocType
+```python
+# crm/fcrm/doctype/leadgen_job/leadgen_job.py
+import frappe
+from frappe.model.document import Document
+
+class LeadGenJob(Document):
+    def validate(self):
+        self.validate_params()
+        self.set_defaults()
+    
+    def validate_params(self):
+        """Validate job parameters based on job_type"""
+        if self.job_type == "trials":
+            required_fields = ["conditions", "interventions", "phases"]
+        elif self.job_type == "nih":
+            required_fields = ["keywords", "activity_codes"]
+        elif self.job_type == "asco":
+            required_fields = ["year", "abstract_types"]
+        
+        for field in required_fields:
+            if not self.params.get(field):
+                frappe.throw(f"Missing required parameter: {field}")
+    
+    def set_defaults(self):
+        """Set default values"""
+        if not self.status:
+            self.status = "Queued"
+        if not self.started_at and self.status == "Running":
+            self.started_at = frappe.utils.now()
+```
+
+### Lead Prospect DocType
+```python
+# crm/fcrm/doctype/lead_prospect/lead_prospect.py
+import frappe
+from frappe.model.document import Document
+
+class LeadProspect(Document):
+    def before_save(self):
+        self.calculate_lead_score()
+        self.assign_tier()
+    
+    def calculate_lead_score(self):
+        """Calculate lead score based on multiple factors"""
+        score = 0
+        
+        # Funding amount (0-30 points)
+        if self.funding_total:
+            score += min(30, self.funding_total / 1000000 * 2)
+        
+        # H-index (0-25 points)
+        if self.h_index:
+            score += min(25, self.h_index / 2)
+        
+        # Recent papers (0-20 points)
+        if self.recent_papers:
+            score += min(20, len(self.recent_papers.split(',')) * 2)
+        
+        # Cancer type relevance (0-15 points)
+        priority_cancers = ["breast", "lung", "colorectal", "prostate"]
+        if any(cancer in self.cancer_type.lower() for cancer in priority_cancers):
+            score += 15
+        
+        # Source quality (0-10 points)
+        source_scores = {"trials": 10, "nih": 8, "asco": 6, "manual": 5}
+        score += source_scores.get(self.source, 0)
+        
+        self.lead_score = int(score)
+    
+    def assign_tier(self):
+        """Assign tier based on lead score"""
+        if self.lead_score >= 80:
+            self.tier = "Tier 1"
+        elif self.lead_score >= 60:
+            self.tier = "Tier 2"
+        else:
+            self.tier = "Tier 3"
+```
+
+## API Patterns
+
+### Collector API Pattern
+```python
+# crm/api/leadgen.py
+import frappe
+from frappe import _
+from frappe.utils import now
+
+@frappe.whitelist()
+def run_job(job_type: str, params: dict):
+    """Run a lead generation job"""
+    # Validate job type
+    valid_types = ["trials", "nih", "asco", "consolidate"]
+    if job_type not in valid_types:
+        frappe.throw(_("Invalid job type"))
+    
+    # Create job record
+    job = frappe.get_doc({
+        "doctype": "LeadGen Job",
+        "job_type": job_type,
+        "params": frappe.as_json(params),
+        "status": "Queued"
+    })
+    job.insert()
+    
+    # Enqueue job
+    frappe.enqueue(
+        f"crm.leadgen.collectors.{job_type}_collector.run",
+        job_name=job.name,
+        params=params,
+        queue="long"
+    )
+    
+    return {"job_name": job.name, "status": "Queued"}
+
+@frappe.whitelist()
+def job_status(job_name: str):
+    """Get job status and logs"""
+    job = frappe.get_doc("LeadGen Job", job_name)
+    return {
+        "status": job.status,
+        "started_at": job.started_at,
+        "ended_at": job.ended_at,
+        "log": job.log,
+        "result_file": job.result_file
+    }
+```
+
+### Collector Implementation Pattern
+```python
+# crm/leadgen/collectors/clinicaltrials_collector.py
+import frappe
+import requests
+import json
+from datetime import datetime
+
+def run(job_name: str, params: dict):
+    """Run ClinicalTrials.gov collector"""
+    job = frappe.get_doc("LeadGen Job", job_name)
+    
+    try:
+        job.status = "Running"
+        job.started_at = frappe.utils.now()
+        job.save()
+        
+        # Collect data
+        trials = collect_trials(params)
+        
+        # Process and save
+        prospects = process_trials(trials)
+        save_prospects(prospects)
+        
+        # Update job
+        job.status = "Completed"
+        job.ended_at = frappe.utils.now()
+        job.log = f"Collected {len(trials)} trials, created {len(prospects)} prospects"
+        job.save()
+        
+    except Exception as e:
+        job.status = "Failed"
+        job.log = f"Error: {str(e)}"
+        job.save()
+        frappe.log_error(f"LeadGen Job {job_name} failed: {str(e)}")
+
+def collect_trials(params: dict):
+    """Collect trials from ClinicalTrials.gov API"""
+    base_url = "https://clinicaltrials.gov/api/v2/studies"
+    
+    # Build query parameters
+    query_params = {
+        "query.cond": " OR ".join(params.get("conditions", [])),
+        "query.intr": " OR ".join(params.get("interventions", [])),
+        "query.phase": " OR ".join(params.get("phases", [])),
+        "format": "json",
+        "pageSize": params.get("page_size", 100)
+    }
+    
+    trials = []
+    page = 1
+    
+    while True:
+        query_params["page"] = page
+        response = requests.get(base_url, params=query_params)
+        response.raise_for_status()
+        
+        data = response.json()
+        trials.extend(data.get("studies", []))
+        
+        if len(data.get("studies", [])) < query_params["pageSize"]:
+            break
+        
+        page += 1
+    
+    return trials
+```
+
+## Data Processing Patterns
+
+### Consolidation Pattern
+```python
+# crm/leadgen/processors/consolidate.py
+import frappe
+from collections import defaultdict
+
+def consolidate_prospects():
+    """Consolidate duplicate prospects"""
+    # Get all prospects
+    prospects = frappe.get_all("Lead Prospect", fields=["*"])
+    
+    # Group by email
+    email_groups = defaultdict(list)
+    for prospect in prospects:
+        if prospect.pi_email:
+            email_groups[prospect.pi_email].append(prospect)
+    
+    # Process duplicates
+    for email, group in email_groups.items():
+        if len(group) > 1:
+            merge_prospects(group)
+
+def merge_prospects(prospects):
+    """Merge duplicate prospects"""
+    # Sort by lead score (highest first)
+    prospects.sort(key=lambda x: x.lead_score or 0, reverse=True)
+    
+    primary = prospects[0]
+    duplicates = prospects[1:]
+    
+    # Merge data
+    for duplicate in duplicates:
+        # Update primary with missing data
+        for field in ["phone", "institution", "h_index", "recent_papers"]:
+            if not getattr(primary, field) and getattr(duplicate, field):
+                setattr(primary, field, getattr(duplicate, field))
+        
+        # Add source references
+        if duplicate.source_ref_id:
+            if not primary.source_ref_id:
+                primary.source_ref_id = duplicate.source_ref_id
+            else:
+                primary.source_ref_id += f", {duplicate.source_ref_id}"
+        
+        # Delete duplicate
+        frappe.delete_doc("Lead Prospect", duplicate.name)
+    
+    primary.save()
+```
+
+## Email Template Patterns
+
+### Template Structure
+```python
+# crm/leadgen/outreach/email_templates.py
+def get_tier1_template(prospect):
+    """Get Tier 1 email template"""
+    return f"""
+Subject: Genomic stratification for {prospect.trial_title}
+
+Dr. {prospect.pi_name},
+
+I came across your {prospect.cancer_type} trial (NCT{prospect.source_ref_id}) and was impressed by your approach to {prospect.endpoint_summary}.
+
+Given the 60% failure rate in Phase 3 oncology trials, I wanted to share how genomic patient stratification could improve your trial's success probability.
+
+Our validation data shows AUROC 0.976 across 38 cancer targets, with particular strength in {prospect.cancer_type} stratification.
+
+Would you be interested in a brief call to discuss how this could apply to your trial?
+
+Best regards,
+Fahad
+alpha@crispro.ai
+"""
+
+def get_tier2_template(prospect):
+    """Get Tier 2 email template"""
+    return f"""
+Subject: Improving {prospect.cancer_type} trial outcomes
+
+Dr. {prospect.pi_name},
+
+Your work on {prospect.endpoint_summary} caught my attention. 
+
+I'm reaching out because genomic patient stratification has shown significant promise in improving Phase 3 oncology trial success rates.
+
+Would you be open to a brief discussion about how this could benefit your research?
+
+Best,
+Fahad
+alpha@crispro.ai
+"""
+```
+
+## Testing Patterns
+
+### Unit Test Structure
+```python
+# tests/test_leadgen/test_collectors.py
+import pytest
+import frappe
+from crm.leadgen.collectors.clinicaltrials_collector import collect_trials
+
+class TestClinicalTrialsCollector:
+    def test_collect_trials_basic(self):
+        """Test basic trial collection"""
+        params = {
+            "conditions": ["breast cancer"],
+            "interventions": ["chemotherapy"],
+            "phases": ["Phase 3"]
+        }
+        
+        trials = collect_trials(params)
+        
+        assert len(trials) > 0
+        assert all("protocolSection" in trial for trial in trials)
+    
+    def test_collect_trials_empty_params(self):
+        """Test with empty parameters"""
+        params = {}
+        
+        with pytest.raises(ValueError):
+            collect_trials(params)
+```
+
+## Error Handling Patterns
+
+### Robust API Calls
+```python
+import requests
+import time
+from functools import wraps
+
+def retry_on_failure(max_retries=3, delay=1):
+    """Decorator for retrying failed API calls"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except requests.exceptions.RequestException as e:
+                    if attempt == max_retries - 1:
+                        raise
+                    time.sleep(delay * (2 ** attempt))  # Exponential backoff
+            return None
+        return wrapper
+    return decorator
+
+@retry_on_failure(max_retries=3, delay=1)
+def make_api_call(url, params):
+    """Make API call with retry logic"""
+    response = requests.get(url, params=params, timeout=30)
+    response.raise_for_status()
+    return response.json()
+```
+
+## Performance Patterns
+
+### Batch Processing
+```python
+def process_prospects_in_batches(prospects, batch_size=100):
+    """Process prospects in batches to avoid memory issues"""
+    for i in range(0, len(prospects), batch_size):
+        batch = prospects[i:i + batch_size]
+        process_batch(batch)
+        frappe.db.commit()  # Commit after each batch
+```
+
+## Security Patterns
+
+### Input Validation
+```python
+def validate_email_params(params):
+    """Validate email sending parameters"""
+    required_fields = ["recipient", "subject", "body"]
+    
+    for field in required_fields:
+        if not params.get(field):
+            frappe.throw(f"Missing required field: {field}")
+    
+    # Validate email format
+    if not frappe.utils.validate_email_address(params["recipient"]):
+        frappe.throw("Invalid email address")
+    
+    # Sanitize HTML content
+    if params.get("body"):
+        params["body"] = frappe.utils.sanitize_html(params["body"])
+```
+
+## Observability & Metrics Patterns
+
+### Job Lifecycle Monitoring
+```python
+# crm/leadgen/utils/metrics.py
+import frappe
+from datetime import datetime
+from typing import Dict, Any
+
+class LeadGenMetrics:
+    """Metrics collection for lead generation jobs"""
+    
+    def __init__(self):
+        self.logger = frappe.logger("leadgen_metrics")
+    
+    def log_job_start(self, job_name: str, job_type: str, params: Dict[str, Any]):
+        """Log job start event"""
+        self.logger.info({
+            "event": "job_start",
+            "job_name": job_name,
+            "job_type": job_type,
+            "params": params,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    def log_job_progress(self, job_name: str, progress: float, records_processed: int):
+        """Log job progress event"""
+        self.logger.info({
+            "event": "job_progress",
+            "job_name": job_name,
+            "progress": progress,
+            "records_processed": records_processed,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    def log_job_complete(self, job_name: str, duration: float, records_processed: int):
+        """Log job completion event"""
+        self.logger.info({
+            "event": "job_complete",
+            "job_name": job_name,
+            "duration": duration,
+            "records_processed": records_processed,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    def log_job_error(self, job_name: str, error: str, context: Dict[str, Any] = None):
+        """Log job error event"""
+        self.logger.error({
+            "event": "job_error",
+            "job_name": job_name,
+            "error": error,
+            "context": context or {},
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    def get_dashboard_metrics(self) -> Dict[str, Any]:
+        """Get dashboard metrics"""
+        # Total prospects
+        total_prospects = frappe.db.count("Lead Prospect")
+        
+        # Prospects by tier
+        tier_counts = frappe.db.sql("""
+            SELECT tier, COUNT(*) as count
+            FROM `tabLead Prospect`
+            GROUP BY tier
+        """, as_dict=True)
+        
+        # Jobs status
+        job_status = frappe.db.sql("""
+            SELECT status, COUNT(*) as count
+            FROM `tabLeadGen Job`
+            WHERE creation >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY status
+        """, as_dict=True)
+        
+        return {
+            "total_prospects": total_prospects,
+            "tier_counts": {t["tier"]: t["count"] for t in tier_counts},
+            "job_status": {j["status"]: j["count"] for j in job_status}
+        }
+```
+
+### Admin CLI/API Patterns
+```python
+# crm/api/leadgen_admin.py
+import frappe
+from frappe import _
+
+@frappe.whitelist()
+def dry_run_collector(collector_type: str, params: dict, limit: int = 10):
+    """Dry run collector with limited results"""
+    if not frappe.has_role("System Manager"):
+        frappe.throw(_("Insufficient permissions"))
+    
+    # Create temporary job for dry run
+    job = frappe.get_doc({
+        "doctype": "LeadGen Job",
+        "job_type": collector_type,
+        "params": frappe.as_json(params),
+        "status": "Dry Run",
+        "owner": frappe.session.user
+    })
+    job.insert()
+    
+    try:
+        # Run collector with limit
+        params["limit"] = limit
+        params["dry_run"] = True
+        
+        if collector_type == "clinicaltrials":
+            from crm.leadgen.collectors.clinicaltrials_collector import collect_trials_dry_run
+            results = collect_trials_dry_run(params)
+        
+        job.status = "Completed"
+        job.log = f"Dry run completed: {len(results)} records"
+        job.save()
+        
+        return {
+            "status": "success",
+            "records": results,
+            "count": len(results)
+        }
+        
+    except Exception as e:
+        job.status = "Failed"
+        job.log = f"Dry run failed: {str(e)}"
+        job.save()
+        
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+@frappe.whitelist()
+def replay_job(job_name: str):
+    """Replay a failed job"""
+    if not frappe.has_role("System Manager"):
+        frappe.throw(_("Insufficient permissions"))
+    
+    job = frappe.get_doc("LeadGen Job", job_name)
+    
+    if job.status != "Failed":
+        frappe.throw(_("Can only replay failed jobs"))
+    
+    # Reset job status
+    job.status = "Queued"
+    job.started_at = None
+    job.ended_at = None
+    job.log = "Replayed by admin"
+    job.save()
+    
+    # Re-enqueue job
+    frappe.enqueue(
+        f"crm.leadgen.collectors.{job.job_type}_collector.run",
+        job_name=job.name,
+        params=frappe.parse_json(job.params),
+        queue="long"
+    )
+    
+    return {"status": "replayed", "job_name": job.name}
+```
+
+## Performance & Scale Patterns
+
+### Rate Limiting & Backoff
+```python
+# crm/leadgen/utils/rate_limiter.py
+import time
+import requests
+from typing import Dict, Any
+from functools import wraps
+
+class RateLimiter:
+    """Rate limiter for API calls"""
+    
+    def __init__(self, rate_limit: int, time_window: int = 60):
+        self.rate_limit = rate_limit
+        self.time_window = time_window
+        self.calls = []
+    
+    def wait_if_needed(self):
+        """Wait if rate limit would be exceeded"""
+        now = time.time()
+        
+        # Remove old calls outside time window
+        self.calls = [call_time for call_time in self.calls 
+                     if now - call_time < self.time_window]
+        
+        # If at rate limit, wait
+        if len(self.calls) >= self.rate_limit:
+            sleep_time = self.time_window - (now - self.calls[0])
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+        
+        # Record this call
+        self.calls.append(now)
+
+def rate_limited(rate_limit: int, time_window: int = 60):
+    """Decorator for rate limiting API calls"""
+    limiter = RateLimiter(rate_limit, time_window)
+    
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            limiter.wait_if_needed()
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# Usage in collectors
+@rate_limited(rate_limit=100, time_window=60)
+def make_clinicaltrials_request(url: str, params: Dict[str, Any]):
+    """Make rate-limited request to ClinicalTrials API"""
+    response = requests.get(url, params=params, timeout=30)
+    response.raise_for_status()
+    return response.json()
+```
+
+### Database Optimization Patterns
+```python
+# crm/leadgen/utils/db_optimization.py
+import frappe
+
+def create_leadgen_indexes():
+    """Create optimized indexes for lead generation tables"""
+    
+    # Lead Prospect indexes
+    indexes = [
+        {
+            "table": "tabLead Prospect",
+            "fields": ["pi_email"],
+            "unique": False
+        },
+        {
+            "table": "tabLead Prospect", 
+            "fields": ["institution"],
+            "unique": False
+        },
+        {
+            "table": "tabLead Prospect",
+            "fields": ["tier", "lead_score"],
+            "unique": False
+        },
+        {
+            "table": "tabLead Prospect",
+            "fields": ["source", "source_ref_id"],
+            "unique": False
+        },
+        {
+            "table": "tabLead Prospect",
+            "fields": ["outreach_status"],
+            "unique": False
+        },
+        {
+            "table": "tabLeadGen Job",
+            "fields": ["status", "job_type"],
+            "unique": False
+        },
+        {
+            "table": "tabLeadGen Job",
+            "fields": ["started_at"],
+            "unique": False
+        }
+    ]
+    
+    for index in indexes:
+        try:
+            frappe.db.sql(f"""
+                CREATE INDEX IF NOT EXISTS idx_{index['table'].replace('tab', '').replace(' ', '_').lower()}_{'_'.join(index['fields'])}
+                ON `{index['table']}` ({', '.join([f'`{field}`' for field in index['fields']])})
+            """)
+        except Exception as e:
+            frappe.log_error(f"Index creation failed: {str(e)}")
+```
+
+## Email Compliance Patterns
+
+### CAN-SPAM Compliance
+```python
+# crm/leadgen/outreach/compliance.py
+import frappe
+from typing import Dict, Any
+
+class EmailCompliance:
+    """Email compliance and deliverability management"""
+    
+    def __init__(self):
+        self.settings = frappe.get_doc("LeadGen Email Settings")
+    
+    def add_unsubscribe_link(self, email_body: str, prospect_email: str) -> str:
+        """Add unsubscribe link to email body"""
+        unsubscribe_url = f"{self.settings.unsubscribe_link}?email={prospect_email}"
+        
+        unsubscribe_html = f"""
+        <div style="margin-top: 20px; padding: 10px; border-top: 1px solid #ccc; font-size: 12px; color: #666;">
+            <p>You received this email because you are a Principal Investigator in oncology clinical trials.</p>
+            <p>If you no longer wish to receive these emails, you can <a href="{unsubscribe_url}">unsubscribe here</a>.</p>
+        </div>
+        """
+        
+        return email_body + unsubscribe_html
+    
+    def validate_email_content(self, subject: str, body: str) -> Dict[str, Any]:
+        """Validate email content for compliance"""
+        issues = []
+        
+        # Check subject line
+        if not subject or len(subject) > 78:
+            issues.append("Subject line too long or empty")
+        
+        # Check for spam keywords
+        spam_keywords = ["free", "urgent", "act now", "limited time", "guaranteed"]
+        if any(keyword in subject.lower() for keyword in spam_keywords):
+            issues.append("Subject contains potential spam keywords")
+        
+        # Check body length
+        if len(body) < 50:
+            issues.append("Email body too short")
+        
+        # Check for unsubscribe link
+        if "unsubscribe" not in body.lower():
+            issues.append("Missing unsubscribe link")
+        
+        return {
+            "valid": len(issues) == 0,
+            "issues": issues
+        }
+    
+    def check_deliverability(self, recipient_email: str) -> Dict[str, Any]:
+        """Check email deliverability"""
+        # Basic email validation
+        if not frappe.utils.validate_email_address(recipient_email):
+            return {"deliverable": False, "reason": "Invalid email format"}
+        
+        # Check domain reputation (simplified)
+        domain = recipient_email.split("@")[1]
+        
+        # Add domain reputation checks here
+        # For now, return basic validation
+        
+        return {
+            "deliverable": True,
+            "domain": domain,
+            "spam_score": 0.0
+        }
+```
+
+### Deliverability Testing
+```python
+# crm/leadgen/outreach/deliverability_test.py
+import frappe
+from typing import List, Dict, Any
+
+class DeliverabilityTester:
+    """Test email deliverability"""
+    
+    def __init__(self):
+        self.test_emails = [
+            "test1@mail-tester.com",
+            "test2@mail-tester.com",
+            "test3@mail-tester.com"
+        ]
+    
+    def run_deliverability_test(self, email_template: str) -> Dict[str, Any]:
+        """Run deliverability test"""
+        results = []
+        
+        for test_email in self.test_emails:
+            result = self._test_single_email(test_email, email_template)
+            results.append(result)
+        
+        return {
+            "overall_score": sum(r["score"] for r in results) / len(results),
+            "individual_results": results,
+            "recommendations": self._generate_recommendations(results)
+        }
+    
+    def _test_single_email(self, email: str, template: str) -> Dict[str, Any]:
+        """Test single email deliverability"""
+        # Simulate deliverability test
+        # In real implementation, use services like Mail-Tester, SendGrid, etc.
+        
+        return {
+            "email": email,
+            "score": 8.5,  # Out of 10
+            "spam_score": 2.1,
+            "issues": ["Missing SPF record"],
+            "recommendations": ["Add SPF record to DNS"]
+        }
+    
+    def _generate_recommendations(self, results: List[Dict[str, Any]]) -> List[str]:
+        """Generate recommendations based on test results"""
+        recommendations = []
+        
+        avg_score = sum(r["score"] for r in results) / len(results)
+        
+        if avg_score < 7:
+            recommendations.append("Email deliverability is poor. Review content and sender reputation.")
+        elif avg_score < 8:
+            recommendations.append("Email deliverability is acceptable but could be improved.")
+        else:
+            recommendations.append("Email deliverability is good.")
+        
+        return recommendations
+```

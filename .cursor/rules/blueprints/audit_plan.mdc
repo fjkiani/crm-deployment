@@ -1,0 +1,119 @@
+---
+alwaysApply: false
+description: Comprehensive audit and plan across Email, Human Inbox, Farfalle, Voice, LeadGen, RBAC, and Deployment
+---
+
+# 🔎 CRM Deployment – Integration Audit & Action Plan
+
+This rule inventories what is implemented, what’s missing, and what’s next across major areas: Email/Human Inbox, Farfalle intelligence, Voice (Vapi/Twilio), LeadGen, RBAC/Permissions, and Deployment. It links to concrete files to guide implementation.
+
+## 1) Email System & Human Inbox
+
+### Implemented
+- Human Inbox scoping per user
+  - [crm-deployment/crm/www/human_inbox.py](mdc:crm-deployment/crm/www/human_inbox.py): filters by current user (sender/recipients) and restricts by user-owned `Email Account` when available.
+- Email Account provisioning API
+  - [crm-deployment/crm/api/settings.py](mdc:crm-deployment/crm/api/settings.py): `create_email_account` with provider presets (Gmail/Outlook/etc.), incoming/outgoing, initial sync.
+- Communication auto-linking hook
+  - [crm-deployment/crm/hooks.py](mdc:crm-deployment/crm/hooks.py): `after_insert` → `crm.api.email.auto_link_communication`.
+  - [crm-deployment/crm/api/email.py](mdc:crm-deployment/crm/api/email.py): resolver to link by thread → Contact → Deal (optional) → Lead → Org domain.
+
+### Missing / Next
+- SPA “Connect Email” modal on `/crm/human_inbox` calling `crm.api.settings.create_email_account`.
+- OAuth option for Gmail/Outlook (optional next sprint); App Password works now.
+- Ensure “If Owner” perms on `Email Account` in Role Permission Manager.
+
+### Risks
+- Shared/global Email Account would bypass isolation; ensure ownership = creator and UI only lists user-owned senders.
+
+## 2) Farfalle Intelligence
+
+### Implemented
+- `/crm/ai` page calls Farfalle intel
+  - AiCopilot SPA page wired (local usage) to `POST /intel/enrich_lead` and saves summary to `FCRM Note`.
+- Farfalle backend intel endpoint
+  - `POST /intel/enrich_lead`: summarization + key insights.
+
+### Missing / Next
+- Production URL config + error handling, caching, retries, observability.
+- Intent router/streaming for long queries.
+
+### Risks
+- Provider timeouts/cost; add timeouts, retries, caching.
+
+## 3) Voice (Vapi/Twilio)
+
+### Implemented
+- Playbook/rules documented.
+
+### Missing / Next
+- CRM endpoints: `initiate_outbound_call()` and `vapi_webhook()` in `crm/integrations/twilio/api.py`.
+- Farfalle thin wrappers to call CRM endpoints.
+- SPA Voice Dashboard consumes CRM Call Logs.
+
+### Risks
+- PII in logs; ensure redaction and limited retention.
+
+## 4) LeadGen Pipeline
+
+### Implemented
+- DocTypes and collectors scaffolded; architecture plan in `leadGen.mdc` expanded.
+
+### Missing / Next
+- Reconcile leadgen job orchestration with existing `crm/api/etl.py` (single job framework).
+- Scoring, tiering, outreach sequences wired end-to-end.
+
+### Risks
+- API rate limits; add batching, backoff, caching.
+
+## 5) RBAC & Permissions
+
+### Implemented
+- Owner scoping on `CRM Lead` list for non-managers
+  - [crm-deployment/crm/api/doc.py](mdc:crm-deployment/crm/api/doc.py): default `owner = session user`.
+- Human Inbox isolation (see §1).
+
+### Missing / Next
+- Confirm Role Permission Manager settings (If Owner) for `CRM Lead`, `Lead Prospect`, `Email Account`, and Communications list views.
+
+## 6) Deployment
+
+### Implemented
+- Repo structured for Frappe Cloud (root packaging files, app under `crm/`).
+- History scrubbed for secrets.
+
+### Missing / Next
+- Add gitleaks pre-commit and CI; rotate any previously exposed keys; update env on Cloud.
+- Farfalle deployment/staging URL and config.
+
+## 7) 7‑Day Action Plan
+
+Day 1–2
+- Add “Connect Email” modal to Human Inbox SPA → call `crm.api.settings.create_email_account` (Gmail App Password first).
+- Enforce If Owner on `Email Account`; verify UI lists only user-owned senders.
+
+Day 3–4
+- Farfalle: add retries, timeouts, basic caching; configurable base URL in SPA/Server.
+- Intent router/stream placeholder (server logs + progressive rendering on SPA).
+
+Day 5–6
+- Voice: implement `initiate_outbound_call`, `vapi_webhook`; create minimal Call Log on inbound webhooks; SPA status feed.
+
+Day 7
+- LeadGen: unify job orchestration with `crm/api/etl.py`; wire scoring/tiering to promotion.
+
+## 8) Acceptance Criteria
+- Human Inbox: per-user isolation verified (User B does not see User A mail).
+- Email onboarding: self-serve modal creates user-owned Email Account; outbound uses that account.
+- Farfalle: `/crm/ai` stable against timeouts; saves notes; basic caching in place.
+- Voice: sandbox call results in CRM Call Log + Note; SPA shows status.
+- LeadGen: one end-to-end run from collect → score → promote → sequence draft.
+
+## 9) References
+- Human Inbox server: [crm-deployment/crm/www/human_inbox.py](mdc:crm-deployment/crm/www/human_inbox.py)
+- Email Account API: [crm-deployment/crm/api/settings.py](mdc:crm-deployment/crm/api/settings.py)
+- Email resolver: [crm-deployment/crm/api/email.py](mdc:crm-deployment/crm/api/email.py)
+- Hooks: [crm-deployment/crm/hooks.py](mdc:crm-deployment/crm/hooks.py)
+- Lead list scoping: [crm-deployment/crm/api/doc.py](mdc:crm-deployment/crm/api/doc.py)
+- LeadGen architecture: [leadGen.mdc](mdc:leadGen.mdc)
+

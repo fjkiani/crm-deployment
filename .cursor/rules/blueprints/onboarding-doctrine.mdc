@@ -1,0 +1,98 @@
+---
+alwaysApply: false
+description: Customer onboarding doctrine and runbook for setting up sites, email, data import, telephony, observability, and go-live on Frappe Cloud.
+---
+
+# Customer Onboarding Doctrine & Runbook (Frappe Cloud)
+
+## Objective
+Stand up a production-ready, agentic CRM for a new customer in hours with a repeatable, low-risk process.
+
+## Environments
+- Bench (shared per region) → Sites (one per customer) → Apps (`crm` from `fjkiani/crm-deployment`).
+- Data and secrets are site-scoped.
+
+## 1) Bench & App
+1. Frappe Cloud → Bench (target) → Apps → Add App:
+   - Repo: `fjkiani/crm-deployment`  • Branch: `main`  • Pull/Update
+2. Confirm app structure per doctrine: packaging at repo root, app under `crm/`.
+   - [pyproject.toml](mdc:pyproject.toml), [setup.py](mdc:setup.py), [MANIFEST.in](mdc:MANIFEST.in)
+
+## 2) Site Provisioning
+1. Create Site → Select Bench → Install Apps → choose `crm` → Continue.
+2. After provision: Site → Actions → Migrate → Clear Cache → Restart.
+3. Domains & SSL: attach custom domain if required.
+
+## 3) Baseline Configuration (10–15 min)
+- Masters (minimum viable):
+  - CRM Lead Status: Open, Qualified, Won, Lost.
+  - CRM Lead Source: Research, Inbound, Referral, Event.
+- Branding: logo/letterhead; timezone; currency.
+- Roles: System Manager, Sales, Support. Disable public signups.
+
+## 4) Email (two paths)
+### Fast Path (works today)
+- Site → Email Account → IMAP/SMTP (app password) • "Always use Account’s Email Address as Sender" → Save • Send/Receive test.
+
+### Scalable Path (Gmail OAuth)
+- Tenant-wide client: Integrations → Google OAuth (client id/secret).
+- Per-user connect: OAuth consent → choose backfill window.
+- Polling now; Pub/Sub later per Gmail doctrine.
+
+## 5) Data Import
+### Built-in Data Import (per DocType)
+1. Desk → Data Import → Import from Google Sheets/CSV.
+2. Fix link fields by ensuring master values exist (e.g., Status, Source).
+3. Validate → Import. Use the blank template to discover fields/links.
+
+### Our ETL (multi-entity, reusable)
+- Mapping Profile:
+  - DocType: `CRM Import Column Map` → Actions → Auto‑generate Mapping (CSV/Sheets) → Save.
+  - UI button is wired by [crm_import_column_map.js](mdc:crm/crm/fcrm/doctype/crm_import_column_map/crm_import_column_map.js).
+- Import Job (API):
+  - POST `/api/method/crm.api.etl.import_rows` with payload {title, source_type (CSV|GOOGLE_SHEETS), file_url|sheet_id, mapping_profile, dedupe:true, link_organization:true}.
+  - Monitor `CRM Import Job` for Status/Counts; failures attach error CSV.
+- Code refs: [etl.py](mdc:crm/crm/api/etl.py), [CRM Import Job](mdc:crm/crm/fcrm/doctype/crm_import_job/crm_import_job.json), [CRM Import Column Map](mdc:crm/crm/fcrm/doctype/crm_import_column_map/crm_import_column_map.json).
+- Behavior: dedupe (Lead by email/phone; Org by website/name); normalizes Status/Source to Title Case; optional per-column transforms.
+
+## 6) Telephony & WhatsApp (optional)
+- Twilio: Integrations → Twilio • SID/Token • click‑to‑call + call logs ([twilio/api.py](mdc:crm/crm/integrations/twilio/api.py)).
+- Exotel: handset flow via agent mobile.
+- WhatsApp: add `frappe_whatsapp` on bench; configure provider; test in/outbound.
+
+## 7) SPA & Navigation
+- Primary UI: `/crm` SPA.
+- Optional: add SPA link to Desk Data Import for non-technical users.
+
+## 8) Observability, Backup, Safety
+- Enable daily backups (DB + files). Verify restore.
+- Monitor Error Log & Background Jobs; alerts on job failures.
+- Private file storage for error CSVs; PII handling per policy.
+
+## 9) Bootstrap Template (Repeatability)
+- Keep a clean staging site with:
+  - Masters preseeded (statuses/sources), default views, sample mapping.
+  - Fixtures for masters & views to reuse across customers.
+- Optionally add a `site_bootstrap.py` to seed masters + run ETL dry‑run on new sites.
+
+## 10) Timeline & Roles
+- T0: Site + app install; baseline masters; branding (SM).
+- T0+0.5d: Email fast path; import test; first automations (SM/Owner).
+- T0+1–2d: OAuth rollout, ETL schedule, telephony/WhatsApp (optional) (Admin).
+
+## 11) Acceptance Criteria
+- Email send/receive working; inbox visible.
+- Leads imported; dedupe effective; orgs linked.
+- At least one automation (follow‑up draft) verified.
+- Backups scheduled; alerts configured.
+
+## 12) Cutover & Rollback
+- Cutover: freeze legacy; final delta import; user training; flip DNS.
+- Rollback: restore backup; disable connectors; communicate plan.
+
+## Appendix: Links & Artifacts
+- ETL API: [crm/api/etl.py](mdc:crm/crm/api/etl.py)
+- Import DocTypes: [CRM Import Job](mdc:crm/crm/fcrm/doctype/crm_import_job/crm_import_job.json), [CRM Import Column Map](mdc:crm/crm/fcrm/doctype/crm_import_column_map/crm_import_column_map.json)
+- Telephony: [Twilio API](mdc:crm/crm/integrations/twilio/api.py)
+- Deployment Doctrine: [deployment-doctrine.mdc](mdc:crm-deployment/.cursor/rules/deployment-doctrine.mdc)
+

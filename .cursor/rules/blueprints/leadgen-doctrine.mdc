@@ -1,0 +1,88 @@
+---
+alwaysApply: true
+description: Lead Generation System Doctrine - Core principles and architecture for clinical trial lead generation
+---
+
+# 🎯 Lead Generation System Doctrine
+> [!IMPORTANT]
+> **STATUS: BLUEPRINT / FUTURE STATE**
+> Describes the doctrine for the future LeadGen module.
+
+## Core Mission
+Build a comprehensive lead generation system targeting oncology clinical trial Principal Investigators (PIs) for genomic stratification partnerships. System must integrate with existing CRM infrastructure while maintaining data quality and compliance.
+
+## Strategic Context
+- **Target Market**: Phase 3 oncology trials with 60% failure rate, $2.6B average drug cost
+- **Value Proposition**: Genomic patient stratification to improve trial success rates
+- **Timing Constraint**: Launch only after Nature Biotechnology publication submission (Q1 2026)
+- **Revenue Target**: $500K-$1.75M from 2-7 paid pilots @ $250K each
+
+## Architecture Principles
+
+### 1. Data-First Approach
+- **Primary Sources**: ClinicalTrials.gov API, NIH RePORTER, ASCO Abstracts
+- **Data Quality**: Deduplication, scoring, tiering (Tier 1: highest priority)
+- **Staging**: Use `Lead Prospect` DocType before promoting to core CRM entities
+
+### 2. CRM Integration Strategy
+- **Existing Infrastructure**: Leverage [crm/api/etl.py](mdc:crm/api/etl.py) for data import
+- **New DocTypes**: `LeadGen Job`, `Lead Prospect`, `Lead Prospect Match`, `Outreach Sequence`
+- **Permissions**: Row-level access control for sales users vs managers
+
+### 3. Email Automation
+- **Templates**: Personalized by tier (Tier 1: highest personalization)
+- **Sequences**: Day 0, 3, 7, 14 follow-up automation
+- **Compliance**: CAN-SPAM compliance, unsubscribe links, professional email service
+
+### 4. Intelligence Integration
+- **Farfalle Integration**: Use existing [scripts/farfalle-main/](mdc:scripts/farfalle-main/) for lead enrichment
+- **AI Actions**: Leverage [crm/api/agent.py](mdc:crm/api/agent.py) for email drafting
+- **Voice Integration**: Integrate with [crm/integrations/twilio/](mdc:crm/integrations/twilio/) for follow-up calls
+
+## Implementation Phases
+
+### Phase 1: Data Acquisition (Weeks 1-2)
+- Build ClinicalTrials.gov scraper
+- Build NIH RePORTER scraper  
+- Build ASCO Abstracts scraper
+- Target: 500+ trials, 200+ grants, 100+ abstracts
+
+### Phase 2: Data Enrichment (Weeks 3-4)
+- Consolidate and deduplicate leads
+- Implement scoring algorithm
+- Generate personalized talking points
+- Target: 500+ deduplicated leads, 100+ Tier 1 leads
+
+### Phase 3: Email Automation (Weeks 5-6)
+- Create email templates for all tiers
+- Build sending infrastructure
+- Generate PDF attachments
+- Test deliverability and compliance
+
+### Phase 4: Follow-Up & Tracking (Weeks 7-8)
+- Build dashboard for metrics
+- Implement automated follow-up sequences
+- Set up reply categorization
+- Target: Real-time dashboard, automated sequences
+
+### Phase 5: Launch (Q1 2026)
+- Send Tier 1 emails (100 PIs)
+- Target: 10-15% response rate, 10+ discovery calls
+
+## Success Metrics
+- **Tier 1 Response Rate**: 10-15%
+- **Discovery Calls**: 20-30 total
+- **Paid Pilots**: 2-7 contracts
+- **Pipeline Value**: $500K-$1.75M
+
+## Risk Mitigation
+- **Low Response Rate**: A/B test templates, offer free retrospective analysis
+- **Email Deliverability**: Use professional service, warm up account, monitor spam score
+- **Legal/Compliance**: Include unsubscribe links, avoid overpromising, use RUO disclaimers
+
+## Key Files to Reference
+- [leadGen.mdc](mdc:leadGen.mdc) - Complete implementation plan
+- [crm/api/etl.py](mdc:crm/api/etl.py) - Existing ETL infrastructure
+- [crm/api/email.py](mdc:crm/api/email.py) - Email sending capabilities
+- [crm/api/agent.py](mdc:crm/api/agent.py) - AI agent integration
+- [scripts/farfalle-main/](mdc:scripts/farfalle-main/) - Intelligence system

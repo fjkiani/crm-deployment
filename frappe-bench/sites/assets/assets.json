@@ -24,12 +24,12 @@
     "build_events.bundle.js": "/assets/frappe/dist/js/build_events.bundle.4YUBLH2P.js",
     "file_uploader.bundle.js": "/assets/frappe/dist/js/file_uploader.bundle.C27EYHVC.js",
     "kanban_board.bundle.js": "/assets/frappe/dist/js/kanban_board.bundle.L56XYUZN.js",
-    "desk.bundle.css": "/assets/frappe/dist/css/desk.bundle.H6ZJ5JBN.css",
-    "email.bundle.css": "/assets/frappe/dist/css/email.bundle.KYJO3QOA.css",
-    "login.bundle.css": "/assets/frappe/dist/css/login.bundle.R6LVF7WI.css",
-    "print.bundle.css": "/assets/frappe/dist/css/print.bundle.Z27L2BOR.css",
-    "print_format.bundle.css": "/assets/frappe/dist/css/print_format.bundle.DDOMJWXJ.css",
-    "report.bundle.css": "/assets/frappe/dist/css/report.bundle.FMZSPXTJ.css",
-    "web_form.bundle.css": "/assets/frappe/dist/css/web_form.bundle.Y3EEENGY.css",
-    "website.bundle.css": "/assets/frappe/dist/css/website.bundle.XHXEIUGD.css"
+    "desk.bundle.css": "/assets/frappe/dist/css/desk.bundle.TGCHPMUL.css",
+    "email.bundle.css": "/assets/frappe/dist/css/email.bundle.BDLPHRY4.css",
+    "login.bundle.css": "/assets/frappe/dist/css/login.bundle.SOQHXFIP.css",
+    "print.bundle.css": "/assets/frappe/dist/css/print.bundle.SJZ3AQ3Z.css",
+    "print_format.bundle.css": "/assets/frappe/dist/css/print_format.bundle.SNJL4D6C.css",
+    "report.bundle.css": "/assets/frappe/dist/css/report.bundle.F2KJR7R7.css",
+    "web_form.bundle.css": "/assets/frappe/dist/css/web_form.bundle.K6X6JRLD.css",
+    "website.bundle.css": "/assets/frappe/dist/css/website.bundle.LYN2GLJV.css"
 }

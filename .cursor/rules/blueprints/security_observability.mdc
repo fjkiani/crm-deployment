@@ -1,0 +1,27 @@
+---
+alwaysApply: false
+description: Security, RBAC, auditing, and observability standards for Copilot + CRM
+---
+# Security & Observability
+
+## RBAC
+- Enforce role checks per tool (e.g., Deals update requires Deal Editor)
+- Validate DocType permissions via CRM before write ops
+
+## Auth
+- Service account session renewal; secure storage of credentials
+- CSRF token management; include X-Frappe-CSRF-Token in POSTs
+
+## Auditing
+- Tool call audit: { time, user, tool, args_hash, outcome }
+- CRM side: Comments/Audit Trail on modified docs
+
+## Rate Limits & Quotas
+- Per-user and per-tool limits; exponential backoff on 429
+
+## Logs & Metrics
+- CRM: log_error with structured messages; job logs for ETL
+- Farfalle: p50/p95 latency per tool, success/error rates, cost
+
+## Privacy
+- Mask PII in logs; encrypt tokens; minimize data retention (CSV bodies)

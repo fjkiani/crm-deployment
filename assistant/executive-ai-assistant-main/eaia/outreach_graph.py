@@ -14,6 +14,7 @@ import asyncio
 import logging
 import requests
 from typing import TypedDict, Optional, List, Dict, Any, AsyncGenerator
+from langchain_core.runnables.config import RunnableConfig
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ class OutreachState(TypedDict, total=False):
     review_feedback: str
     attempt: int
     error: str
+    crm_synced: bool
+    crm_prospect_id: str
 
 
 # ── SHARED COHERE CALLER ────────────────────────────────────────────────────
@@ -108,11 +111,14 @@ def _apollo_match(name: str, org: str) -> Optional[Dict]:
     return None
 
 
-def research_node(state: OutreachState) -> OutreachState:
+async def research_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
     """Node 1: Research prospect via Tavily + Apollo."""
+    cb = config.get("configurable", {}).get("callback")
     name = state["prospect_name"]
     company = state["company_name"]
     logger.info(f"🔍 RESEARCH: {name} @ {company}")
+
+    if cb: await cb("research", "thought", {"message": f"Searching Tavily + Apollo for {name} at {company}..."})
 
     # Tavily — company intelligence
     tavily_results = _tavily_search(f"{company} {name} investment strategy AUM portfolio")
@@ -155,9 +161,11 @@ Rules:
 - blind_spot must connect to biological drug response signals predicting clinical trials, stock moves, sector rotation."""
 
 
-def distill_node(state: OutreachState) -> OutreachState:
+async def distill_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
     """Node 2: Distill raw research into structured signals."""
+    cb = config.get("configurable", {}).get("callback")
     logger.info("🔬 DISTILL: Extracting signals")
+    if cb: await cb("distill", "thought", {"message": "Citation combiner extracting 5 structured signals..."})
     prompt = DISTILL_PROMPT.format(raw_intel=state["raw_research"][:4000])
     try:
         signals = _cohere_json(prompt)
@@ -201,9 +209,11 @@ Score 0-100:
 Return JSON: {{"score": int, "reasoning": "...", "angle": "..."}}"""
 
 
-def score_node(state: OutreachState) -> OutreachState:
+async def score_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
     """Node 3: Score the lead and auto-select framework."""
+    cb = config.get("configurable", {}).get("callback")
     logger.info("📊 SCORE: Kill scoring")
+    if cb: await cb("score", "thought", {"message": "Calculating Kill Score 0-100 and determining framework..."})
     signals = state.get("distilled_signals", {})
     try:
         prompt = SCORE_PROMPT.format(
@@ -246,10 +256,12 @@ def score_node(state: OutreachState) -> OutreachState:
 from eaia.skills.challenger_email_writer import FRAMEWORKS, _two_pass_generate, _generate_ab_subjects
 
 
-def write_node(state: OutreachState) -> OutreachState:
+async def write_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
     """Node 4: Two-pass email generation (Think → Write)."""
+    cb = config.get("configurable", {}).get("callback")
     fw = state.get("framework", "challenger")
     logger.info(f"✍️ WRITE: {fw.upper()} framework, attempt {state.get('attempt', 1)}")
+    if cb: await cb("write", "thought", {"message": f"Writing {fw.upper()} email (attempt {state.get('attempt',1)})... Pass 1: Think. Pass 2: Write."})
 
     cohere_key = os.getenv("COHERE_API_KEY")
     if not cohere_key:
@@ -297,9 +309,11 @@ BANNED_WORDS = [
 BANNED_OPENERS = ["i hope this", "my name is", "i'm reaching out", "i wanted to"]
 
 
-def review_node(state: OutreachState) -> OutreachState:
+async def review_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
     """Node 5: Deterministic quality gate — no LLM needed."""
+    cb = config.get("configurable", {}).get("callback")
     logger.info("🔍 REVIEW: Quality gate check")
+    if cb: await cb("review", "thought", {"message": "Quality gate checking word count, banned words, and CTA..."})
     email_data = state.get("email_draft", {})
     email = email_data.get("email", {})
     fw = state.get("framework", "challenger")
@@ -348,15 +362,67 @@ def review_node(state: OutreachState) -> OutreachState:
 # CONDITIONAL EDGE: Review → Write (loop) or END
 # ═══════════════════════════════════════════════════════════════════════════
 def should_retry(state: OutreachState) -> str:
-    """If review failed and attempts < 2, loop back to write. Otherwise end."""
+    """If review failed and attempts < 2, loop back to write. Otherwise sync to CRM."""
     if state.get("review_result") == "pass":
-        return "end"
+        return "sync"
     attempt = state.get("attempt", 1)
     if attempt >= 2:
-        logger.warning("⚠️ Max retries reached. Returning best effort.")
-        return "end"
+        logger.warning("⚠️ Max retries reached. Syncing best effort.")
+        return "sync"
     state["attempt"] = attempt + 1
     return "retry"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NODE 6: SYNC TO CRM (Write-back via Frappe API)
+# ═══════════════════════════════════════════════════════════════════════════
+from eaia.agents.zo import CRMClient
+
+async def sync_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
+    """Node 6: Sync pipeline results to CRM Lead Prospect."""
+    cb = config.get("configurable", {}).get("callback")
+    logger.info("💾 SYNC: Writing to CRM")
+    if cb: await cb("sync", "thought", {"message": "Syncing prospect + score + email to CRM..."})
+
+    try:
+        client = CRMClient()
+        apollo = state.get("apollo_data", {})
+        signals = state.get("distilled_signals", {})
+        email_draft = state.get("email_draft", {})
+        email = email_draft.get("email", {})
+
+        prospect_data = {
+            "pi_name": state["prospect_name"],
+            "pi_email": apollo.get("email") or "",
+            "institution": state["company_name"],
+            "source": "Nyx Pipeline",
+            "lead_score": state.get("score", 0),
+            "tier": "Tier 1" if state.get("score", 0) > 75 else "Tier 2" if state.get("score", 0) > 40 else "Tier 3",
+            "notes": json.dumps({
+                "framework": state.get("framework"),
+                "score_reasoning": state.get("score_reasoning", "")[:500],
+                "signals": signals,
+                "email_subject": email.get("subject", ""),
+                "email_body": email.get("body", ""),
+                "apollo_title": apollo.get("title", ""),
+                "apollo_linkedin": apollo.get("linkedin_url", ""),
+                "review_result": state.get("review_result"),
+                "ab_subjects": state.get("ab_subjects", []),
+            }, indent=2)
+        }
+
+        prospect_id = client.upsert_prospect(prospect_data)
+        state["crm_synced"] = bool(prospect_id)
+        state["crm_prospect_id"] = prospect_id or ""
+        logger.info(f"💾 SYNC: {'✅ Saved' if prospect_id else '❌ Failed'} — {prospect_id}")
+
+    except Exception as e:
+        logger.error(f"💾 SYNC ERROR: {e}")
+        state["crm_synced"] = False
+        state["crm_prospect_id"] = ""
+        state["error"] = str(e)
+
+    return state
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -373,17 +439,19 @@ try:
         graph.add_node("score", score_node)
         graph.add_node("write", write_node)
         graph.add_node("review", review_node)
+        graph.add_node("sync", sync_node)
 
         graph.set_entry_point("research")
         graph.add_edge("research", "distill")
         graph.add_edge("distill", "score")
         graph.add_edge("score", "write")
         graph.add_edge("write", "review")
+        graph.add_edge("sync", END)
 
         graph.add_conditional_edges(
             "review",
             should_retry,
-            {"retry": "write", "end": END}
+            {"retry": "write", "sync": "sync"}
         )
 
         return graph.compile()
@@ -430,7 +498,9 @@ async def run_pipeline(
         "review_result": "",
         "review_feedback": "",
         "attempt": 1,
-        "error": ""
+        "error": "",
+        "crm_synced": False,
+        "crm_prospect_id": ""
     }
 
     if PIPELINE:
@@ -440,7 +510,8 @@ async def run_pipeline(
 
         # Run through graph — langgraph handles the edges
         final_state = None
-        async for event in PIPELINE.astream(initial_state):
+        config = {"configurable": {"callback": callback}}
+        async for event in PIPELINE.astream(initial_state, config):
             for node_name, node_state in event.items():
                 if callback:
                     # Build progress payload
@@ -474,12 +545,14 @@ async def run_pipeline(
             ("score", score_node),
             ("write", write_node),
             ("review", review_node),
+            ("sync", sync_node),
         ]
+        config = {"configurable": {"callback": callback}}
         state = initial_state
         for node_name, node_fn in nodes:
             if callback:
                 await callback(node_name, "running", {})
-            state = node_fn(state)
+            state = await node_fn(state, config)
             if callback:
                 await callback(node_name, "done", {"state": "complete"})
 
@@ -488,10 +561,10 @@ async def run_pipeline(
                 state["attempt"] = state.get("attempt", 1) + 1
                 if callback:
                     await callback("write", "running", {"retry": True})
-                state = write_node(state)
+                state = await write_node(state, config)
                 if callback:
                     await callback("write", "done", {"retry": True})
-                state = review_node(state)
+                state = await review_node(state, config)
                 if callback:
                     await callback("review", "done", {"retry": True})
 

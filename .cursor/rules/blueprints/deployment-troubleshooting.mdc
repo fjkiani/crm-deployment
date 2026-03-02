@@ -1,0 +1,39 @@
+---
+alwaysApply: false
+description: Troubleshooting guide for deploying the crm app on Frappe Cloud
+---
+
+# Deployment Troubleshooting (crm-deployment)
+
+## Error: Not a valid Frappe App! setup.py/pyproject.toml missing
+Cause: Packaging files not at repo root.
+Fix:
+- Ensure repo root contains `setup.py` and/or `pyproject.toml`.
+- Ensure the app code is under `crm/` with `__init__.py`.
+- Remove vendored `frappe/` from the repo.
+
+## Error: pip install -e ... FileNotFoundError: requirements.txt
+Cause: `setup.py` tries to open `requirements.txt` but file missing during build.
+Fixes we applied:
+- Added root `requirements.txt`.
+- Made `setup.py` resilient to missing `requirements.txt` (fallback to empty deps).
+
+## Error: Database table missing (local dev)
+Symptom: `ProgrammingError: (1146, "Table '...tabdefaultvalue' doesn't exist")`
+Cause: Site not fully installed/migrated.
+Fix:
+- Run `bench --site your.site migrate`.
+- Or recreate site and reinstall app: `bench drop-site`, `bench new-site`, `bench --site your.site install-app crm`.
+
+## Bench start: No process manager found (local dev)
+Cause: Honcho/foreman not installed in bench env.
+Fix:
+- `source env/bin/activate && pip install honcho` then `bench start`.
+
+## Verify app installable locally
+- In a fresh bench:
+  - `bench get-app crm /path/to/crm-deployment`
+  - `bench new-site test.local`
+  - `bench --site test.local install-app crm`
+
+If these pass, the repo structure is valid for Frappe Cloud.

@@ -1,0 +1,894 @@
+---
+globs: crm/api/email.py,crm/api/etl.py,crm/integrations/twilio/*.py
+description: CRM Integration Patterns - How to integrate lead generation with existing CRM infrastructure
+---
+
+# 🔗 CRM Integration Patterns
+> [!IMPORTANT]
+> **STATUS: BLUEPRINT / FUTURE STATE**
+> Describes integration patterns for the future LeadGen module.
+
+## Unified Job Orchestration
+
+### Single Job System Integration
+Reference: [crm/api/etl.py](mdc:crm/api/etl.py)
+
+**CRITICAL**: Use existing Frappe queue system instead of creating parallel job infrastructure.
+
+**Unified Job Pattern:**
+```python
+# crm/api/leadgen.py - Unified with existing ETL job system
+@frappe.whitelist()
+def run_leadgen_job(job_type: str, params: dict):
+    """Run lead generation job using unified job system"""
+    # Create LeadGen Job DocType (extends CRM Import Job pattern)
+    job = frappe.get_doc({
+        "doctype": "LeadGen Job",
+        "job_type": job_type,  # "clinicaltrials", "nih", "asco", "consolidate"
+        "params": frappe.as_json(params),
+        "status": "Queued",
+        "owner": frappe.session.user
+    })
+    job.insert()
+    
+    # Use existing Frappe enqueue system
+    frappe.enqueue(
+        f"crm.leadgen.collectors.{job_type}_collector.run",
+        job_name=job.name,
+        params=params,
+        queue="long",  # Use existing queue system
+        timeout=3600
+    )
+    
+    return {"job_name": job.name, "status": "Queued"}
+
+# crm/leadgen/collectors/clinicaltrials_collector.py
+def run(job_name: str, params: dict):
+    """Run ClinicalTrials collector using unified job system"""
+    job = frappe.get_doc("LeadGen Job", job_name)
+    
+    try:
+        # Update job status using existing pattern
+        job.status = "Running"
+        job.started_at = frappe.utils.now()
+        job.save()
+        
+        # Collect data with bookmark pagination
+        trials = collect_trials_with_bookmark(params, job.bookmark)
+        
+        # Process and save prospects
+        prospects = process_trials(trials)
+        save_prospects(prospects)
+        
+        # Update bookmark for resumability
+        job.bookmark = get_next_bookmark(trials)
+        
+        # Complete job
+        job.status = "Completed"
+        job.ended_at = frappe.utils.now()
+        job.log = f"Collected {len(trials)} trials, created {len(prospects)} prospects"
+        job.save()
+        
+    except Exception as e:
+        # Error handling using existing pattern
+        job.status = "Failed"
+        job.log = f"Error: {str(e)}"
+        job.save()
+        frappe.log_error(f"LeadGen Job {job_name} failed: {str(e)}")
+
+def collect_trials_with_bookmark(params: dict, bookmark: str = None):
+    """Collect trials with bookmark pagination for resumability"""
+    trials = []
+    page = 1
+    
+    if bookmark:
+        # Resume from bookmark
+        page = int(bookmark) if bookmark.isdigit() else 1
+    
+    while True:
+        try:
+            page_trials = fetch_page(page, params)
+            if not page_trials:
+                break
+                
+            trials.extend(page_trials)
+            
+            # Rate limiting
+            time.sleep(60 / params.get("rate_limit", 100))
+            page += 1
+            
+        except Exception as e:
+            frappe.log_error(f"Error fetching page {page}: {str(e)}")
+            break
+    
+    return trials
+```
+
+### Job Scheduling Integration
+```python
+# crm/hooks.py - Add to scheduler_events
+scheduler_events = {
+    "daily": [
+        "crm.leadgen.scheduler.run_daily_collectors",
+        "crm.leadgen.scheduler.run_consolidation",
+        "crm.leadgen.scheduler.send_follow_ups"
+    ],
+    "weekly": [
+        "crm.leadgen.scheduler.run_weekly_cleanup",
+        "crm.leadgen.scheduler.generate_weekly_report"
+    ]
+}
+
+# crm/leadgen/scheduler.py
+def run_daily_collectors():
+    """Run daily data collection jobs"""
+    # Check if jobs already running
+    running_jobs = frappe.get_all("LeadGen Job", 
+        filters={"status": "Running"}, 
+        fields=["name", "job_type"]
+    )
+    
+    if running_jobs:
+        frappe.log_error("Previous jobs still running, skipping daily collection")
+        return
+    
+    # Run collectors
+    collectors = ["clinicaltrials", "nih", "asco"]
+    for collector in collectors:
+        frappe.enqueue(
+            f"crm.api.leadgen.run_leadgen_job",
+            job_type=collector,
+            params=get_default_params(collector),
+            queue="long"
+        )
+
+def run_consolidation():
+    """Run daily consolidation job"""
+    frappe.enqueue(
+        "crm.api.leadgen.run_leadgen_job",
+        job_type="consolidate",
+        params={},
+        queue="long"
+    )
+
+def send_follow_ups():
+    """Send scheduled follow-up emails"""
+    frappe.enqueue(
+        "crm.leadgen.outreach.follow_up_scheduler.send_scheduled_follow_ups",
+        queue="short"
+    )
+```
+
+### Email System Integration
+Reference: [crm/api/email.py](mdc:crm/api/email.py)
+
+The existing email system provides:
+- Draft creation and management
+- Sending infrastructure with provider support
+- Thread context and linking
+- Inbox management
+
+**Integration Pattern:**
+```python
+# Extend email system for lead generation outreach
+def send_lead_outreach_email(prospect, template_type="tier1"):
+    """Send outreach email using existing email infrastructure"""
+    # Get template
+    template = get_email_template(prospect, template_type)
+    
+    # Create draft
+    draft = frappe.get_doc({
+        "doctype": "Communication",
+        "communication_type": "Communication",
+        "communication_medium": "Email",
+        "sent_or_received": "Sent",
+        "subject": template["subject"],
+        "content": template["body"],
+        "recipients": prospect.pi_email,
+        "reference_doctype": "Lead Prospect",
+        "reference_name": prospect.name
+    })
+    draft.insert()
+    
+    # Send using existing infrastructure
+    frappe.enqueue(
+        "crm.api.email.send",
+        communication_name=draft.name,
+        queue="short"
+    )
+```
+
+### Agent System Integration
+Reference: [crm/api/agent.py](mdc:crm/api/agent.py)
+
+The existing agent system provides:
+- Command routing and execution
+- AI-powered email drafting
+- Context-aware responses
+
+**Integration Pattern:**
+```python
+# Extend agent system for lead generation
+def draft_lead_outreach_email(prospect):
+    """Draft outreach email using AI agent"""
+    context = {
+        "prospect": prospect,
+        "trial_info": get_trial_context(prospect),
+        "personalization": get_personalization_data(prospect)
+    }
+    
+    # Use existing agent infrastructure
+    result = frappe.call(
+        "crm.api.agent.run",
+        command="email.draft",
+        context=context,
+        template_type="lead_outreach"
+    )
+    
+    return result
+```
+
+## New DocType Integration Patterns
+
+### LeadGen Job Integration
+```python
+# crm/fcrm/doctype/leadgen_job/leadgen_job.py
+import frappe
+from frappe.model.document import Document
+
+class LeadGenJob(Document):
+    def on_update(self):
+        """Update job status and trigger notifications"""
+        if self.status == "Completed":
+            self.notify_completion()
+        elif self.status == "Failed":
+            self.notify_failure()
+    
+    def notify_completion(self):
+        """Notify users of job completion"""
+        frappe.publish_realtime(
+            "leadgen_job_completed",
+            {
+                "job_name": self.name,
+                "job_type": self.job_type,
+                "message": self.log
+            }
+        )
+    
+    def notify_failure(self):
+        """Notify users of job failure"""
+        frappe.publish_realtime(
+            "leadgen_job_failed",
+            {
+                "job_name": self.name,
+                "job_type": self.job_type,
+                "error": self.log
+            }
+        )
+```
+
+### Lead Prospect Integration
+```python
+# crm/fcrm/doctype/lead_prospect/lead_prospect.py
+import frappe
+from frappe.model.document import Document
+
+class LeadProspect(Document):
+    def on_update(self):
+        """Handle prospect updates"""
+        if self.has_value_changed("tier") and self.tier == "Tier 1":
+            self.trigger_tier1_workflow()
+    
+    def trigger_tier1_workflow(self):
+        """Trigger Tier 1 workflow"""
+        # Create CRM Lead
+        lead = frappe.get_doc({
+            "doctype": "CRM Lead",
+            "lead_name": self.pi_name,
+            "email_id": self.pi_email,
+            "mobile_no": self.phone,
+            "company": self.institution,
+            "source": "Lead Generation",
+            "custom_lead_score": self.lead_score,
+            "custom_tier": self.tier,
+            "custom_prospect_ref": self.name
+        })
+        lead.insert()
+        
+        # Create FCRM Note with evidence
+        note = frappe.get_doc({
+            "doctype": "FCRM Note",
+            "reference_doctype": "CRM Lead",
+            "reference_name": lead.name,
+            "note": f"Promoted from Lead Prospect: {self.source_ref_id}",
+            "note_type": "Evidence"
+        })
+        note.insert()
+        
+        # Link prospect to lead
+        self.linked_lead = lead.name
+        self.save()
+```
+
+## API Integration Patterns
+
+### LeadGen API Endpoints
+```python
+# crm/api/leadgen.py
+import frappe
+from frappe import _
+from frappe.utils import now
+
+@frappe.whitelist()
+def run_collector(collector_type: str, params: dict):
+    """Run a data collector"""
+    # Validate collector type
+    valid_collectors = ["clinicaltrials", "nih", "asco"]
+    if collector_type not in valid_collectors:
+        frappe.throw(_("Invalid collector type"))
+    
+    # Create job
+    job = frappe.get_doc({
+        "doctype": "LeadGen Job",
+        "job_type": collector_type,
+        "params": frappe.as_json(params),
+        "status": "Queued"
+    })
+    job.insert()
+    
+    # Enqueue job
+    frappe.enqueue(
+        f"crm.leadgen.collectors.{collector_type}_collector.run",
+        job_name=job.name,
+        params=params,
+        queue="long"
+    )
+    
+    return {"job_name": job.name, "status": "Queued"}
+
+@frappe.whitelist()
+def promote_prospects(prospect_names: list):
+    """Promote prospects to CRM entities"""
+    promoted = []
+    
+    for prospect_name in prospect_names:
+        prospect = frappe.get_doc("Lead Prospect", prospect_name)
+        
+        # Create CRM Lead
+        lead = create_crm_lead_from_prospect(prospect)
+        promoted.append(lead.name)
+        
+        # Create FCRM Note
+        create_evidence_note(prospect, lead)
+        
+        # Update prospect
+        prospect.linked_lead = lead.name
+        prospect.save()
+    
+    return {"promoted": promoted}
+
+@frappe.whitelist()
+def start_outreach_sequence(prospect_names: list, sequence_type: str):
+    """Start outreach sequence for prospects"""
+    sequence = frappe.get_doc("Outreach Sequence", sequence_type)
+    
+    for prospect_name in prospect_names:
+        prospect = frappe.get_doc("Lead Prospect", prospect_name)
+        
+        # Create sequence instance
+        instance = frappe.get_doc({
+            "doctype": "Outreach Sequence Instance",
+            "sequence": sequence.name,
+            "prospect": prospect.name,
+            "status": "Active",
+            "start_date": now()
+        })
+        instance.insert()
+        
+        # Schedule first step
+        schedule_next_step(instance)
+    
+    return {"status": "success"}
+
+def create_crm_lead_from_prospect(prospect):
+    """Create CRM Lead from Lead Prospect"""
+    lead = frappe.get_doc({
+        "doctype": "CRM Lead",
+        "lead_name": prospect.pi_name,
+        "email_id": prospect.pi_email,
+        "mobile_no": prospect.phone,
+        "company": prospect.institution,
+        "source": "Lead Generation",
+        "custom_lead_score": prospect.lead_score,
+        "custom_tier": prospect.tier,
+        "custom_prospect_ref": prospect.name,
+        "custom_cancer_type": prospect.cancer_type,
+        "custom_endpoint_summary": prospect.endpoint_summary
+    })
+    lead.insert()
+    return lead
+
+def create_evidence_note(prospect, lead):
+    """Create evidence note for lead"""
+    note = frappe.get_doc({
+        "doctype": "FCRM Note",
+        "reference_doctype": "CRM Lead",
+        "reference_name": lead.name,
+        "note": f"""
+        Lead Generation Evidence:
+        - Source: {prospect.source}
+        - Reference ID: {prospect.source_ref_id}
+        - Cancer Type: {prospect.cancer_type}
+        - Endpoint: {prospect.endpoint_summary}
+        - Funding: ${prospect.funding_total:,} if prospect.funding_total else "N/A"
+        - H-Index: {prospect.h_index if prospect.h_index else "N/A"}
+        """,
+        "note_type": "Evidence"
+    })
+    note.insert()
+    return note
+```
+
+## Frontend Integration Patterns
+
+### SPA Integration
+```javascript
+// frappe-bench/apps/crm/frontend/src/pages/LeadGenDashboard.vue
+<template>
+  <div class="leadgen-dashboard">
+    <div class="dashboard-header">
+      <h1>Lead Generation Dashboard</h1>
+      <div class="actions">
+        <button @click="runCollector('clinicaltrials')" class="btn btn-primary">
+          Run ClinicalTrials Collector
+        </button>
+        <button @click="runCollector('nih')" class="btn btn-primary">
+          Run NIH Collector
+        </button>
+        <button @click="runCollector('asco')" class="btn btn-primary">
+          Run ASCO Collector
+        </button>
+      </div>
+    </div>
+    
+    <div class="dashboard-content">
+      <div class="metrics">
+        <div class="metric-card">
+          <h3>Total Prospects</h3>
+          <p>{{ metrics.total_prospects }}</p>
+        </div>
+        <div class="metric-card">
+          <h3>Tier 1 Prospects</h3>
+          <p>{{ metrics.tier1_prospects }}</p>
+        </div>
+        <div class="metric-card">
+          <h3>Emails Sent</h3>
+          <p>{{ metrics.emails_sent }}</p>
+        </div>
+        <div class="metric-card">
+          <h3>Response Rate</h3>
+          <p>{{ metrics.response_rate }}%</p>
+        </div>
+      </div>
+      
+      <div class="prospects-table">
+        <table>
+          <thead>
+            <tr>
+              <th>PI Name</th>
+              <th>Institution</th>
+              <th>Tier</th>
+              <th>Score</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="prospect in prospects" :key="prospect.name">
+              <td>{{ prospect.pi_name }}</td>
+              <td>{{ prospect.institution }}</td>
+              <td>{{ prospect.tier }}</td>
+              <td>{{ prospect.lead_score }}</td>
+              <td>
+                <button @click="promoteProspect(prospect.name)" class="btn btn-sm">
+                  Promote
+                </button>
+                <button @click="startOutreach(prospect.name)" class="btn btn-sm">
+                  Start Outreach
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'LeadGenDashboard',
+  data() {
+    return {
+      metrics: {},
+      prospects: []
+    }
+  },
+  mounted() {
+    this.loadMetrics()
+    this.loadProspects()
+  },
+  methods: {
+    async runCollector(collectorType) {
+      try {
+        const response = await frappe.call({
+          method: 'crm.api.leadgen.run_collector',
+          args: {
+            collector_type: collectorType,
+            params: this.getDefaultParams(collectorType)
+          }
+        })
+        
+        frappe.show_alert({
+          message: `Started ${collectorType} collector`,
+          indicator: 'green'
+        })
+      } catch (error) {
+        frappe.show_alert({
+          message: `Error starting collector: ${error.message}`,
+          indicator: 'red'
+        })
+      }
+    },
+    
+    async promoteProspect(prospectName) {
+      try {
+        await frappe.call({
+          method: 'crm.api.leadgen.promote_prospects',
+          args: {
+            prospect_names: [prospectName]
+          }
+        })
+        
+        frappe.show_alert({
+          message: 'Prospect promoted to CRM Lead',
+          indicator: 'green'
+        })
+        
+        this.loadProspects()
+      } catch (error) {
+        frappe.show_alert({
+          message: `Error promoting prospect: ${error.message}`,
+          indicator: 'red'
+        })
+      }
+    },
+    
+    async startOutreach(prospectName) {
+      try {
+        await frappe.call({
+          method: 'crm.api.leadgen.start_outreach_sequence',
+          args: {
+            prospect_names: [prospectName],
+            sequence_type: 'tier1_sequence'
+          }
+        })
+        
+        frappe.show_alert({
+          message: 'Outreach sequence started',
+          indicator: 'green'
+        })
+      } catch (error) {
+        frappe.show_alert({
+          message: `Error starting outreach: ${error.message}`,
+          indicator: 'red'
+        })
+      }
+    },
+    
+    async loadMetrics() {
+      try {
+        const response = await frappe.call({
+          method: 'crm.api.leadgen.get_dashboard_metrics'
+        })
+        this.metrics = response.message
+      } catch (error) {
+        console.error('Error loading metrics:', error)
+      }
+    },
+    
+    async loadProspects() {
+      try {
+        const response = await frappe.call({
+          method: 'crm.api.leadgen.get_prospects',
+          args: {
+            filters: { tier: ['in', ['Tier 1', 'Tier 2']] },
+            limit: 50
+          }
+        })
+        this.prospects = response.message
+      } catch (error) {
+        console.error('Error loading prospects:', error)
+      }
+    },
+    
+    getDefaultParams(collectorType) {
+      const params = {
+        clinicaltrials: {
+          conditions: ["breast cancer", "lung cancer", "colorectal cancer"],
+          interventions: ["chemotherapy", "immunotherapy"],
+          phases: ["Phase 3"],
+          page_size: 100
+        },
+        nih: {
+          keywords: ["oncology", "cancer", "clinical trial"],
+          activity_codes: ["R01", "R21", "R43"],
+          page_size: 100
+        },
+        asco: {
+          year: 2025,
+          abstract_types: ["oral", "poster"],
+          page_size: 100
+        }
+      }
+      return params[collectorType] || {}
+    }
+  }
+}
+</script>
+```
+
+## Permission Integration Patterns
+
+### Row-Level Permissions & PII Protection
+
+#### Lead Prospect DocType Permissions
+```json
+{
+  "permissions": [
+    {
+      "role": "Sales User",
+      "permlevel": 0,
+      "if_owner": 1,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 0
+    },
+    {
+      "role": "Sales Manager",
+      "permlevel": 0,
+      "if_owner": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Sales User",
+      "permlevel": 1,
+      "if_owner": 1,
+      "read": 0,
+      "write": 0,
+      "create": 0,
+      "delete": 0
+    },
+    {
+      "role": "Sales Manager",
+      "permlevel": 1,
+      "if_owner": 0,
+      "read": 1,
+      "write": 1,
+      "create": 0,
+      "delete": 0
+    }
+  ],
+  "fields": [
+    {
+      "fieldname": "raw",
+      "fieldtype": "JSON",
+      "label": "Raw Source Data",
+      "permlevel": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "pi_email",
+      "fieldtype": "Data",
+      "label": "PI Email",
+      "permlevel": 0
+    },
+    {
+      "fieldname": "phone",
+      "fieldtype": "Data",
+      "label": "Phone",
+      "permlevel": 0
+    }
+  ]
+}
+```
+
+#### LeadGen Job DocType Permissions
+```json
+{
+  "permissions": [
+    {
+      "role": "Sales User",
+      "permlevel": 0,
+      "if_owner": 1,
+      "read": 1,
+      "write": 0,
+      "create": 0,
+      "delete": 0
+    },
+    {
+      "role": "Sales Manager",
+      "permlevel": 0,
+      "if_owner": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "System Manager",
+      "permlevel": 0,
+      "if_owner": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ]
+}
+```
+
+#### Outreach Sequence DocType Permissions
+```json
+{
+  "permissions": [
+    {
+      "role": "Sales User",
+      "permlevel": 0,
+      "if_owner": 1,
+      "read": 1,
+      "write": 0,
+      "create": 0,
+      "delete": 0
+    },
+    {
+      "role": "Sales Manager",
+      "permlevel": 0,
+      "if_owner": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ]
+}
+```
+
+### PII Data Access Rules
+```python
+# crm/api/leadgen.py
+@frappe.whitelist()
+def get_prospects(filters=None, limit=20, include_raw=False):
+    """Get prospects with PII protection"""
+    # Check user permissions
+    if not frappe.has_permission("Lead Prospect", "read"):
+        frappe.throw(_("Insufficient permissions"))
+    
+    # Apply row-level permissions
+    if frappe.has_role("Sales User") and not frappe.has_role("Sales Manager"):
+        filters = filters or {}
+        filters["owner"] = frappe.session.user
+    
+    # Get prospects with field restrictions
+    fields = [
+        "name", "pi_name", "institution", "cancer_type", 
+        "tier", "lead_score", "source", "source_ref_id"
+    ]
+    
+    # Only managers can see raw data and PII
+    if include_raw and frappe.has_role("Sales Manager"):
+        fields.extend(["raw", "pi_email", "phone"])
+    
+    prospects = frappe.get_list(
+        "Lead Prospect",
+        fields=fields,
+        filters=filters,
+        limit=limit,
+        order_by="lead_score desc"
+    )
+    
+    return prospects
+```
+
+### API Permission Checks
+```python
+# crm/api/leadgen.py
+@frappe.whitelist()
+def get_prospects(filters=None, limit=20):
+    """Get prospects with permission checks"""
+    # Check user permissions
+    if not frappe.has_permission("Lead Prospect", "read"):
+        frappe.throw(_("Insufficient permissions"))
+    
+    # Apply row-level permissions
+    if frappe.has_role("Sales User") and not frappe.has_role("Sales Manager"):
+        filters = filters or {}
+        filters["owner"] = frappe.session.user
+    
+    # Get prospects
+    prospects = frappe.get_list(
+        "Lead Prospect",
+        filters=filters,
+        limit=limit,
+        order_by="lead_score desc"
+    )
+    
+    return prospects
+```
+
+## Error Handling Integration
+
+### Graceful Degradation
+```python
+def handle_api_failure(api_name, error):
+    """Handle API failures gracefully"""
+    frappe.log_error(
+        f"{api_name} API failed: {str(error)}",
+        f"{api_name}_api_error"
+    )
+    
+    # Create error notification
+    frappe.publish_realtime(
+        "api_error",
+        {
+            "api": api_name,
+            "error": str(error),
+            "timestamp": frappe.utils.now()
+        }
+    )
+    
+    # Fallback to cached data if available
+    cached_data = get_cached_data(api_name)
+    if cached_data:
+        return cached_data
+    
+    # Return empty result
+    return []
+```
+
+## Testing Integration Patterns
+
+### Integration Tests
+```python
+# tests/test_leadgen/test_integration.py
+import pytest
+import frappe
+from crm.api.leadgen import run_collector, promote_prospects
+
+class TestLeadGenIntegration:
+    def test_end_to_end_workflow(self):
+        """Test complete lead generation workflow"""
+        # Run collector
+        result = run_collector("clinicaltrials", {
+            "conditions": ["breast cancer"],
+            "phases": ["Phase 3"]
+        })
+        
+        assert result["status"] == "Queued"
+        
+        # Wait for completion (in real test, use mock)
+        # ...
+        
+        # Promote prospects
+        prospects = frappe.get_all("Lead Prospect", limit=5)
+        if prospects:
+            promote_result = promote_prospects([p.name for p in prospects])
+            assert "promoted" in promote_result
+        
+        # Verify CRM Lead creation
+        leads = frappe.get_all("CRM Lead", filters={"source": "Lead Generation"})
+        assert len(leads) > 0
+```

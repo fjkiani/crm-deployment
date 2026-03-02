@@ -43,27 +43,32 @@ class PipelineRequest(BaseModel):
 @app.post("/pipeline")
 async def pipeline_endpoint(request: PipelineRequest):
     """Autonomous outreach pipeline — streams node progress via SSE."""
-    events = []
+    events_queue = asyncio.Queue()
 
     async def collect_progress(node: str, status: str, data: dict):
-        events.append({"node": node, "status": status, **data})
+        await events_queue.put({"node": node, "status": status, **data})
 
     async def event_generator():
         yield f"data: {json.dumps({'event': 'pipeline-start', 'prospect': request.prospect_name, 'company': request.company_name})}\n\n"
 
-        # Run the pipeline with progress callback
-        result = await run_pipeline(
+        # Start the pipeline in the background
+        pipeline_task = asyncio.create_task(run_pipeline(
             request.prospect_name,
             request.company_name,
             callback=collect_progress
-        )
+        ))
 
-        # Stream each node event
-        for evt in events:
-            yield f"data: {json.dumps({'event': 'node-complete', 'data': evt})}\n\n"
-            await asyncio.sleep(0.05)  # Small delay for smooth streaming
+        # Stream each node event as it arrives
+        while not pipeline_task.done() or not events_queue.empty():
+            try:
+                evt = await asyncio.wait_for(events_queue.get(), timeout=0.1)
+                evt_type = "node-thought" if evt.get("status") == "thought" else "node-complete"
+                yield f"data: {json.dumps({'event': evt_type, 'data': evt})}\n\n"
+            except asyncio.TimeoutError:
+                continue
 
         # Final result
+        result = pipeline_task.result()
         final = {
             "prospect_name": result.get("prospect_name"),
             "company_name": result.get("company_name"),
@@ -77,6 +82,8 @@ async def pipeline_endpoint(request: PipelineRequest):
             "review_feedback": result.get("review_feedback"),
             "apollo_data": result.get("apollo_data"),
             "attempt": result.get("attempt"),
+            "crm_synced": result.get("crm_synced", False),
+            "crm_prospect_id": result.get("crm_prospect_id", ""),
         }
         yield f"data: {json.dumps({'event': 'pipeline-complete', 'data': final})}\n\n"
 

@@ -18,12 +18,19 @@ logger = logging.getLogger(__name__)
 
 class CRMClient:
     def __init__(self):
-        self.base_url = os.getenv("FRAPPE_URL", "http://localhost:8000")
+        frappe_url = os.getenv("FRAPPE_URL", "http://crm.localhost:8000")
+        # For DNS: crm.localhost doesn't resolve in Python, use 127.0.0.1
+        self.base_url = "http://127.0.0.1:8000"
+        # Extract hostname from FRAPPE_URL for multitenancy Host header
+        from urllib.parse import urlparse
+        parsed = urlparse(frappe_url)
+        self.host = parsed.hostname or "crm.localhost"
         self.api_key = os.getenv("FRAPPE_API_KEY")
         self.api_secret = os.getenv("FRAPPE_API_SECRET")
         self.headers = {
             "Authorization": f"token {self.api_key}:{self.api_secret}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Host": f"{self.host}:{parsed.port}" if parsed.port else self.host,
         }
         
     def upsert_prospect(self, data: dict):
