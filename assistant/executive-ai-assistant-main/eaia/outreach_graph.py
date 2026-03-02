@@ -40,23 +40,55 @@ class OutreachState(TypedDict, total=False):
     crm_prospect_id: str
 
 
-# ── SHARED COHERE CALLER ────────────────────────────────────────────────────
-def _cohere_json(prompt: str) -> Dict[str, Any]:
-    key = os.getenv("COHERE_API_KEY")
-    if not key:
-        raise RuntimeError("COHERE_API_KEY not set")
-    r = requests.post(
-        'https://api.cohere.com/v2/chat',
-        headers={'Authorization': f'Bearer {key}'},
-        json={
-            'model': 'command-r-plus-08-2024',
-            'messages': [{'role': 'user', 'content': prompt}],
-            'response_format': {'type': 'json_object'}
-        },
-        timeout=45
-    )
-    r.raise_for_status()
-    return json.loads(r.json()['message']['content'][0]['text'])
+# ── SHARED LLM CALLER (Cohere → OpenAI fallback) ───────────────────────────
+def _llm_json(prompt: str) -> Dict[str, Any]:
+    """Call LLM with JSON response. Tries Cohere first, falls back to OpenAI."""
+    # ── Primary: Cohere ───────────────────────────────────────────────
+    cohere_key = os.getenv("COHERE_API_KEY")
+    if cohere_key:
+        try:
+            r = requests.post(
+                'https://api.cohere.com/v2/chat',
+                headers={'Authorization': f'Bearer {cohere_key}'},
+                json={
+                    'model': 'command-r-plus-08-2024',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'response_format': {'type': 'json_object'}
+                },
+                timeout=45
+            )
+            r.raise_for_status()
+            return json.loads(r.json()['message']['content'][0]['text'])
+        except Exception as e:
+            logger.warning(f"Cohere failed ({e}), falling back to OpenAI...")
+
+    # ── Fallback: OpenAI ──────────────────────────────────────────────
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            r = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={'Authorization': f'Bearer {openai_key}'},
+                json={
+                    'model': 'gpt-4o-mini',
+                    'messages': [
+                        {'role': 'system', 'content': 'You are a JSON-only assistant. Return ONLY valid JSON, no markdown.'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    'response_format': {'type': 'json_object'}
+                },
+                timeout=30
+            )
+            r.raise_for_status()
+            return json.loads(r.json()['choices'][0]['message']['content'])
+        except Exception as e:
+            logger.error(f"OpenAI fallback also failed: {e}")
+
+    raise RuntimeError("No LLM available (both COHERE_API_KEY and OPENAI_API_KEY failed)")
+
+
+# Keep backward compat alias
+_cohere_json = _llm_json
 
 
 # ═══════════════════════════════════════════════════════════════════════════
