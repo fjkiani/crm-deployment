@@ -18,6 +18,9 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".secrets/.env"))
 
 from eaia.main.draft_response import graph
 
+import logging
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="EAIA Agent Service (Farfalle Compatible)")
 
 app.add_middleware(
@@ -116,6 +119,7 @@ async def call_endpoint(request: CallRequest):
     ctx = request.pipeline_context
     signals = ctx.get("distilled_signals", {})
     email = ctx.get("email_draft", {}).get("email", {})
+    calendar_context = ""  # will be filled in try block if Google Calendar token exists
 
     dossier = f"""
 TARGET DOSSIER — {request.prospect_name} @ {request.company_name}
@@ -133,7 +137,6 @@ IF THEY AGREE TO MEET:
 - The booking system will auto-confirm
 
 IF THEY SAY NO: ask who handles alt-data/quant strategy decisions
-{calendar_context}
 """
 
     # Build system message for Vapi
@@ -188,30 +191,92 @@ RULES:
             except Exception as cal_e:
                 logger.warning(f"Calendar context failed: {cal_e}")
 
-        # Try Vapi MCP call
-        from eaia.skills.vapi_mcp_tool import _invoke_mcp_create_call
-        result = await _invoke_mcp_create_call(
-            phone_number=request.phone_number,
-            objective=f"Follow up with {request.prospect_name}",
-            override_context=system_message
+        # ── Vapi REST API (direct — no MCP subprocess, instant) ─────────────
+        import httpx
+        vapi_key = os.getenv("VAPI_API_KEY", "53593b76-8c70-46e2-b01a-d2996afec5ba")
+        phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID", "05559ed7-9762-4887-a690-2f8b3a8a7837")
+
+        # Build final system message (with calendar context if available)
+        full_system = system_message
+        if calendar_context:
+            full_system = system_message.rstrip() + "\n" + calendar_context
+
+        first_message = (
+            f"Hi, is this {request.prospect_name}? "
+            f"I'm calling on behalf of Zeta Intelligence — we sent you a note about "
+            f"\"{ctx.get('email_draft', {}).get('email', {}).get('subject', 'our research')}\". "
+            f"Do you have 60 seconds?"
         )
 
-        # Update CRM prospect status
-        if request.crm_prospect_id:
-            try:
-                client = CRMClient()
-                import requests as req
-                update_url = f"{client.base_url}/api/resource/Lead Prospect/{request.crm_prospect_id}"
-                req.put(update_url, headers=client.headers, json={"outreach_status": "Email Sent"})
-            except Exception as e:
-                logger.warning(f"CRM status update failed: {e}")
-
-        return {
-            "status": "call_initiated",
-            "phone_number": request.phone_number,
-            "prospect": request.prospect_name,
-            "vapi_result": str(result)[:500]
+        vapi_payload = {
+            "phoneNumberId": phone_number_id,
+            "customer": {"number": request.phone_number},
+            "assistant": {
+                "firstMessage": first_message,
+                "model": {
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                    "messages": [{"role": "system", "content": full_system}],
+                    "temperature": 0.7,
+                    "maxTokens": 250
+                },
+                "voice": {
+                    "provider": "11labs",
+                    "voiceId": "burt"
+                },
+                "endCallFunctionEnabled": True,
+                "recordingEnabled": True,
+                "maxDurationSeconds": 300,
+                "silenceTimeoutSeconds": 30,
+                "backgroundSound": "office"
+            }
         }
+
+        async with httpx.AsyncClient(timeout=20.0) as http:
+            resp = await http.post(
+                "https://api.vapi.ai/call",
+                headers={
+                    "Authorization": f"Bearer {vapi_key}",
+                    "Content-Type": "application/json"
+                },
+                json=vapi_payload
+            )
+        
+        if resp.status_code in (200, 201):
+            vapi_data = resp.json()
+            call_id = vapi_data.get("id", "")
+            logger.info(f"📞 CALL: ✅ Vapi REST → {request.phone_number} (call_id={call_id})")
+
+            # Update CRM status
+            if request.crm_prospect_id:
+                try:
+                    import requests as req_sync
+                    _c = CRMClient()
+                    req_sync.put(
+                        f"{_c.base_url}/api/resource/Lead Prospect/{request.crm_prospect_id}",
+                        headers=_c.headers,
+                        json={"outreach_status": "Call Scheduled"}
+                    )
+                except Exception:
+                    pass
+
+            return {
+                "status": "call_initiated",
+                "phone_number": request.phone_number,
+                "prospect": request.prospect_name,
+                "call_id": call_id,
+                "vapi_status": vapi_data.get("status"),
+                "vapi_result": str(vapi_data)[:400]
+            }
+        else:
+            error_body = resp.text[:300]
+            logger.error(f"📞 CALL: Vapi REST error {resp.status_code} — {error_body}")
+            return {
+                "status": "call_failed",
+                "http_status": resp.status_code,
+                "error": error_body,
+                "phone_number": request.phone_number
+            }
 
     except Exception as e:
         logger.error(f"Call failed: {e}")
@@ -220,6 +285,7 @@ RULES:
             "error": str(e),
             "phone_number": request.phone_number
         }
+
 
 
 # Farfalle Request Model
