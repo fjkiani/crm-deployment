@@ -7,6 +7,7 @@ import os
 import requests
 from dotenv import load_dotenv
 from eaia.skills.reply_matrix import ReplyMatrix
+from eaia.config import NyxConfig
 
 # Load secrets relative to this file
 params_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".secrets", ".env"))
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class CRMCloserClient:
     def __init__(self):
-        self.base_url = os.getenv("FRAPPE_URL", "http://localhost:8000")
+        self.base_url = NyxConfig.FRAPPE_URL
         self.api_key = os.getenv("FRAPPE_API_KEY")
         self.api_secret = os.getenv("FRAPPE_API_SECRET")
         self.headers = {

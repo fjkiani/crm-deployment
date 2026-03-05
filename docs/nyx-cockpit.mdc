@@ -1,0 +1,540 @@
+---
+description: Nyx Cockpit — 10-Sprint Frontend Plan (v5 Code-Grounded). Every claim maps to a real file, function, and line number. No vague aspirations.
+globs: ["frontend/**/*.vue", "frontend/**/*.js", "eaia/**/*.py"]
+---
+
+# Nyx Cockpit — v5: Code-Grounded Implementation Plan
+
+> Every capability listed below is backed by a specific file, function, and line reference in the EAIA codebase. Nothing is aspirational unless explicitly tagged [PLANNED].
+
+---
+
+## Part 1: Exact Capability Inventory (What We Actually Have Today)
+
+### 1.1 The LangGraph Pipeline — 7 Nodes, 1136 Lines
+**File:** `eaia/outreach_graph.py`
+**Graph:** `research → distill → score → write → review → (retry loop) → sync → send → END`
+**Compiled at:** line 1023 via `langgraph.graph.StateGraph`
+
+| Node | Function | What It Actually Does | LLM Used | Lines |
+|---|---|---|---|---|
+| **Research** | `research_node()` | 5-source parallel enrichment (below) | None (API calls only) | 258-355 |
+| **Distill** | `distill_node()` | Extracts 5 structured signals from raw research via LLM prompt | Cohere `command-r-plus-08-2024` → OpenAI `gpt-4o-mini` fallback | 406-449 |
+| **Score** | `score_node()` | Additive rubric scoring (AUM, title, sector, LinkedIn) via LLM | Same dual-LLM | 489-551 |
+| **Write** | `write_node()` | Two-pass email generation (Think → Write) with 10-field dossier injection | Cohere only (no fallback) | 560-637 |
+| **Review** | `review_node()` | **Deterministic** quality gate — word count, banned words, opener check. NO LLM. | None | 653-699 |
+| **Sync** | `sync_node()` | Creates/updates CRM Lead + attaches FCRM Note with full dossier | None (HTTP to Frappe) | 722-879 |
+| **Send** | `send_email_node()` | Fires email via Gmail API → SMTP fallback | None | 886-987 |
+
+### 1.2 Enrichment Sources — What They Actually Find
+
+| Source | Function | What It Scrapes | Can It Find Papers/Blogs/Videos? | Lines |
+|---|---|---|---|---|
+| **Tavily** | `_tavily_search()` | Web search with `search_depth=advanced`. Finds news articles, blog posts, press releases, published papers — anything indexed by search engines | ✅ Yes — papers, blogs, videos IF they appear in web search results | 101-120 |
+| **Apollo** | `_apollo_match()` | People database match. Returns: email, title, LinkedIn URL, headline, city, org name | ❌ No content — structured contact data only | 123-147 |
+| **BrightData LinkedIn** | `_brightdata_linkedin_profile()` | Scrapes LinkedIn profile HTML. Extracts: headline, summary, positions, **recent_activity (posts)** | ✅ Finds LinkedIn posts (articles, shared videos, reshares) via regex on `commentary.text` field | 172-198 |
+| **BrightData SEC** | `_brightdata_aum()` | Scrapes SEC EDGAR for 13F filings. Extracts dollar amounts from filings | ❌ Only financial filings | 201-219 |
+| **BrightData Strategy** | `_brightdata_company_strategy()` | Scrapes company website `/about`, `/strategy`, `/investment-philosophy`, `/approach`. Falls back to Tavily search for strategy keywords | ✅ Finds blog-style strategy content from their own website | 222-245 |
+| **BrightData Competitors** | `_brightdata_competitors()` | Tavily search for `{company} competitors alternative data` | ✅ Web search results — can surface competitor blog posts, press releases | 248-255 |
+
+**HONEST ANSWER TO "Published a paper WHERE?":**
+- Tavily will find it IF it's indexed (PubMed, arXiv, Google Scholar surface to Tavily)
+- BrightData LinkedIn will find it IF the prospect shared it on LinkedIn
+- **LIMITATION:** We do NOT directly query PubMed, arXiv, or Google Scholar APIs. We rely on Tavily's web search to surface them. This is a real gap.
+- **LIMITATION:** We cannot find private/gated content (paywalled papers, internal videos, private LinkedIn posts)
+- **[PLANNED]:** Sprint 7 could add a dedicated PubMed/arXiv enrichment source to `pipeline/enrichment/`
+
+**HONEST ANSWER TO "Videos/Blogs":**
+- Blog posts: ✅ Tavily finds these reliably (they're well-indexed)
+- YouTube videos: ⚠️ Tavily sometimes surfaces YouTube URLs, but we don't extract transcripts
+- Podcast appearances: ⚠️ Same — URL found, no transcript extraction
+- **[PLANNED]:** Adding a YouTube/podcast transcript extraction source would require a new enrichment module
+
+### 1.3 The Classification Brain — What It Actually Uses
+
+**File:** `eaia/skills/reply_matrix.py` — `ReplyMatrix.classify()`
+**Brain:** **NO LLM.** Pure keyword matching. 65 lines. Zero intelligence.
+
+```
+Priority order:
+1. OOO:             "out of office", "automatic reply", "vacation", "on leave"
+2. UNSUBSCRIBE:     "unsubscribe", "remove list", "stop emailing", "cease"
+3. NOT_INTERESTED:  "not interested", "no thanks", "pass", "remove", "stop", "spam"
+4. INTERESTED:      "interested", "meet", "meeting", "call", "schedule", "calendar"
+5. Fallback:        UNKNOWN
+```
+
+**What breaks:**
+- Foreign language reply → `UNKNOWN` (no multilingual support)
+- "I'm not interested in meeting Tuesday but happy to chat Friday" → `NOT_INTERESTED` (matches "not interested" first, ignores nuance)
+- Sarcasm: "Sure, I'd LOVE more spam" → `INTERESTED` (matches "love")
+- **[PLANNED]:** Sprint 4 adds LLM fallback classifier for UNKNOWN bucket
+
+**Duplicate MCP classifier:** `mcp_server.py:624-715` has a SECOND keyword classifier (`classify_and_route_reply`) with slightly different keywords. These are NOT in sync. **This is a bug.**
+
+### 1.4 The Three Orphaned Capability Systems
+
+The codebase contains THREE enrichment systems that were built independently and never unified:
+
+#### System A: Finance Pipeline (ACTIVE — hardcoded in `outreach_graph.py`)
+This is the only system wired into the autonomous pipeline today.
+- **Sources:** Tavily (web), Apollo (contact), BrightData (LinkedIn, SEC 13F, Strategy, Competitors)
+- **Scoring rubric:** AUM, PM/CIO title, biotech focus, quant mandate
+- **Problem:** Hardcoded for hedge funds. The Tavily query literally searches `"{company} investment strategy AUM"`. The score rubric gives +40 for "AUM > $1B".
+
+#### System B: BioMed MCP Agents (ORPHANED — `eaia/mcp/biomed_mcp/biomed_agents/`)
+- **`pubmed_agent.py`** (416 lines): LangGraph ReAct agent → Azure OpenAI `o3`
+  - Tools: `search_pubmed_articles` (NCBI E-utilities), `get_pubmed_fulltext` (PMC full-text extraction)
+  - Capabilities: Literature search, cross-referencing, intelligent synthesis with `ResearchComplete` stopping criteria
+  - Max 4 tool calls per research session, memory checkpointing via `MemorySaver`
+- **`clinical_agent.py`** (470 lines): LangGraph ReAct agent → Azure OpenAI `o3`
+  - Tools: `search_clinical_trials` (pytrials → ClinicalTrials.gov), `get_clinical_trial_details`, `analyze_clinical_trials_patterns`
+  - Capabilities: Condition research, trial detail analysis, intervention comparison, phase/status pattern analysis
+  - Returns: NCT IDs, enrollment, phases, eligibility criteria, outcome measures
+
+#### System C: PI Intelligence Extractor (ORPHANED — `eaia/services/personalized_outreach/intelligence_extractor.py`)
+- **207 lines**, transplanted from Oncology Backend
+- 5-layer intelligence extraction: Trial Intel → Research Intel → Biomarker Intel → Goal Understanding → Value Prop Generation
+- **Biomarker scoring (KELIM):** Detects platinum-based therapy (carboplatin/cisplatin), CA-125 monitoring, ovarian cancer focus
+- **Value prop generation:** Auto-generates selling angles based on detected biomarkers and PI goals
+- Calls `ResearchIntelligence.get_pi_publications()` and `get_clinical_trials_client()`
+
+**HONEST ANSWER TO "What happened to that?":**
+Nothing was deleted. All three systems are intact and functional. But they were built as **standalone islands** — System A runs the pipeline, Systems B+C sit unused. The hedge fund targets ARE healthcare investors, so they need BOTH financial + clinical enrichment. The fix is not to fork pipelines — it's to **compose enrichment sources additively** (see Section 1.8).
+
+### 1.5 The Unified Fix: Composable Enrichment Layer [PLANNED]
+
+The core insight: **a healthcare-focused hedge fund PM needs SEC 13F data AND PubMed publications about their portfolio companies.** Hard-routing to one OR the other loses half the picture.
+
+**Architecture: Additive Source Composition**
+
+Instead of forking the pipeline by ICP, we keep ONE pipeline but make `research_node()` composable. Each enrichment source becomes a **module** that fires or doesn't based on context signals detected from the Lead.
+
+```
+research_node() — CURRENT (hardcoded):
+  ALWAYS: Tavily + Apollo + BrightData LinkedIn
+  ALWAYS: BrightData SEC 13F
+  ALWAYS: BrightData Strategy + Competitors
+
+research_node() — REDESIGNED (composable):
+  ALWAYS (Core):     Tavily + Apollo + BrightData LinkedIn  ← universal for any prospect
+  IF has_financial:  BrightData SEC 13F                     ← only if company is a fund/investor
+  IF has_clinical:   PubMed search + ClinicalTrials.gov     ← only if prospect/company touches trials
+  IF has_biomarker:  KELIM/CA-125 biomarker analysis         ← only if trial data found
+  IF has_saas:       [future] Tech stack enrichment          ← extensible
+```
+
+**How context signals are detected (no LLM needed):**
+```python
+# Deterministic signal detection from Lead fields + early enrichment
+def detect_context(lead, apollo_data, tavily_results):
+    signals = set()
+    signals.add('core')  # always
+
+    # Financial signals
+    title = (apollo_data.get('title') or '').lower()
+    company = (lead.get('company') or '').lower()
+    if any(kw in title for kw in ['portfolio', 'pm', 'cio', 'analyst', 'partner']):
+        signals.add('financial')
+    if any(kw in company for kw in ['capital', 'fund', 'partners', 'advisors', 'asset']):
+        signals.add('financial')
+
+    # Clinical signals
+    if any(kw in title for kw in ['md', 'pi', 'investigator', 'physician', 'professor']):
+        signals.add('clinical')
+    if any(kw in ' '.join(tavily_results) for kw in ['nct', 'clinical trial', 'phase 3', 'fda']):
+        signals.add('clinical')
+    # Also: if financial + company invests in healthcare → add clinical
+    if 'financial' in signals and any(kw in ' '.join(tavily_results) for kw in ['biotech', 'pharma', 'oncology', 'therapeutics']):
+        signals.add('clinical')
+
+    return signals
+```
+
+**The key scenario this solves:**
+> Lead: "John Smith, Partner at RA Capital Management"
+> - Apollo returns: title=Partner, company=RA Capital
+> - Tavily finds: "RA Capital leads $200M Series C in Recursion Pharmaceuticals"
+> - `detect_context()` → `{'core', 'financial', 'clinical'}`
+> - SEC 13F fires → finds $3.2B AUM, top holdings in oncology
+> - PubMed fires → finds publications about their portfolio company's drug
+> - ClinicalTrials fires → finds active Phase 3 trials for portfolio holdings
+> - Distill gets ALL of it: financial signals + clinical context
+> - Email: "RA Capital's $200M bet on Recursion's Phase 3 trial (NCT04XXXX) suggests you see the same gap in recursive drug discovery that we do..."
+
+**What changes in the pipeline:**
+
+| Node | Current | After Composable Layer |
+|---|---|---|
+| `research_node` | 5 hardcoded sources, all fire | Core sources always fire + conditional modules based on `detect_context()` |
+| `distill_node` | Fixed prompt expecting finance signals | Prompt template with `{available_signals}` injection. Extracts whatever signals are present. |
+| `score_node` | Fixed rubric (AUM +40, PM title +25) | Rubric merges applicable sub-rubrics: `FINANCE_RUBRIC + CLINICAL_RUBRIC` if both signals present |
+| `write_node` | Unchanged | Unchanged — it already works from distilled signals, not raw sources |
+| `review_node` | Unchanged | Unchanged |
+
+**Sub-rubrics (additive, not exclusive):**
+```
+FINANCE_RUBRIC:
+  AUM > $1B confirmed: +25
+  Title is PM/CIO/Partner: +15
+  Active healthcare portfolio: +10
+
+CLINICAL_RUBRIC:
+  Active Phase 3 trial found: +20
+  Recent Nature/Lancet/NEJM pub: +15
+  Biomarker relevance (KELIM fit): +10
+  PI status confirmed: +10
+
+CORE_RUBRIC (always applied):
+  LinkedIn activity about topic: +10
+  Recent hiring/expansion signal: +10
+  Competitor intelligence found: +5
+```
+
+A healthcare hedge fund PM could score: 25 (AUM) + 15 (PM title) + 10 (healthcare portfolio) + 20 (Phase 3 in portfolio) + 10 (LinkedIn) = **80 → Challenger framework**.
+
+### 1.4 Email Writing — Exactly How the Two-Pass System Works
+
+**File:** `eaia/skills/challenger_email_writer.py`
+**LLM:** Cohere `command-r-plus-08-2024` (NO OpenAI fallback for writing — line 166-178)
+
+**Pass 1 (THINK):** Extracts 3 talking points from distilled signals using framework-specific prompts:
+- Challenger: `tp1_tease` (blind spot) → `tp2_insight` (Zeta capability) → `tp3_proof` (verifiable result)
+- PAS: `tp1_problem` (their problem) → `tp2_agitate` (cost of inaction) → `tp3_solution` (Zeta fix)
+- AIDA: `tp1_attention` (surprising stat) → `tp2_interest` (relevance) → `tp3_desire` (social proof)
+
+**Pass 2 (WRITE):** Takes ONLY the 3 talking points and writes the email. Hard rules enforced:
+- Word limits: Challenger ≤65, PAS ≤70, AIDA ≤85 (enforced in `review_node`, line 643-699)
+- 19 banned buzzwords (`cutting-edge`, `innovative`, `leverage`, `synergy`, etc.)
+- 4 banned openers (`I hope this`, `My name is`, `I'm reaching out`, `Dear`)
+- CTAs are exactly prescribed per framework (not generated)
+- A/B subject line variants generated separately (line 218-246)
+
+**Retry loop:** If review fails (word count, banned words), the write node fires again with `review_feedback` injected. Max 2 attempts (line 705-714).
+
+### 1.5 Email Sending — Gmail API → SMTP, No Deliverability Layer
+
+**File:** `eaia/outreach_graph.py:886-987`
+
+**How it sends:**
+1. First tries Gmail API via `google-auth` credentials (`token.json` in `.secrets/`)
+2. Falls back to SMTP via `GMAIL_APP_PASSWORD` env var
+3. Sends as `GMAIL_USER` env var
+
+**HONEST ANSWER TO "How do we know it won't land in spam?":**
+- **We don't.** There is ZERO deliverability infrastructure:
+  - No SPF/DKIM/DMARC verification
+  - No warm-up rotation
+  - No send limits (beyond `max_daily_sends` in `Outreach Sequence` DocType)
+  - No link tracking
+  - No unsubscribe header (CAN-SPAM compliance gap)
+- **The only protection:** Emails are plain text (no HTML), short (≤85 words), and personalized (reduces spam score)
+- **[PLANNED]:** Sprint 5/9 should add: unsubscribe footer, send domain rotation, daily send cap enforcement
+
+### 1.6 Where Drafts Live — The Actual Data Flow
+
+After the pipeline runs, the email draft is stored in TWO places:
+
+1. **FCRM Note body** (human-readable): `sync_node()` line 801-852 creates a formatted note with the full dossier + email draft visible in the CRM Lead timeline
+2. **Second FCRM Note** (raw JSON): Line 868-871 creates a separate `📊 Raw Enrichment Data` note with the full JSON
+
+**There is NO dedicated "drafts inbox" today.** The email is:
+- Generated → reviewed → synced to CRM Note → sent immediately (if review passes)
+- If quarantined → stored in CRM Note with `(QUARANTINED — NOT SENT)` header
+
+**[PLANNED]:** Sprint 1's `NyxTab.vue` would surface these notes. Sprint 5's timeline would show sent/quarantined/draft states.
+
+### 1.7 The 22 MCP Tools — Exact Capabilities and Agent Usage
+
+**Server-side:** `crm/api/mcp_server.py` — 22 `@mcp.tool()` decorators
+**Client-side:** `eaia/frappe_tool.py` — 16 `@tool` LangChain wrappers (6 MCP tools have no client wrapper yet)
+
+| Tool | MCP Server | LangChain Wrapper | Used By Pipeline | Used By Inbound | Used By Chat |
+|---|---|---|---|---|---|
+| `echo` | ✅ | ✅ `crm_echo` | ❌ | ❌ | ✅ health check |
+| `create_lead` | ✅ | ✅ `create_new_lead` | ❌ (uses `zo.py` instead) | ❌ | ✅ |
+| `update_lead_context` | ✅ | ✅ `update_context` | ❌ | ✅ status update | ✅ |
+| `get_leads_batch` | ✅ | ✅ `list_leads` | ❌ | ❌ | ✅ |
+| `cleanup_leads` | ✅ | ✅ `delete_all_leads` | ❌ | ❌ | ❌ (dangerous) |
+| `get_lead_dossier` | ✅ | ✅ `get_lead_dossier` | ❌ | ❌ | ✅ |
+| `search_leads` | ✅ | ✅ `search_leads` | ❌ | ✅ email lookup | ✅ |
+| `get_enrichment_status` | ✅ | ✅ `get_enrichment_status` | ❌ | ❌ | ✅ health |
+| `get_sequence_status` | ✅ | ✅ `get_sequence_status` | ❌ | ❌ | ✅ |
+| `fire_sequence_step` | ✅ | ✅ `fire_sequence_step` | ❌ | ❌ | ✅ |
+| `pause_sequence` | ✅ | ✅ `pause_outreach` | ❌ | ✅ auto-pause | ✅ |
+| `approve_and_send` | ✅ | ✅ `approve_and_send_email` | ❌ | ❌ | ✅ |
+| `create_outreach_sequence` | ✅ | ✅ `create_sequence` | ❌ | ❌ | ✅ |
+| `get_call_log` | ✅ | ✅ `get_call_log` | ❌ | ❌ | ✅ |
+| `log_call_outcome` | ✅ | ✅ `log_call_outcome` | ❌ | ❌ | ✅ |
+| `get_communication_history` | ✅ | ✅ `get_communication_history` | ❌ | ❌ | ✅ |
+| `update_lead_score` | ✅ | ✅ `update_lead_score` | ❌ | ❌ | ✅ |
+| `create_note` | ✅ | ✅ `create_crm_note` | ❌ (uses `zo.py`) | ✅ logs reply | ✅ |
+| `get_lead_status_snapshot` | ✅ | ✅ `get_lead_status_snapshot` | ❌ | ❌ | ✅ |
+| `classify_and_route_reply` | ✅ | ✅ `classify_and_route_reply` | ❌ | ⚠️ duplicate | ✅ |
+
+**6 MCP tools NOT used today by any agent or pipeline:**
+`cleanup_leads`, `create_outreach_sequence`, `get_call_log`, `get_communication_history`, `get_enrichment_status`, `get_lead_status_snapshot`
+
+---
+
+## Part 2: Workflow Traces (Grounded in Code)
+
+### Workflow 1: Cold Lead → Enriched → Email Sent
+
+```
+SDR clicks "Run Pipeline" on Lead.vue
+  │
+  ├─→ POST /pipeline {prospect_name, company_name}     [api/enrichment.py]
+  │
+  ├─→ research_node() fires 5 sources in PARALLEL:     [outreach_graph.py:258]
+  │     ├─ Tavily: web search "{company} {name} investment strategy AUM"
+  │     ├─ Apollo: people match (returns email + title + LinkedIn URL)
+  │     ├─ BrightData LinkedIn: scrapes apollo.linkedin_url for posts/headline
+  │     ├─ BrightData SEC: scrapes EDGAR for 13F AUM amounts
+  │     └─ BrightData Strategy: scrapes company /about + /strategy pages
+  │
+  │   OUTPUT: raw_research blob + structured enrichment dict (10 fields)
+  │
+  ├─→ distill_node() sends raw_research[:6000] to LLM:  [outreach_graph.py:406]
+  │     PROMPT: "Extract 3 citable signals — numbers, names, or dates"
+  │     OUTPUT: {specific_number, recent_event, strategic_detail, blind_spot, recommended_framework}
+  │
+  │   ╔═══ SIGNAL GATE ═══╗
+  │   ║ If < 2 real signals (not UNKNOWN, not empty, > 10 chars):
+  │   ║   → QUARANTINE. No email. Lead tagged "quarantine:{reason}"
+  │   ║ If ≥ 2:
+  │   ║   → PASS. Continue to scoring.
+  │   ╚═══════════════════╝
+  │
+  ├─→ score_node() sends enrichment + signals to LLM:   [outreach_graph.py:489]
+  │     RUBRIC (additive):
+  │       AUM > $1B confirmed: +40
+  │       Title is PM/CIO/Research Director: +25
+  │       Active biotech focus: +20
+  │       Quant mandate confirmed: +10
+  │       Recent hiring signal: +15
+  │       LinkedIn activity about alt data: +10
+  │     OUTPUT: score (0-100), reasoning, angle, why_hot_or_cold
+  │     FRAMEWORK: score ≥ 70 → Challenger | 40-69 → PAS | < 40 → AIDA
+  │
+  ├─→ write_node() TWO-PASS with 10-field dossier:      [outreach_graph.py:560]
+  │     Pass 1: LLM extracts 3 talking points using framework prompt
+  │     Pass 2: LLM writes email using ONLY those 3 talking points
+  │     OUTPUT: {subject, body, ps} + A/B subject variants
+  │
+  ├─→ review_node() DETERMINISTIC checks:               [outreach_graph.py:653]
+  │     Check 1: Word count ≤ framework limit (65/70/85)
+  │     Check 2: No banned words (19 words blacklisted)
+  │     Check 3: No banned openers (4 openers blacklisted)
+  │     Check 4: Subject ≤ 50 chars
+  │     FAIL → retry write with feedback (max 2 attempts)
+  │
+  ├─→ sync_node() writes to Frappe CRM:                 [outreach_graph.py:722]
+  │     1. Upserts CRM Lead via zo.py CRMClient
+  │     2. Creates FCRM Note with human-readable dossier + email draft
+  │     3. Creates second FCRM Note with raw JSON enrichment data
+  │
+  └─→ send_email_node() fires the email:                [outreach_graph.py:886]
+        1. Try Gmail API (token.json)
+        2. Fallback: SMTP (GMAIL_APP_PASSWORD)
+        3. Updates CRM Lead outreach_status = "Email Sent"
+```
+
+### Workflow 2: Inbound Reply → Classification → CRM Update
+
+```
+Prospect replies to automated email
+  │
+  ├─→ POST /inbound/process-reply {from_email, subject, body}  [api/inbound.py:48]
+  │
+  ├─→ ReplyMatrix.classify(full_text)                           [skills/reply_matrix.py:40]
+  │     BRAIN: Keyword matching ONLY. No LLM.
+  │     Priority: OOO > UNSUBSCRIBE > NOT_INTERESTED > INTERESTED > UNKNOWN
+  │
+  ├─→ Route based on classification:                             [api/inbound.py:90-115]
+  │     ├─ INTERESTED:
+  │     │    • update_context → status="Interested"               [via frappe_tool.py]
+  │     │    • pause_outreach → sequence paused                   [via frappe_tool.py]
+  │     │    • create_crm_note → "📨 INTERESTED Reply"            [via frappe_tool.py]
+  │     │
+  │     ├─ NOT_INTERESTED:
+  │     │    • update_context → status="Lost"
+  │     │    • pause_outreach → sequence stopped
+  │     │    • create_crm_note → "❌ NOT INTERESTED"
+  │     │
+  │     ├─ UNSUBSCRIBE:
+  │     │    • update_context → status="Do Not Contact"
+  │     │    • pause_outreach → ALL outreach stopped
+  │     │    • create_crm_note → "🛑 COMPLIANCE"
+  │     │
+  │     ├─ OOO:
+  │     │    • pause_outreach → paused (no status change)
+  │     │    • create_crm_note → "🏖️ OOO"
+  │     │
+  │     └─ UNKNOWN:
+  │          • create_crm_note → "⚠️ UNCLASSIFIED — Needs Review"
+  │          • NO status change, NO sequence pause
+  │
+  └─→ Return: {classification, action_taken, crm_lead_id}
+
+  ⚠️ GAP: No frappe.publish_realtime() call. Frontend does NOT update in real-time.
+  ⚠️ GAP: No LLM fallback for UNKNOWN. Human must manually review in CRM.
+```
+
+### Workflow 3: Pre-Call → Vapi → Transcript Sync
+
+```
+SDR opens CallArea tab on Lead
+  │
+  ├─→ [PLANNED] NyxPreCallBrief.vue fetches:
+  │     1. get_lead_dossier(lead_name) → returns FCRM Notes + intel JSON
+  │     2. get_communication_history(lead_name) → returns email thread
+  │     3. get_call_log(lead_name) → returns past phone calls
+  │
+  ├─→ SDR initiates Vapi call
+  │     POST /call {lead_name, phone}                   [api/scheduling.py]
+  │     Vapi voice agent dials prospect
+  │
+  ├─→ Call ends → Vapi webhook fires
+  │     POST /vapi-call-outcome {call_id, lead_name, outcome, transcript}
+  │
+  ├─→ log_call_outcome MCP tool:                       [mcp_server.py:434-490]
+  │     1. Creates Communication (medium=Phone, subject=outcome)
+  │     2. Creates FCRM Note ("📞 Call: {outcome}" + transcript[:1000])
+  │     3. Updates CRM Lead status based on outcome:
+  │         meeting_booked → "Interested"
+  │         answered → "Contacted"
+  │         voicemail → "Contacted"
+  │         rejected → "Do Not Contact"
+  │         no_answer → unchanged
+  │
+  └─→ ⚠️ GAP: No frappe.publish_realtime(). UI requires manual refresh.
+```
+
+### Workflow 4: Composable Enrichment (Healthcare Investor Example)
+
+```
+SDR clicks "Run Pipeline" on Lead.vue (Lead: "John Smith, Partner, RA Capital")
+  │
+  ├─→ research_node() Phase 1 (CORE — always fires):        [outreach_graph.py]
+  │     ├─ Tavily: web search → finds "RA Capital leads $200M in Recursion Pharma"
+  │     ├─ Apollo: match → title="Partner", company="RA Capital Management"
+  │     └─ BrightData LinkedIn: scrapes profile → posts about oncology AI
+  │
+  ├─→ detect_context(lead, apollo, tavily):                  [NEW: enrichment/context.py]
+  │     Signals detected: {'core', 'financial', 'clinical'}
+  │     Reason: title=Partner + company=Capital + tavily mentions biotech/pharma
+  │
+  ├─→ research_node() Phase 2 (CONDITIONAL — based on signals):
+  │     ├─ 'financial' → BrightData SEC 13F: AUM=$3.2B, top holding: Recursion
+  │     ├─ 'clinical' → PubMed search: "RA Capital oncology" → 3 papers found
+  │     └─ 'clinical' → ClinicalTrials: NCT04XXXX Phase 3 (Recursion's drug)
+  │
+  ├─→ distill_node() receives MERGED enrichment blob:
+  │     Prompt template injects: {financial_context} + {clinical_context}
+  │     Extracts: "$3.2B AUM" + "Phase 3 NCT04XXXX" + "partner-level decision maker"
+  │
+  ├─→ score_node() applies MERGED rubric:
+  │     FINANCE: AUM +25, PM title +15, healthcare portfolio +10 = 50
+  │     CLINICAL: Phase 3 found +20, biotech focus +10 = 30
+  │     TOTAL: 80 → Challenger framework
+  │
+  └─→ write_node() generates email using ALL signals:
+        "RA Capital's $200M bet on Recursion's Phase 3 trial (NCT04XXXX)
+         suggests you see the same gap in recursive drug discovery..."
+```
+
+---
+
+## Part 3: Known Gaps & Honest Limitations
+
+| # | Gap | Severity | Where It Breaks | Fix Sprint |
+|---|---|---|---|---|
+| **G1** | No auth on EAIA endpoints | 🔴 Critical | Anyone with the URL can fire pipelines / send emails | Sprint 1 |
+| **G2** | No deliverability layer (SPF/DKIM/warmup) | 🔴 Critical | Emails may land in spam at scale | Sprint 5 |
+| **G3** | Reply classifier is keyword-only | 🟡 Medium | Sarcasm, foreign languages, nuanced replies misclassified | Sprint 4 |
+| **G4** | Duplicate classifiers (inbound.py vs mcp_server.py) | 🟡 Medium | Different keyword lists → inconsistent classification | Sprint 4 |
+| **G5** | No real-time frontend updates | 🟡 Medium | After webhook events, UI requires manual refresh | Sprint 2 |
+| **G6** | No PubMed/arXiv direct query | 🟢 Low | Academic publications found inconsistently via Tavily | Sprint 7 |
+| **G7** | No YouTube/podcast transcript extraction | 🟢 Low | Video content URLs found but not parsed | Sprint 7+ |
+| **G8** | No "drafts inbox" — emails fire immediately | 🟡 Medium | No human review before Day 0 send (unless quarantined) | Sprint 1 |
+| **G9** | Cohere-only for email writing (no fallback) | 🟡 Medium | If Cohere is down, write_node fails entirely | Sprint 2 |
+| **G10** | 6 MCP tools have no agent usage path | 🟢 Low | Capabilities exist but aren't wired into any workflow | Sprint 3 |
+| **G11** | Hardcoded Enrichment Sources | 🔴 Critical | Pipeline only fires Finance sources. 3 orphaned capability systems (BioMed MCP, PI Intelligence Extractor) never compose into the pipeline. A healthcare investor gets zero clinical context. | Sprint 2 |
+
+---
+
+## Part 4: Sprint Plan (Grounded)
+
+### Sprint 0 (✅ COMPLETE)
+Created `eaia/config.py` NyxConfig class. Replaced hardcoded values in 9 files. Created `composables/useNyxConfig.js`. Created `crm/scripts/add_nyx_custom_fields.py`.
+
+### Sprint 1: Tab + Sidebar + Auth + God Mode
+- **Auth:** `useNyxAuth.js` injects `Authorization: token {api_key}:{api_secret}` from `window.frappe.boot` into every EAIA fetch. FastAPI dependency validates against Frappe.
+- **God Mode:** Inline signal editor in `NyxTab.vue`. Edits write to `update_lead_context` + `update_lead_score` MCP tools.
+- **Draft Hold:** Add `auto_send=false` parameter to pipeline. When false, sync_node creates the note but send_email_node skips. SDR reviews in NyxTab, then clicks "Approve & Send" → calls `approve_and_send` MCP tool.
+- **Fixes:** G1 (auth), G8 (draft hold)
+
+### Sprint 2: SSE Progress + Realtime Webhooks
+- **SSE:** `useNyxSSE.js` wraps `fetch` ReadableStream with exponential backoff reconnect.
+- **Realtime:** After `sync_node` completes, EAIA calls Frappe REST API to trigger `frappe.publish_realtime('nyx_update', {...})`. Vue listens via `$socket`.
+- **Fixes:** G5 (realtime), G9 (add OpenAI fallback to `_two_pass_generate`)
+
+### Sprint 3: Command Palette + Chat
+- **Palette:** `NyxCommandPalette.vue` (CMD+K). Maps to all 22 MCP tools via `frappe_tool.py` wrappers. Confirmation dialog for destructive tools.
+- **Chat:** Native `NyxChat.vue` replacing iframe. SSE stream from `/chat` endpoint.
+- **Fixes:** G10 (unused MCP tools)
+
+### Sprint 4: Inbound Inbox + LLM Classifier
+- **Inbox:** `NyxInbox.vue` — pulls from `/inbound/pending` endpoint.
+- **LLM Fallback:** When `ReplyMatrix.classify()` returns `UNKNOWN`, pass to Cohere/OpenAI for intent classification.
+- **Dedup:** Merge the two classifiers (inbound.py + mcp_server.py) into a single `ReplyMatrix` source.
+- **Fixes:** G3 (classifier quality), G4 (duplicate classifiers)
+
+### Sprint 5: Sequence Timeline + Deliverability
+- **Timeline:** `NyxSequenceTimeline.vue` reads `nyx_sequence_step` from CRM fields.
+- **Deliverability:** Add `List-Unsubscribe` header to sent emails. Implement daily send cap enforcement in `send_email_node`. Log bounce webhooks.
+- **Fixes:** G2 (deliverability basics)
+
+### Sprint 6: Pre-Call Brief + Vapi Integration
+- **Brief:** `NyxPreCallBrief.vue` calls `get_lead_dossier` + `get_communication_history` + `get_call_log` MCP tools.
+
+### Sprint 7: Analytics + Enrichment Sources
+- **[OPTIONAL] PubMed source:** New `pipeline/enrichment/pubmed.py` querying PubMed E-utilities API. Fixes G6.
+
+### Sprint 8: System Health
+- Ping EAIA, MCP, cron timestamps, API key validity per source.
+
+### Sprint 9: Settings Panel
+- Exposes NyxConfig values (B3-B8) to UI via Frappe DocType read/write.
+
+### Sprint 10: Bulk Ops
+- CSV enrichment with row validation, batch processing, mass-pause/resume.
+
+### Sprint 11: Composable Enrichment Layer
+- Refactor `research_node` into two phases: Core (always) → Conditional (based on `detect_context()`).
+- Wire orphaned System B (`biomed_mcp` agents) as conditional PubMed/ClinicalTrials modules.
+- Wire orphaned System C (`intelligence_extractor.py`) as conditional biomarker/KELIM module.
+- Make `distill_node` prompt a template with `{available_signals}` injection.
+- Make `score_node` rubric composable: merge applicable sub-rubrics additively.
+- **No ICP forking.** One pipeline, N composable sources. A healthcare investor gets Finance + Clinical.
+
+---
+
+## Part 5: Tech Stack (Actual)
+
+| Layer | Technology | Evidence |
+|---|---|---|
+| Pipeline orchestration | LangGraph `StateGraph` | `outreach_graph.py:993-1023` |
+| Primary LLM | Cohere `command-r-plus-08-2024` | `outreach_graph.py:55`, `challenger_email_writer.py:170` |
+| Fallback LLM | OpenAI `gpt-4o-mini` | `outreach_graph.py:77` (distill/score only, NOT writing) |
+| People enrichment | Apollo `/v1/people/match` | `outreach_graph.py:128` |
+| Web enrichment | Tavily `/search` (advanced depth) | `outreach_graph.py:106` |
+| Deep enrichment | BrightData Web Unlocker | `outreach_graph.py:152-255` |
+| Email sending | Gmail API → SMTP | `outreach_graph.py:907-985` |
+| CRM bridge | Frappe REST API via `zo.py` CRMClient | `agents/zo.py` |
+| MCP protocol | `frappe_mcp.MCP` (JSON-RPC) | `mcp_server.py:14` |
+| MCP client | LangChain `@tool` wrappers | `frappe_tool.py` |
+| Reply classification | Keyword matching (no LLM) | `skills/reply_matrix.py:40-64` |
+| Frontend | Vue 3 + `frappe-ui` | `frontend/` |
+| Voice | Vapi | `api/scheduling.py` |

@@ -9,14 +9,11 @@ except ImportError:
 
 class ContextManager:
     """
-    The Intelligence Layer for Voice Calls.
-    Fetches 'Dossiers' from the CRM (via API) to prep the Agent before a call.
+    Manages pre-call intelligence.
+    Fetches the pipeline dossier for a lead, or falls back to basic DB lookup if not available.
     """
-    
-    def __init__(self, mock_mode=False):
-        # Force mock mode if DB is known to be down/unreachable or explicitly set
-        self.mock_mode = mock_mode or os.getenv("FORCE_MOCK_CONTEXT", "False").lower() == "true"
-        self.frappe_url = os.getenv("FRAPPE_SITE_URL", "http://localhost:8000")
+    def __init__(self):
+        self.frappe_url = NyxConfig.FRAPPE_URL
         self.api_key = os.getenv("FRAPPE_API_KEY")
         self.api_secret = os.getenv("FRAPPE_API_SECRET")
 

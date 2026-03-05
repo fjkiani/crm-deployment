@@ -10,8 +10,11 @@ from eaia.schemas import (
     ResponseEmailDraft,
     Question,
     MeetingAssistant,
-    SendCalendarInvite
+    SendCalendarInvite,
+    Ignore,
+    email_template,
 )
+from eaia.main.config import get_config
 from eaia.frappe_tool import delete_all_leads, update_context, list_leads
 from eaia.research_tool import research_company, web_search
 from eaia.skills.voice_tool import voice_call

@@ -13,8 +13,12 @@ from datetime import datetime
 # BioMed-MCP Import
 try:
     from eaia.mcp.biomed_mcp.biomed_agents import PubMedAgent, ClinicalTrialsAgent
-except ImportError as e:
-    raise ImportError(f"BioMed-MCP agents not found. Error: {e}")
+except (ImportError, ModuleNotFoundError) as e:
+    import logging as _log
+    _log.getLogger(__name__).warning(f"biomed_mcp unavailable (langgraph compat): {e}")
+    PubMedAgent = None
+    ClinicalTrialsAgent = None
+
 
 from .models import ResearchResult, AgentResult, MultiSourceResult, Synthesis, StructuredData
 

@@ -6,7 +6,12 @@ import logging
 import asyncio
 import json
 from eaia.agents.state import AgentState
-from eaia.mcp.biomed_mcp.biomed_agents.tools.clinical_tools import get_clinical_trials_client
+try:
+    from eaia.mcp.biomed_mcp.biomed_agents.tools.clinical_tools import get_clinical_trials_client
+except (ImportError, ModuleNotFoundError) as _biomed_err:
+    import logging as _log
+    _log.getLogger(__name__).warning(f"biomed_mcp not available (langgraph compat): {_biomed_err}")
+    def get_clinical_trials_client(): return None
 from eaia.services.structure_parsing.study_parser import parse_ctgov_study
 from eaia.skills.apollo_enrichment import enrich_person
 from eaia.skills.air_support import scout_target
