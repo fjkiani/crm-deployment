@@ -1,0 +1,273 @@
+# =============================================================================
+# render.yaml — Render Blueprint
+#
+# Deploys the full CRM stack to Render.com.
+#
+# Architecture:
+#   frappe-web        Web Service  (public :8000)
+#   eaia-agent        Web Service  (public :8001)
+#   farfalle-backend  Web Service  (public :8000 → exposed as /api)
+#   farfalle-frontend Web Service  (public :3000)
+#   frappe-worker     Background Worker
+#   frappe-scheduler  Background Worker
+#   mariadb           Private Service (Docker)
+#   redis-cache       Private Service (Docker)
+#   redis-queue       Private Service (Docker)
+#
+# Deploy steps:
+#   1. Push repo to GitHub
+#   2. render.com → New → Blueprint → connect repo
+#   3. Render reads this file and provisions all services
+#   4. Set secret env vars in Render dashboard (marked sync: false)
+#   5. After first frappe-web deploy, copy FRAPPE_API_KEY/SECRET from logs
+#      into eaia-agent and farfalle-backend env vars, then redeploy those two.
+#
+# IMPORTANT — farfalle-frontend NEXT_PUBLIC_API_URL:
+#   Next.js bakes this into the JS bundle at BUILD time.
+#   After first deploy, note the farfalle-backend public URL from Render,
+#   update NEXT_PUBLIC_API_URL below, and redeploy farfalle-frontend.
+#   Render will show the URL as: https://<service-name>.onrender.com
+# =============================================================================
+
+services:
+
+  # ── MariaDB (private — not exposed to internet) ───────────────────────────
+  - type: pserv
+    name: crm-mariadb
+    runtime: docker
+    image:
+      url: docker.io/library/mariadb:10.6
+    disk:
+      name: mariadb-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+    envVars:
+      - key: MYSQL_ROOT_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        value: crm_db
+      - key: MYSQL_USER
+        value: crm_db
+      - key: MYSQL_PASSWORD
+        sync: false
+
+  # ── Redis Cache (private) ─────────────────────────────────────────────────
+  - type: pserv
+    name: crm-redis-cache
+    runtime: docker
+    image:
+      url: docker.io/library/redis:7-alpine
+    dockerCommand: redis-server --port 13000 --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # ── Redis Queue (private) ─────────────────────────────────────────────────
+  - type: pserv
+    name: crm-redis-queue
+    runtime: docker
+    image:
+      url: docker.io/library/redis:7-alpine
+    dockerCommand: redis-server --port 11000
+
+  # ── Frappe Web ────────────────────────────────────────────────────────────
+  - type: web
+    name: crm-frappe-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile.frappe
+    dockerContext: .
+    plan: standard          # needs ≥1GB RAM
+    disk:
+      name: frappe-sites
+      mountPath: /home/frappe/frappe-bench/sites
+      sizeGB: 10
+    healthCheckPath: /api/method/ping
+    envVars:
+      - key: FRAPPE_SITE_NAME
+        value: crm-frappe-web.onrender.com
+      - key: DB_HOST
+        fromService:
+          name: crm-mariadb
+          type: pserv
+          property: host
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        value: crm_db
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_ROOT_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: REDIS_CACHE_URL
+        fromService:
+          name: crm-redis-cache
+          type: pserv
+          property: connectionString
+      - key: REDIS_QUEUE_URL
+        fromService:
+          name: crm-redis-queue
+          type: pserv
+          property: connectionString
+
+  # ── Frappe Worker (background) ────────────────────────────────────────────
+  - type: worker
+    name: crm-frappe-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.frappe
+    dockerContext: .
+    plan: starter
+    dockerCommand: >-
+      bash -c "cd /home/frappe/frappe-bench && bench use crm-frappe-web.onrender.com && bench worker --queue long,default,short"
+    envVars:
+      - key: FRAPPE_SITE_NAME
+        value: crm-frappe-web.onrender.com
+      - key: DB_HOST
+        fromService:
+          name: crm-mariadb
+          type: pserv
+          property: host
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        value: crm_db
+      - key: DB_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: REDIS_CACHE_URL
+        fromService:
+          name: crm-redis-cache
+          type: pserv
+          property: connectionString
+      - key: REDIS_QUEUE_URL
+        fromService:
+          name: crm-redis-queue
+          type: pserv
+          property: connectionString
+
+  # ── Frappe Scheduler (background) ─────────────────────────────────────────
+  - type: worker
+    name: crm-frappe-scheduler
+    runtime: docker
+    dockerfilePath: ./Dockerfile.frappe
+    dockerContext: .
+    plan: starter
+    dockerCommand: >-
+      bash -c "cd /home/frappe/frappe-bench && bench use crm-frappe-web.onrender.com && bench schedule"
+    envVars:
+      - key: FRAPPE_SITE_NAME
+        value: crm-frappe-web.onrender.com
+      - key: DB_HOST
+        fromService:
+          name: crm-mariadb
+          type: pserv
+          property: host
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        value: crm_db
+      - key: DB_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: REDIS_CACHE_URL
+        fromService:
+          name: crm-redis-cache
+          type: pserv
+          property: connectionString
+      - key: REDIS_QUEUE_URL
+        fromService:
+          name: crm-redis-queue
+          type: pserv
+          property: connectionString
+
+  # ── EAIA Agent (Nyx) ──────────────────────────────────────────────────────
+  - type: web
+    name: crm-eaia-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile.eaia
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: FRAPPE_SITE_URL
+        fromService:
+          name: crm-frappe-web
+          type: web
+          property: url
+      - key: EAIA_URL
+        fromService:
+          name: crm-eaia-agent
+          type: web
+          property: url
+      - key: FRAPPE_API_KEY
+        sync: false
+      - key: FRAPPE_API_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: GMAIL_SECRET
+        sync: false
+      - key: GMAIL_TOKEN
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: NYX_COMPANY_NAME
+        value: Zeta
+      - key: NYX_INDUSTRY
+        value: life sciences
+
+  # ── Farfalle Backend ──────────────────────────────────────────────────────
+  - type: web
+    name: crm-farfalle-backend
+    runtime: docker
+    dockerfilePath: ./scripts/farfalle-main/src/backend/Dockerfile
+    dockerContext: ./scripts/farfalle-main
+    plan: starter
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: CRM_BASE_URL
+        fromService:
+          name: crm-frappe-web
+          type: web
+          property: url
+      - key: CRM_USER
+        value: Administrator
+      - key: CRM_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        sync: false   # set to your Render Postgres URL after provisioning
+      - key: DB_ENABLED
+        value: "True"
+
+  # ── Farfalle Frontend ─────────────────────────────────────────────────────
+  # NEXT_PUBLIC_API_URL is baked into the JS bundle at build time.
+  # After first deploy, update this value to the actual crm-farfalle-backend URL
+  # (shown in Render dashboard as https://crm-farfalle-backend.onrender.com)
+  # then trigger a manual redeploy of this service.
+  - type: web
+    name: crm-farfalle-frontend
+    runtime: docker
+    dockerfilePath: ./scripts/farfalle-main/src/frontend/Dockerfile
+    dockerContext: ./scripts/farfalle-main
+    plan: starter
+    dockerBuildArgs:
+      - key: NEXT_PUBLIC_API_URL
+        # UPDATE THIS to your actual farfalle-backend Render URL after first deploy
+        value: https://crm-farfalle-backend.onrender.com
+      - key: NEXT_PUBLIC_LOCAL_MODE_ENABLED
+        value: "true"
+      - key: NEXT_PUBLIC_PRO_MODE_ENABLED
+        value: "true"

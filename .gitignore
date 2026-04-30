@@ -23,10 +23,7 @@ logs/
 
 # OS
 Thumbs.db
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> d4b35b8e4ab23eabd20c216efd33a313c2a3ce18
+
 # Secrets and credentials
 .secrets/
 *.secrets.json
@@ -41,10 +38,6 @@ mysql-data/
 *.MYD
 *.MAI
 *.MAD
-<<<<<<< HEAD
-=======
-=======
-# Local dev ignore
+
+# Local dev
 scripts/farfalle-main/venv*/
->>>>>>> fc6c54f (all)
->>>>>>> d4b35b8e4ab23eabd20c216efd33a313c2a3ce18

@@ -1,0 +1,261 @@
+# =============================================================================
+# docker-compose.yml — CRM Self-Hosted Stack
+#
+# Services:
+#   Infrastructure:  mariadb, redis-cache, redis-queue
+#   Frappe:          frappe-web, frappe-worker, frappe-scheduler, frappe-socketio
+#   Agent:           eaia-agent  (FastAPI / Nyx)
+#   Chat UI:         farfalle-backend, farfalle-frontend, farfalle-db
+#
+# Quick start (local dev):
+#   cp .env.example .env   # fill in secrets
+#   docker-compose up --build
+#
+# IMPORTANT — NEXT_PUBLIC_API_URL:
+#   Next.js bakes this into the JS bundle at BUILD time.
+#   For local dev it defaults to http://localhost:3001 (farfalle-backend).
+#   For production set FARFALLE_BACKEND_PUBLIC_URL in your .env to the
+#   public URL of farfalle-backend BEFORE running docker-compose build.
+#   e.g. FARFALLE_BACKEND_PUBLIC_URL=https://farfalle-api.onrender.com
+# =============================================================================
+
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Shared Frappe environment block
+# ---------------------------------------------------------------------------
+x-frappe-env: &frappe-env
+  FRAPPE_SITE_NAME: ${FRAPPE_SITE_NAME:-crm.localhost}
+  DB_HOST: mariadb
+  DB_PORT: "3306"
+  DB_NAME: ${DB_NAME:-crm_db}
+  DB_PASSWORD: ${DB_PASSWORD}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+  REDIS_CACHE_URL: redis://redis-cache:13000
+  REDIS_QUEUE_URL: redis://redis-queue:11000
+
+x-frappe-base: &frappe-base
+  build:
+    context: .
+    dockerfile: Dockerfile.frappe
+  image: crm-frappe:latest
+  restart: unless-stopped
+  depends_on:
+    mariadb:
+      condition: service_healthy
+    redis-cache:
+      condition: service_started
+    redis-queue:
+      condition: service_started
+  volumes:
+    - frappe-sites:/home/frappe/frappe-bench/sites
+    - frappe-logs:/home/frappe/frappe-bench/logs
+  networks:
+    - crm-network
+
+# ---------------------------------------------------------------------------
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────
+
+  mariadb:
+    image: mariadb:10.6
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-crm_db}
+      MYSQL_USER: ${DB_NAME:-crm_db}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./docker/mariadb.cnf:/etc/mysql/conf.d/frappe.cnf:ro
+    ports:
+      - "3306:3306"   # remove in production
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - crm-network
+
+  redis-cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --port 13000 --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cache-data:/data
+    networks:
+      - crm-network
+
+  redis-queue:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --port 11000
+    volumes:
+      - redis-queue-data:/data
+    networks:
+      - crm-network
+
+  # ── Frappe ────────────────────────────────────────────────────────────────
+
+  frappe-web:
+    <<: *frappe-base
+    environment:
+      <<: *frappe-env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/method/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s   # bench init takes time on first boot
+
+  frappe-worker:
+    <<: *frappe-base
+    environment:
+      <<: *frappe-env
+    command: >
+      bash -c "
+        cd /home/frappe/frappe-bench &&
+        bench use ${FRAPPE_SITE_NAME:-crm.localhost} &&
+        bench worker --queue long,default,short
+      "
+    depends_on:
+      frappe-web:
+        condition: service_healthy
+
+  frappe-scheduler:
+    <<: *frappe-base
+    environment:
+      <<: *frappe-env
+    command: >
+      bash -c "
+        cd /home/frappe/frappe-bench &&
+        bench use ${FRAPPE_SITE_NAME:-crm.localhost} &&
+        bench schedule
+      "
+    depends_on:
+      frappe-web:
+        condition: service_healthy
+
+  frappe-socketio:
+    <<: *frappe-base
+    environment:
+      <<: *frappe-env
+    command: >
+      bash -c "
+        cd /home/frappe/frappe-bench &&
+        node apps/frappe/socketio.js
+      "
+    ports:
+      - "9000:9000"
+    depends_on:
+      frappe-web:
+        condition: service_healthy
+
+  # ── EAIA Agent (Nyx) ──────────────────────────────────────────────────────
+
+  eaia-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.eaia
+    image: crm-eaia:latest
+    restart: unless-stopped
+    environment:
+      FRAPPE_SITE_URL: http://frappe-web:8000
+      EAIA_URL: http://eaia-agent:8001
+      FRAPPE_API_KEY: ${FRAPPE_API_KEY:-}
+      FRAPPE_API_SECRET: ${FRAPPE_API_SECRET:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      GMAIL_SECRET: ${GMAIL_SECRET:-}
+      GMAIL_TOKEN: ${GMAIL_TOKEN:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      NYX_COMPANY_NAME: ${NYX_COMPANY_NAME:-Zeta}
+      NYX_INDUSTRY: ${NYX_INDUSTRY:-life sciences}
+    ports:
+      - "8001:8001"
+    depends_on:
+      frappe-web:
+        condition: service_healthy
+    networks:
+      - crm-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Farfalle Chat UI ──────────────────────────────────────────────────────
+
+  farfalle-backend:
+    build:
+      context: scripts/farfalle-main
+      dockerfile: src/backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      # CRM connection (farfalle intel router → Frappe)
+      CRM_BASE_URL: http://frappe-web:8000
+      CRM_USER: ${CRM_USER:-Administrator}
+      CRM_PASSWORD: ${ADMIN_PASSWORD}
+      DATABASE_URL: postgresql+psycopg2://farfalle:${FARFALLE_DB_PASSWORD:-farfalle}@farfalle-db:5432/farfalle
+      DB_ENABLED: "True"
+    ports:
+      - "3001:8000"
+    depends_on:
+      - farfalle-db
+      - frappe-web
+    networks:
+      - crm-network
+
+  farfalle-frontend:
+    build:
+      context: scripts/farfalle-main
+      dockerfile: src/frontend/Dockerfile
+      args:
+        # CRITICAL: Next.js bakes this into the JS bundle at build time.
+        # For local dev: http://localhost:3001
+        # For production: set FARFALLE_BACKEND_PUBLIC_URL in .env before building
+        NEXT_PUBLIC_API_URL: ${FARFALLE_BACKEND_PUBLIC_URL:-http://localhost:3001}
+        NEXT_PUBLIC_LOCAL_MODE_ENABLED: "true"
+        NEXT_PUBLIC_PRO_MODE_ENABLED: "true"
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - farfalle-backend
+    networks:
+      - crm-network
+
+  farfalle-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: farfalle
+      POSTGRES_PASSWORD: ${FARFALLE_DB_PASSWORD:-farfalle}
+      POSTGRES_DB: farfalle
+    volumes:
+      - farfalle-db-data:/var/lib/postgresql/data
+    networks:
+      - crm-network
+
+# ---------------------------------------------------------------------------
+volumes:
+  mariadb-data:
+  redis-cache-data:
+  redis-queue-data:
+  frappe-sites:
+  frappe-logs:
+  farfalle-db-data:
+
+networks:
+  crm-network:
+    name: crm-network

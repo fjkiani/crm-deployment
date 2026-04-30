@@ -1,0 +1,86 @@
+# =============================================================================
+# Dockerfile.eaia
+# Executive AI Assistant (EAIA / Nyx) — FastAPI agent, port 8001
+#
+# Fixes vs. previous version:
+#   - Copies static/ directory (required by StaticFiles mount in server.py)
+#   - Handles missing poetry.lock gracefully
+#   - Sets correct WORKDIR so `python eaia/server.py` resolves paths correctly
+#   - FRAPPE_SITE_URL defaults to docker-compose service name
+# =============================================================================
+
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    git \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry==1.8.3
+
+# Working directory = the EAIA package root
+# server.py does: StaticFiles(directory="static") — relative to CWD
+WORKDIR /app
+
+# ---------------------------------------------------------------------------
+# Dependencies — copy manifests first for layer caching
+# ---------------------------------------------------------------------------
+COPY assistant/executive-ai-assistant-main/pyproject.toml ./pyproject.toml
+# poetry.lock is optional — copy if present, skip if not
+COPY assistant/executive-ai-assistant-main/poetry.lock* ./
+
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --only main \
+    || pip install --no-cache-dir \
+        "langgraph>=0.4.5" \
+        "langgraph-checkpoint>=2.0.0" \
+        "langchain>=0.3.9" \
+        "langchain-openai>=0.2" \
+        "langchain-anthropic>=0.3" \
+        "google-api-python-client>=2.128.0" \
+        "langchain-auth>=0.1.2" \
+        "langgraph-sdk>=0.2" \
+        "langsmith>=0.3.45" \
+        "langgraph-api>=0.4.7" \
+        "langchain-google-genai>=2.0.0" \
+        "mcp>=1.0.0" \
+        "pytrials>=0.1.0" \
+        "pandas>=2.0.0" \
+        "pytz" \
+        "pyyaml" \
+        "python-dateutil>=2.9.0" \
+        "python-dotenv>=1.0.1" \
+        "fastapi[all]" \
+        "uvicorn[standard]" \
+        "httpx" \
+        "requests" \
+        "twilio==8.5.0" \
+        "starlette"
+
+# ---------------------------------------------------------------------------
+# Copy full EAIA source (includes eaia/ package and static/ directory)
+# ---------------------------------------------------------------------------
+COPY assistant/executive-ai-assistant-main/ .
+
+# ---------------------------------------------------------------------------
+# Ensure static/ exists (server.py mounts it; crashes if missing)
+# ---------------------------------------------------------------------------
+RUN mkdir -p static && \
+    [ -f static/nyx-test.html ] || echo '<html><body><h1>Nyx Agent</h1><p>See <a href="/docs">/docs</a></p></body></html>' > static/nyx-test.html
+
+# ---------------------------------------------------------------------------
+# Runtime environment defaults (all overridden by docker-compose env block)
+# ---------------------------------------------------------------------------
+ENV FRAPPE_SITE_URL=http://frappe-web:8000
+ENV EAIA_URL=http://eaia-agent:8001
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8001
+
+# Run from /app so relative paths (static/, eaia/) resolve correctly
+CMD ["python", "eaia/server.py"]

@@ -1,0 +1,104 @@
+# =============================================================================
+# Dockerfile.frappe
+# Frappe (develop branch) + CRM app — self-hosted, platform-agnostic
+#
+# One image, four roles (set via `command:` in docker-compose):
+#   frappe-web       → /home/frappe/init-site.sh  (default)
+#   frappe-worker    → bench worker --queue long,default,short
+#   frappe-scheduler → bench schedule
+#   frappe-socketio  → node apps/frappe/socketio.js
+#
+# Build-time: installs bench + Frappe framework + CRM app code.
+# Run-time:   init-site.sh creates the site, runs migrations, starts gunicorn.
+# Secrets:    injected via env vars at runtime — never baked into the image.
+# =============================================================================
+
+FROM python:3.11-slim
+
+# ---------------------------------------------------------------------------
+# System dependencies
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    default-libmysqlclient-dev \
+    mariadb-client \
+    git \
+    curl \
+    gnupg \
+    wkhtmltopdf \
+    redis-tools \
+    gettext \
+    libffi-dev \
+    libssl-dev \
+    libjpeg-dev \
+    libpng-dev \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g yarn \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# Non-root user (Frappe convention)
+# ---------------------------------------------------------------------------
+RUN useradd -ms /bin/bash frappe
+WORKDIR /home/frappe
+
+# ---------------------------------------------------------------------------
+# Install frappe-bench CLI
+# ---------------------------------------------------------------------------
+RUN pip install --no-cache-dir frappe-bench
+
+# ---------------------------------------------------------------------------
+# Initialise bench with Frappe framework (pinned commit from apps.json)
+# --skip-assets: no DB available at build time, assets built at runtime
+# ---------------------------------------------------------------------------
+USER frappe
+RUN bench init \
+    --frappe-branch develop \
+    --frappe-path https://github.com/frappe/frappe \
+    --skip-assets \
+    --python python3 \
+    frappe-bench \
+    && cd frappe-bench \
+    && git -C apps/frappe checkout 3b61c0ba8f362e83c578f9d7aa0a61b4e8956191 2>/dev/null || true
+
+WORKDIR /home/frappe/frappe-bench
+
+# ---------------------------------------------------------------------------
+# Install frappe-mcp (PyPI v0.1.0)
+# ---------------------------------------------------------------------------
+RUN ./env/bin/pip install --no-cache-dir frappe-mcp==0.1.0
+
+# ---------------------------------------------------------------------------
+# Copy CRM app source into the bench
+# ---------------------------------------------------------------------------
+COPY --chown=frappe:frappe crm/                apps/crm/
+COPY --chown=frappe:frappe setup.py            apps/crm/setup.py
+COPY --chown=frappe:frappe pyproject.toml      apps/crm/pyproject.toml
+COPY --chown=frappe:frappe requirements.txt    apps/crm/requirements.txt
+COPY --chown=frappe:frappe MANIFEST.in         apps/crm/MANIFEST.in
+
+# Install CRM into the bench virtualenv
+RUN ./env/bin/pip install --no-cache-dir -e apps/crm
+
+# Register app so `bench install-app crm` works
+RUN echo "crm" >> sites/apps.txt
+
+# ---------------------------------------------------------------------------
+# NOTE: `bench build` requires a running site (DB connection).
+# Asset compilation is deferred to init-site.sh at runtime.
+# The pre-built frontend assets in crm/public/frontend/ are already present.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Startup script
+# ---------------------------------------------------------------------------
+COPY --chown=frappe:frappe init-site.sh /home/frappe/init-site.sh
+RUN chmod +x /home/frappe/init-site.sh
+
+EXPOSE 8000 9000
+
+CMD ["/home/frappe/init-site.sh"]
