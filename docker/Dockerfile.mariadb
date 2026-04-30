@@ -1,7 +1,8 @@
 # Render private services expose port 10000 on the private network.
 # MariaDB listens on 10000 so Frappe can connect at crm-mariadb:10000
 FROM mariadb:10.6
-COPY mariadb.cnf /etc/mysql/conf.d/frappe.cnf
+# Path relative to build context (repo root)
+COPY docker/mariadb.cnf /etc/mysql/conf.d/frappe.cnf
 # Override default port to 10000 (Render private network convention)
 ENV MYSQL_TCP_PORT=10000
 EXPOSE 10000

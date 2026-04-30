@@ -27,7 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     gnupg \
-    wkhtmltopdf \
     redis-tools \
     gettext \
     libffi-dev \
@@ -86,12 +85,6 @@ RUN ./env/bin/pip install --no-cache-dir -e apps/crm
 
 # Register app so `bench install-app crm` works
 RUN echo "crm" >> sites/apps.txt
-
-# ---------------------------------------------------------------------------
-# NOTE: `bench build` requires a running site (DB connection).
-# Asset compilation is deferred to init-site.sh at runtime.
-# The pre-built frontend assets in crm/public/frontend/ are already present.
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Startup script

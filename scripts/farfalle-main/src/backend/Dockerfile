@@ -26,4 +26,6 @@ RUN pip install --no-cache-dir poetry && poetry install
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "cd /workspace/src/backend && alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
+# Run alembic migrations if DB is available, then start uvicorn
+# alembic failure is non-fatal (DB may not be ready yet on first boot)
+CMD ["sh", "-c", "cd /workspace/src/backend && (alembic upgrade head || echo 'alembic skipped - DB not ready') && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
