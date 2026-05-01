@@ -10,9 +10,7 @@ authors = [
     {name = "Frappe Technologies Pvt. Ltd.", email = "shariq@frappe.io"}
 ]
 dependencies = [
-    "twilio==8.5.0",
-    "frappe-mcp"
-
+    "twilio==8.5.0"
 ]
 requires-python = ">=3.10"
 readme = "README.md"
