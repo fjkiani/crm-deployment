@@ -33,7 +33,7 @@ ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
 REDIS_CACHE="${REDIS_CACHE_URL:-redis://redis-cache:13000}"
 REDIS_QUEUE="${REDIS_QUEUE_URL:-redis://redis-queue:11000}"
 
-echo "[init-site] site: ${SITE}, db: ${DB_HOST}:${DB_PORT}"
+echo "[init-site] site: ${SITE}, db: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
 cd "${BENCH_DIR}"
 
@@ -94,31 +94,66 @@ echo "[init-site] gunicorn status: $(kill -0 $GUNICORN_PID 2>&1 && echo 'running
     done
     echo "[init-site] MariaDB is up."
 
-    # Create site or migrate
-    if [ ! -d "${BENCH_DIR}/sites/${SITE}" ]; then
-        echo "[init-site] Creating site '${SITE}'..."
+    # Check if the database already has Frappe tables (site was previously set up)
+    TABLE_COUNT=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_NAME" -p"$DB_PASSWORD" \
+        "$DB_NAME" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" \
+        --skip-column-names 2>/dev/null || echo "0")
+    
+    echo "[init-site] Database table count: $TABLE_COUNT"
+
+    if [ "$TABLE_COUNT" -gt "10" ] 2>/dev/null; then
+        # Database already has tables - site was previously set up
+        # Just create the site directory and run migrate
+        echo "[init-site] Database already initialized ($TABLE_COUNT tables). Setting up site directory..."
         
-        # Build bench new-site command
-        NEW_SITE_CMD="bench new-site \"$SITE\" \
-            --db-name \"$DB_NAME\" \
-            --db-password \"$DB_PASSWORD\" \
-            --admin-password \"$ADMIN_PASSWORD\" \
-            --db-host \"$DB_HOST\" \
-            --db-port \"$DB_PORT\" \
-            --no-mariadb-socket"
+        # Create site directory if it doesn't exist
+        mkdir -p "${BENCH_DIR}/sites/${SITE}"
+        
+        # Create site_config.json
+        python3 - <<PYEOF2
+import json
+site_config = {
+    "db_name": "${DB_NAME}",
+    "db_password": "${DB_PASSWORD}",
+    "db_host": "${DB_HOST}",
+    "db_port": ${DB_PORT},
+    "encryption_key": "${ENCRYPTION_KEY}"
+}
+with open("${BENCH_DIR}/sites/${SITE}/site_config.json", "w") as f:
+    json.dump(site_config, f, indent=2)
+print("[init-site] site_config.json created.")
+PYEOF2
+        
+        echo "[init-site] Running migrate on existing site..."
+        bench --site "$SITE" migrate || echo "[init-site] migrate skipped"
+    else
+        # Fresh database - run bench new-site
+        echo "[init-site] Fresh database. Creating site '${SITE}'..."
+        
+        # Build bench new-site command args
+        BENCH_ARGS=(
+            new-site "$SITE"
+            --db-name "$DB_NAME"
+            --db-password "$DB_PASSWORD"
+            --admin-password "$ADMIN_PASSWORD"
+            --db-host "$DB_HOST"
+            --db-port "$DB_PORT"
+            --no-mariadb-socket
+            --force
+        )
         
         # Add root password if provided
         if [ -n "$DB_ROOT_PASSWORD" ]; then
-            NEW_SITE_CMD="$NEW_SITE_CMD --db-root-password \"$DB_ROOT_PASSWORD\""
+            BENCH_ARGS+=(--db-root-password "$DB_ROOT_PASSWORD")
         fi
         
         # Add encryption key if provided
         if [ -n "$ENCRYPTION_KEY" ]; then
-            NEW_SITE_CMD="$NEW_SITE_CMD --encryption-key \"$ENCRYPTION_KEY\""
+            BENCH_ARGS+=(--encryption-key "$ENCRYPTION_KEY")
         fi
         
-        echo "[init-site] Running: bench new-site $SITE ..."
-        eval "$NEW_SITE_CMD"
+        echo "[init-site] Running bench new-site..."
+        bench "${BENCH_ARGS[@]}"
         SITE_EXIT=$?
         
         if [ $SITE_EXIT -ne 0 ]; then
@@ -133,13 +168,14 @@ echo "[init-site] gunicorn status: $(kill -0 $GUNICORN_PID 2>&1 && echo 'running
         bench --site "$SITE" migrate
 
         echo "[init-site] Site '${SITE}' created and CRM installed."
-    else
-        echo "[init-site] Site '${SITE}' exists — running migrate..."
-        bench --site "$SITE" migrate || echo "[init-site] migrate skipped"
     fi
 
     bench use "$SITE"
     echo "[init-site] Site setup complete! Frappe is ready."
+    
+    # Reload gunicorn to pick up the new site
+    echo "[init-site] Sending SIGHUP to gunicorn to reload..."
+    kill -HUP $GUNICORN_PID 2>/dev/null || true
 ) &
 
 # Wait for gunicorn to exit (it runs in foreground)
