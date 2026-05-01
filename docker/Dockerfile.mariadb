@@ -3,6 +3,9 @@
 FROM mariadb:10.6
 # Path relative to build context (repo root)
 COPY docker/mariadb.cnf /etc/mysql/conf.d/frappe.cnf
+# Init script: grants root access from any host (needed for bench new-site)
+COPY docker/mariadb-init.sh /docker-entrypoint-initdb.d/01-grant-root.sh
+RUN chmod +x /docker-entrypoint-initdb.d/01-grant-root.sh
 # Override default port to 10000 (Render private network convention)
 ENV MYSQL_TCP_PORT=10000
 EXPOSE 10000
