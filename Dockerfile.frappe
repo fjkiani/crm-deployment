@@ -2,8 +2,8 @@
 # Dockerfile.frappe
 # Frappe (develop branch) + CRM app — self-hosted, platform-agnostic
 #
-# Uses node:18-slim as base (Node pre-installed) then adds Python 3.11.
-# This avoids the nodesource curl|bash install which can fail in CI environments.
+# Uses python:3.11 (full Debian Bookworm) — has all build tools pre-installed.
+# Installs nodejs from Debian repos (no nodesource curl|bash needed).
 #
 # One image, four roles (set via `command:` in docker-compose):
 #   frappe-web       → /home/frappe/init-site.sh  (default)
@@ -12,23 +12,18 @@
 #   frappe-socketio  → node apps/frappe/socketio.js
 # =============================================================================
 
-FROM node:18-slim
+FROM python:3.11
 
 # ---------------------------------------------------------------------------
-# Install Python 3.11 and system dependencies
+# System dependencies
+# nodejs is available directly in Debian Bookworm repos (no nodesource needed)
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-dev \
-    python3.11-venv \
-    python3-pip \
-    build-essential \
-    gcc \
-    g++ \
+    nodejs \
+    npm \
     default-libmysqlclient-dev \
     mariadb-client \
     git \
-    curl \
     redis-tools \
     gettext \
     libffi-dev \
@@ -39,10 +34,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Make python3.11 the default python3
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python python python3.11 1
-
 # ---------------------------------------------------------------------------
 # Non-root user (Frappe convention)
 # ---------------------------------------------------------------------------
@@ -52,7 +43,7 @@ WORKDIR /home/frappe
 # ---------------------------------------------------------------------------
 # Install frappe-bench CLI
 # ---------------------------------------------------------------------------
-RUN pip install --no-cache-dir --break-system-packages frappe-bench
+RUN pip install --no-cache-dir frappe-bench
 
 # ---------------------------------------------------------------------------
 # Initialise bench with Frappe framework (develop branch HEAD)
