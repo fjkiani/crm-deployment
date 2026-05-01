@@ -1,16 +1,16 @@
 #!/bin/bash
 # =============================================================================
-# init-site.sh
-# Runs inside the frappe-web container on every startup.
+# init-site.sh - Simplified version for debugging
 # =============================================================================
 
 export PATH="/usr/local/bin:/home/frappe/frappe-bench/env/bin:$PATH"
-
 SERVE_PORT="${PORT:-8000}"
-LOG_FILE="/tmp/init-site.log"
 
-echo "[init-site] Starting at $(date), port=$SERVE_PORT" | tee -a "$LOG_FILE"
-echo "[init-site] USER=$(whoami), bench=$(which bench 2>/dev/null || echo NOT_FOUND)" | tee -a "$LOG_FILE"
+echo "=== init-site.sh starting at $(date) ==="
+echo "PORT=$SERVE_PORT USER=$(whoami)"
+echo "bench=$(which bench 2>/dev/null || echo NOT_FOUND)"
+echo "mysqladmin=$(which mysqladmin 2>/dev/null || echo NOT_FOUND)"
+echo "mysql=$(which mysql 2>/dev/null || echo NOT_FOUND)"
 
 BENCH_DIR="/home/frappe/frappe-bench"
 SITE="${FRAPPE_SITE_NAME:-crm.localhost}"
@@ -24,27 +24,52 @@ ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
 REDIS_CACHE="${REDIS_CACHE_URL:-redis://redis-cache:13000}"
 REDIS_QUEUE="${REDIS_QUEUE_URL:-redis://redis-queue:11000}"
 
-echo "[init-site] site=$SITE db=$DB_HOST:$DB_PORT/$DB_NAME" | tee -a "$LOG_FILE"
+echo "SITE=$SITE DB=$DB_HOST:$DB_PORT/$DB_NAME"
 
 cd "${BENCH_DIR}"
 
 # Update common_site_config.json
 python3 -c "
 import json
-config_path = '${BENCH_DIR}/sites/common_site_config.json'
-try:
-    config = json.load(open(config_path))
-except:
-    config = {}
-config['redis_cache'] = '${REDIS_CACHE}'
-config['redis_queue'] = '${REDIS_QUEUE}'
-config['redis_socketio'] = '${REDIS_QUEUE}'
-json.dump(config, open(config_path, 'w'), indent=2)
-print('[init-site] common_site_config.json updated')
-" 2>&1 | tee -a "$LOG_FILE"
+p = '${BENCH_DIR}/sites/common_site_config.json'
+try: c = json.load(open(p))
+except: c = {}
+c['redis_cache'] = '${REDIS_CACHE}'
+c['redis_queue'] = '${REDIS_QUEUE}'
+c['redis_socketio'] = '${REDIS_QUEUE}'
+json.dump(c, open(p, 'w'), indent=2)
+print('common_site_config.json updated')
+"
 
-# Start gunicorn WITHOUT --preload (so it starts even without a site)
-echo "[init-site] Starting gunicorn on port $SERVE_PORT..." | tee -a "$LOG_FILE"
+# Test MariaDB connectivity BEFORE starting gunicorn
+echo "=== Testing MariaDB connectivity ==="
+for i in 1 2 3 4 5; do
+    if mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" --silent 2>/dev/null; then
+        echo "MariaDB ping OK on attempt $i"
+        break
+    else
+        echo "MariaDB ping failed (attempt $i): $(mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" 2>&1)"
+        sleep 5
+    fi
+done
+
+# Test Python DB connection
+echo "=== Testing Python DB connection ==="
+python3 -c "
+import pymysql, sys
+try:
+    conn = pymysql.connect(host='${DB_HOST}', port=int('${DB_PORT}'), user='${DB_NAME}', password='${DB_PASSWORD}', database='${DB_NAME}', connect_timeout=10)
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"${DB_NAME}\"')
+    count = cursor.fetchone()[0]
+    print(f'DB connection OK, table count: {count}')
+    conn.close()
+except Exception as e:
+    print(f'DB connection FAILED: {e}')
+" 2>&1
+
+# Start gunicorn
+echo "=== Starting gunicorn on port $SERVE_PORT ==="
 /home/frappe/frappe-bench/env/bin/gunicorn \
     --chdir=/home/frappe/frappe-bench/sites \
     --bind=0.0.0.0:${SERVE_PORT} \
@@ -54,48 +79,53 @@ echo "[init-site] Starting gunicorn on port $SERVE_PORT..." | tee -a "$LOG_FILE"
     --timeout=120 \
     frappe.app:application &
 GUNICORN_PID=$!
-echo "[init-site] gunicorn PID=$GUNICORN_PID" | tee -a "$LOG_FILE"
+echo "gunicorn PID=$GUNICORN_PID"
 
 sleep 5
 if kill -0 $GUNICORN_PID 2>/dev/null; then
-    echo "[init-site] gunicorn running OK" | tee -a "$LOG_FILE"
+    echo "gunicorn running OK"
 else
-    echo "[init-site] ERROR: gunicorn died!" | tee -a "$LOG_FILE"
-    # Try without worker class
+    echo "ERROR: gunicorn died! Trying without worker class..."
     /home/frappe/frappe-bench/env/bin/gunicorn \
         --chdir=/home/frappe/frappe-bench/sites \
         --bind=0.0.0.0:${SERVE_PORT} \
         --timeout=120 \
         frappe.app:application &
     GUNICORN_PID=$!
-    echo "[init-site] gunicorn retry PID=$GUNICORN_PID" | tee -a "$LOG_FILE"
+    echo "gunicorn retry PID=$GUNICORN_PID"
     sleep 3
 fi
 
 # Run site setup in background
 {
-    echo "[bg] Site setup starting at $(date)"
+    echo "[bg] Starting site setup at $(date)"
     
     # Wait for MariaDB
-    echo "[bg] Waiting for MariaDB $DB_HOST:$DB_PORT..."
     for i in $(seq 1 200); do
         if mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" --silent 2>/dev/null; then
-            echo "[bg] MariaDB ready after $i attempts"
+            echo "[bg] MariaDB ready (attempt $i)"
             break
         fi
         [ $i -eq 200 ] && echo "[bg] ERROR: MariaDB timeout" && exit 1
-        [ $((i % 20)) -eq 0 ] && echo "[bg] Still waiting for MariaDB (attempt $i)..."
+        [ $((i % 20)) -eq 0 ] && echo "[bg] Waiting for MariaDB (attempt $i)..."
         sleep 3
     done
 
-    # Check table count
-    TABLE_COUNT=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_NAME" -p"$DB_PASSWORD" \
-        "$DB_NAME" --skip-column-names -e \
-        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" \
-        2>/dev/null)
+    # Check table count via Python
+    TABLE_COUNT=$(python3 -c "
+import pymysql
+try:
+    conn = pymysql.connect(host='${DB_HOST}', port=int('${DB_PORT}'), user='${DB_NAME}', password='${DB_PASSWORD}', database='${DB_NAME}', connect_timeout=10)
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"${DB_NAME}\"')
+    print(cursor.fetchone()[0])
+    conn.close()
+except Exception as e:
+    print(f'ERROR: {e}')
+" 2>&1)
     echo "[bg] Table count: '$TABLE_COUNT'"
 
-    if [ -n "$TABLE_COUNT" ] && [ "$TABLE_COUNT" -gt "10" ] 2>/dev/null; then
+    if echo "$TABLE_COUNT" | grep -qE '^[0-9]+$' && [ "$TABLE_COUNT" -gt "10" ] 2>/dev/null; then
         echo "[bg] DB has $TABLE_COUNT tables - restoring site config..."
         mkdir -p "${BENCH_DIR}/sites/${SITE}"
         python3 -c "
@@ -116,7 +146,6 @@ print('[bg] site_config.json written')
         
         bench "${ARGS[@]}" 2>&1
         echo "[bg] bench new-site exit: $?"
-        
         bench --site "$SITE" install-app crm 2>&1
         bench --site "$SITE" migrate 2>&1
     fi
@@ -124,10 +153,9 @@ print('[bg] site_config.json written')
     bench use "$SITE" 2>&1
     echo "[bg] Site setup done at $(date)"
     kill -HUP $GUNICORN_PID 2>/dev/null && echo "[bg] Sent SIGHUP to gunicorn"
-} >> "$LOG_FILE" 2>&1 &
+} &
 
-echo "[init-site] Background setup PID=$!" | tee -a "$LOG_FILE"
+echo "Background setup PID=$!"
 
-# Keep gunicorn running
 wait $GUNICORN_PID
-echo "[init-site] gunicorn exited: $?" | tee -a "$LOG_FILE"
+echo "gunicorn exited: $?"
