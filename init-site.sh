@@ -6,9 +6,10 @@
 #
 # Flow:
 #   1. Wait for MariaDB to be ready
-#   2. If bench not initialised → bench init (clones Frappe from GitHub)
+#   2. If bench not initialised → bench init (clones Frappe from GitHub, ~10 min)
 #   3. If CRM app not installed → copy app + pip install + register
-#   4. If site does not exist   → bench new-site + install-app crm + migrate
+#   4. Configure Redis URLs in common_site_config.json
+#   5. If site does not exist   → bench new-site + install-app crm + migrate
 #   5. If site exists           → bench migrate (applies any new patches)
 #   6. Generate EAIA API key if not already present (printed to logs)
 #   7. Hand off to bench serve
@@ -16,7 +17,11 @@
 
 set -e
 
-BENCH_DIR="/home/frappe/frappe-bench"
+# Ensure bench is in PATH (installed to /usr/local/bin by pip)
+export PATH="/usr/local/bin:$PATH"
+
+HOME_DIR="/home/frappe"
+BENCH_DIR="${HOME_DIR}/frappe-bench"
 SITE="${FRAPPE_SITE_NAME:-crm.localhost}"
 DB_HOST="${DB_HOST:-mariadb}"
 DB_PORT="${DB_PORT:-3306}"
@@ -38,42 +43,52 @@ done
 echo "[init-site] MariaDB is up."
 
 # ---------------------------------------------------------------------------
-# 2. Initialise bench (only on first boot — bench init clones Frappe from GitHub)
+# 2. Initialise bench (only on first boot)
+#    bench init creates frappe-bench/ — skip if already initialised
 # ---------------------------------------------------------------------------
 if [ ! -f "${BENCH_DIR}/env/bin/python" ]; then
-    echo "[init-site] Bench not found — running bench init (this takes 5-10 minutes on first boot)..."
+    echo "[init-site] Bench not initialised — running bench init (takes 5-10 min on first boot)..."
+
+    # If directory exists but is empty/incomplete, remove it so bench init can create it fresh
+    if [ -d "${BENCH_DIR}" ] && [ -z "$(ls -A ${BENCH_DIR} 2>/dev/null)" ]; then
+        rmdir "${BENCH_DIR}" 2>/dev/null || true
+    fi
+
+    cd "${HOME_DIR}"
     bench init \
         --frappe-branch develop \
         --frappe-path https://github.com/frappe/frappe \
         --skip-assets \
         --python python3 \
-        "$BENCH_DIR"
+        frappe-bench
+
     echo "[init-site] Bench initialised."
 
     # Install frappe-mcp
     "${BENCH_DIR}/env/bin/pip" install --no-cache-dir frappe-mcp==0.1.0
     echo "[init-site] frappe-mcp installed."
 else
-    echo "[init-site] Bench already exists — skipping bench init."
+    echo "[init-site] Bench already initialised — skipping bench init."
 fi
 
-cd "$BENCH_DIR"
+cd "${BENCH_DIR}"
 
 # ---------------------------------------------------------------------------
 # 3. Install CRM app (only if not already present)
 # ---------------------------------------------------------------------------
 if [ ! -d "${BENCH_DIR}/apps/crm" ]; then
     echo "[init-site] Installing CRM app..."
-    cp -r /home/frappe/crm-app "${BENCH_DIR}/apps/crm"
+    cp -r "${HOME_DIR}/crm-app" "${BENCH_DIR}/apps/crm"
     "${BENCH_DIR}/env/bin/pip" install --no-cache-dir -e "${BENCH_DIR}/apps/crm"
-    echo "crm" >> "${BENCH_DIR}/sites/apps.txt"
+    # Register app
+    grep -qxF "crm" "${BENCH_DIR}/sites/apps.txt" 2>/dev/null || echo "crm" >> "${BENCH_DIR}/sites/apps.txt"
     echo "[init-site] CRM app installed."
 else
     echo "[init-site] CRM app already present."
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Configure common_site_config.json (Redis URLs)
+# 4. Configure Redis URLs in common_site_config.json
 # ---------------------------------------------------------------------------
 python3 - <<PYEOF
 import json, os
@@ -81,7 +96,7 @@ config_path = "${BENCH_DIR}/sites/common_site_config.json"
 try:
     with open(config_path) as f:
         config = json.load(f)
-except:
+except Exception:
     config = {}
 config["redis_cache"] = "${REDIS_CACHE}"
 config["redis_queue"] = "${REDIS_QUEUE}"
@@ -135,7 +150,7 @@ import sys, json
 try:
     data = json.load(sys.stdin)
     print(data.get('api_key',''))
-except:
+except Exception:
     pass
 " 2>/dev/null || echo "")
 

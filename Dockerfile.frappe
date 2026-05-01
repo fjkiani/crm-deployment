@@ -42,15 +42,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Non-root user (Frappe convention)
 # ---------------------------------------------------------------------------
 RUN useradd -ms /bin/bash frappe
-WORKDIR /home/frappe
 
 # ---------------------------------------------------------------------------
-# Install frappe-bench CLI (system-wide, available to frappe user)
+# Install frappe-bench CLI (system-wide, /usr/local/bin/bench)
 # ---------------------------------------------------------------------------
 RUN pip install --no-cache-dir frappe-bench
 
 # ---------------------------------------------------------------------------
-# Copy CRM app source so init-site.sh can install it into the bench
+# Copy CRM app source so init-site.sh can install it into the bench at runtime
 # ---------------------------------------------------------------------------
 COPY --chown=frappe:frappe crm/             /home/frappe/crm-app/
 COPY --chown=frappe:frappe setup.py         /home/frappe/crm-app/setup.py
@@ -59,16 +58,19 @@ COPY --chown=frappe:frappe requirements.txt /home/frappe/crm-app/requirements.tx
 COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/crm-app/MANIFEST.in
 
 # ---------------------------------------------------------------------------
-# Startup script (runs bench init + site creation at container start)
+# Startup script
 # ---------------------------------------------------------------------------
 COPY --chown=frappe:frappe init-site.sh /home/frappe/init-site.sh
 RUN chmod +x /home/frappe/init-site.sh
 
-# bench-bench directory is created at runtime and mounted as a persistent volume
-# so we just create the parent directory here
-RUN mkdir -p /home/frappe/frappe-bench && chown frappe:frappe /home/frappe/frappe-bench
+# NOTE: Do NOT mkdir /home/frappe/frappe-bench here.
+# The persistent volume is mounted at /home/frappe/frappe-bench at runtime.
+# bench init creates this directory — if it already exists and is non-empty,
+# init-site.sh skips bench init (idempotent check on env/bin/python).
 
 EXPOSE 8000 9000
 
 USER frappe
+WORKDIR /home/frappe
+
 CMD ["/home/frappe/init-site.sh"]
