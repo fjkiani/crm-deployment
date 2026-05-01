@@ -28,6 +28,7 @@ DB_PORT="${DB_PORT:-3306}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
 DB_NAME="${DB_NAME:-crm_db}"
 DB_PASSWORD="${DB_PASSWORD:-changeme}"
+DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
 REDIS_CACHE="${REDIS_CACHE_URL:-redis://redis-cache:13000}"
 REDIS_QUEUE="${REDIS_QUEUE_URL:-redis://redis-queue:11000}"
@@ -96,14 +97,34 @@ echo "[init-site] gunicorn status: $(kill -0 $GUNICORN_PID 2>&1 && echo 'running
     # Create site or migrate
     if [ ! -d "${BENCH_DIR}/sites/${SITE}" ]; then
         echo "[init-site] Creating site '${SITE}'..."
-        bench new-site "$SITE" \
-            --db-name "$DB_NAME" \
-            --db-password "$DB_PASSWORD" \
-            --admin-password "$ADMIN_PASSWORD" \
-            --db-host "$DB_HOST" \
-            --db-port "$DB_PORT" \
-            --no-mariadb-socket \
-            ${ENCRYPTION_KEY:+--encryption-key "$ENCRYPTION_KEY"}
+        
+        # Build bench new-site command
+        NEW_SITE_CMD="bench new-site \"$SITE\" \
+            --db-name \"$DB_NAME\" \
+            --db-password \"$DB_PASSWORD\" \
+            --admin-password \"$ADMIN_PASSWORD\" \
+            --db-host \"$DB_HOST\" \
+            --db-port \"$DB_PORT\" \
+            --no-mariadb-socket"
+        
+        # Add root password if provided
+        if [ -n "$DB_ROOT_PASSWORD" ]; then
+            NEW_SITE_CMD="$NEW_SITE_CMD --db-root-password \"$DB_ROOT_PASSWORD\""
+        fi
+        
+        # Add encryption key if provided
+        if [ -n "$ENCRYPTION_KEY" ]; then
+            NEW_SITE_CMD="$NEW_SITE_CMD --encryption-key \"$ENCRYPTION_KEY\""
+        fi
+        
+        echo "[init-site] Running: bench new-site $SITE ..."
+        eval "$NEW_SITE_CMD"
+        SITE_EXIT=$?
+        
+        if [ $SITE_EXIT -ne 0 ]; then
+            echo "[init-site] ERROR: bench new-site failed with exit code $SITE_EXIT"
+            exit $SITE_EXIT
+        fi
 
         echo "[init-site] Installing CRM app..."
         bench --site "$SITE" install-app crm
