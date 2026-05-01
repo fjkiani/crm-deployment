@@ -219,12 +219,15 @@ def _setup_site_inner():
                     "--force"]
             if DB_ROOT_PASSWORD:
                 args += ["--db-root-password", DB_ROOT_PASSWORD]
-            if ENCRYPTION_KEY:
-                args += ["--encryption-key", ENCRYPTION_KEY]
+            # Note: --encryption-key is NOT supported by this bench version.
+            # We write it to site_config.json manually after site creation.
 
             rc = run_bench(args)
             if rc == 0:
                 log("bench new-site succeeded!")
+                # Write encryption_key to site_config.json if provided
+                if ENCRYPTION_KEY:
+                    _patch_site_config({"encryption_key": ENCRYPTION_KEY})
                 log("Installing CRM app...")
                 rc2 = run_bench(["--site", SITE, "install-app", "crm"])
                 run_bench(["use", SITE])
@@ -242,6 +245,20 @@ def _setup_site_inner():
             _install_app_fallback()
 
     log(f"Setup complete. SETUP_SUCCESS={SETUP_SUCCESS}")
+
+def _patch_site_config(updates: dict):
+    """Merge updates into site_config.json."""
+    site_dir = os.path.join(BENCH_DIR, "sites", SITE)
+    cfg_path = os.path.join(site_dir, "site_config.json")
+    try:
+        with open(cfg_path) as f:
+            cfg = json.load(f)
+    except Exception:
+        cfg = {}
+    cfg.update(updates)
+    with open(cfg_path, "w") as f:
+        json.dump(cfg, f, indent=2)
+    log(f"site_config.json patched with keys: {list(updates.keys())}")
 
 def _install_app_fallback():
     global SETUP_SUCCESS
@@ -264,12 +281,14 @@ def _install_app_fallback():
 
     site_dir = os.path.join(BENCH_DIR, "sites", SITE)
     os.makedirs(site_dir, exist_ok=True)
+    # Create logs dir - bench install-app tries to open logs/database.log
+    os.makedirs(os.path.join(site_dir, "logs"), exist_ok=True)
     cfg = {"db_name": DB_NAME, "db_password": DB_PASSWORD, "db_host": DB_HOST, "db_port": DB_PORT}
     if ENCRYPTION_KEY:
         cfg["encryption_key"] = ENCRYPTION_KEY
     with open(os.path.join(site_dir, "site_config.json"), "w") as f:
         json.dump(cfg, f, indent=2)
-    log("site_config.json written")
+    log("site_config.json written (with logs/ dir created)")
 
     rc1 = run_bench(["--site", SITE, "install-app", "frappe"])
     rc2 = run_bench(["--site", SITE, "install-app", "crm"])
