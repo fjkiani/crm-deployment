@@ -5,16 +5,20 @@
 # 
 # KEY DESIGN: bench serve starts FIRST (in background) so Render's health check
 # passes immediately. Site creation happens in the background.
+# 
+# Render sets PORT=10000 for web services. We use $PORT.
 # =============================================================================
 
 set -e
 
 export PATH="/usr/local/bin:/home/frappe/frappe-bench/env/bin:$PATH"
 
-echo "[init-site] Starting..."
+# Render sets PORT=10000 for web services
+SERVE_PORT="${PORT:-8000}"
+
+echo "[init-site] Starting on port $SERVE_PORT..."
 echo "[init-site] USER: $(whoami)"
 echo "[init-site] bench: $(which bench 2>/dev/null || echo 'NOT FOUND')"
-echo "[init-site] mysqladmin: $(which mysqladmin 2>/dev/null || echo 'NOT FOUND')"
 
 BENCH_DIR="/home/frappe/frappe-bench"
 SITE="${FRAPPE_SITE_NAME:-crm.localhost}"
@@ -52,9 +56,10 @@ PYEOF
 
 # ---------------------------------------------------------------------------
 # Start bench serve in background FIRST so Render's health check passes
+# Render requires the service to listen on $PORT (default 10000)
 # ---------------------------------------------------------------------------
-echo "[init-site] Starting bench serve in background (port 8000)..."
-bench serve --port 8000 &
+echo "[init-site] Starting bench serve on port $SERVE_PORT..."
+bench serve --port "$SERVE_PORT" &
 BENCH_PID=$!
 echo "[init-site] bench serve started with PID $BENCH_PID"
 
@@ -62,7 +67,7 @@ echo "[init-site] bench serve started with PID $BENCH_PID"
 sleep 5
 
 # ---------------------------------------------------------------------------
-# Wait for MariaDB (in background, non-blocking)
+# Wait for MariaDB and do site setup in background
 # ---------------------------------------------------------------------------
 (
     echo "[init-site] Waiting for MariaDB at ${DB_HOST}:${DB_PORT}..."
@@ -103,7 +108,7 @@ sleep 5
     fi
 
     bench use "$SITE"
-    echo "[init-site] Site setup complete!"
+    echo "[init-site] Site setup complete! Frappe is ready."
 ) &
 
 # Wait for bench serve to exit (it runs in foreground)
