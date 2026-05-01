@@ -2,14 +2,16 @@
 # =============================================================================
 # init-site.sh
 # Runs inside the frappe-web container on every startup.
-# Idempotent: safe to run on restarts — skips init if site already exists.
+# Fully idempotent — safe to run on restarts.
 #
 # Flow:
 #   1. Wait for MariaDB to be ready
-#   2. If site does not exist → new-site + install-app crm + migrate
-#   3. If site exists         → bench migrate (applies any new patches)
-#   4. Generate EAIA API key if not already present (printed to logs)
-#   5. Hand off to bench serve
+#   2. If bench not initialised → bench init (clones Frappe from GitHub)
+#   3. If CRM app not installed → copy app + pip install + register
+#   4. If site does not exist   → bench new-site + install-app crm + migrate
+#   5. If site exists           → bench migrate (applies any new patches)
+#   6. Generate EAIA API key if not already present (printed to logs)
+#   7. Hand off to bench serve
 # =============================================================================
 
 set -e
@@ -25,8 +27,6 @@ ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
 REDIS_CACHE="${REDIS_CACHE_URL:-redis://redis-cache:13000}"
 REDIS_QUEUE="${REDIS_QUEUE_URL:-redis://redis-queue:11000}"
 
-cd "$BENCH_DIR"
-
 # ---------------------------------------------------------------------------
 # 1. Wait for MariaDB
 # ---------------------------------------------------------------------------
@@ -38,27 +38,63 @@ done
 echo "[init-site] MariaDB is up."
 
 # ---------------------------------------------------------------------------
-# 2. Write common_site_config.json (Redis URLs, etc.)
-#    This is safe to overwrite on every boot — it contains no secrets.
+# 2. Initialise bench (only on first boot — bench init clones Frappe from GitHub)
 # ---------------------------------------------------------------------------
-cat > sites/common_site_config.json <<EOF
-{
-    "background_workers": 1,
-    "redis_cache": "${REDIS_CACHE}",
-    "redis_queue": "${REDIS_QUEUE}",
-    "redis_socketio": "${REDIS_CACHE}",
-    "serve_default_site": true,
-    "webserver_port": 8000,
-    "socketio_port": 9000,
-    "db_host": "${DB_HOST}",
-    "db_port": ${DB_PORT}
-}
-EOF
+if [ ! -f "${BENCH_DIR}/env/bin/python" ]; then
+    echo "[init-site] Bench not found — running bench init (this takes 5-10 minutes on first boot)..."
+    bench init \
+        --frappe-branch develop \
+        --frappe-path https://github.com/frappe/frappe \
+        --skip-assets \
+        --python python3 \
+        "$BENCH_DIR"
+    echo "[init-site] Bench initialised."
+
+    # Install frappe-mcp
+    "${BENCH_DIR}/env/bin/pip" install --no-cache-dir frappe-mcp==0.1.0
+    echo "[init-site] frappe-mcp installed."
+else
+    echo "[init-site] Bench already exists — skipping bench init."
+fi
+
+cd "$BENCH_DIR"
 
 # ---------------------------------------------------------------------------
-# 3. Create site if it does not exist
+# 3. Install CRM app (only if not already present)
 # ---------------------------------------------------------------------------
-if [ ! -f "sites/${SITE}/site_config.json" ]; then
+if [ ! -d "${BENCH_DIR}/apps/crm" ]; then
+    echo "[init-site] Installing CRM app..."
+    cp -r /home/frappe/crm-app "${BENCH_DIR}/apps/crm"
+    "${BENCH_DIR}/env/bin/pip" install --no-cache-dir -e "${BENCH_DIR}/apps/crm"
+    echo "crm" >> "${BENCH_DIR}/sites/apps.txt"
+    echo "[init-site] CRM app installed."
+else
+    echo "[init-site] CRM app already present."
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Configure common_site_config.json (Redis URLs)
+# ---------------------------------------------------------------------------
+python3 - <<PYEOF
+import json, os
+config_path = "${BENCH_DIR}/sites/common_site_config.json"
+try:
+    with open(config_path) as f:
+        config = json.load(f)
+except:
+    config = {}
+config["redis_cache"] = "${REDIS_CACHE}"
+config["redis_queue"] = "${REDIS_QUEUE}"
+config["redis_socketio"] = "${REDIS_QUEUE}"
+with open(config_path, "w") as f:
+    json.dump(config, f, indent=2)
+print("[init-site] common_site_config.json updated.")
+PYEOF
+
+# ---------------------------------------------------------------------------
+# 5. Create site or migrate existing
+# ---------------------------------------------------------------------------
+if [ ! -d "${BENCH_DIR}/sites/${SITE}" ]; then
     echo "[init-site] Site '${SITE}' not found — creating..."
 
     bench new-site "$SITE" \
@@ -70,7 +106,7 @@ if [ ! -f "sites/${SITE}/site_config.json" ]; then
         --no-mariadb-socket \
         ${ENCRYPTION_KEY:+--encryption-key "$ENCRYPTION_KEY"}
 
-    echo "[init-site] Installing CRM app..."
+    echo "[init-site] Installing CRM app into site..."
     bench --site "$SITE" install-app crm
 
     echo "[init-site] Running migrations..."
@@ -83,13 +119,12 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Set default site
+# 6. Set default site
 # ---------------------------------------------------------------------------
 bench use "$SITE"
 
 # ---------------------------------------------------------------------------
-# 5. Generate API key for the EAIA agent (idempotent — skips if already set)
-#    The key is printed to stdout so it can be captured from container logs.
+# 7. Generate API key for the EAIA agent (idempotent)
 # ---------------------------------------------------------------------------
 echo "[init-site] Checking EAIA API credentials..."
 EAIA_USER="${EAIA_API_USER:-Administrator}"
@@ -115,7 +150,7 @@ if [ -n "$API_KEY" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Start Frappe web server
+# 8. Start Frappe web server
 # ---------------------------------------------------------------------------
 echo "[init-site] Starting bench serve on port 8000..."
 exec bench serve --port 8000

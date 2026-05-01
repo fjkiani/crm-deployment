@@ -2,8 +2,12 @@
 # Dockerfile.frappe
 # Frappe (develop branch) + CRM app — self-hosted, platform-agnostic
 #
-# Uses python:3.11 (full Debian Bookworm) — has all build tools pre-installed.
-# Installs nodejs from Debian repos (no nodesource curl|bash needed).
+# DESIGN: This Dockerfile only installs system tools and the frappe-bench CLI.
+# bench init (cloning Frappe from GitHub) runs at CONTAINER STARTUP in init-site.sh.
+# This avoids GitHub network access during Docker build (which can fail in CI).
+#
+# The /home/frappe/frappe-bench directory is mounted as a persistent volume on Render,
+# so bench init only runs once (on first boot). Subsequent starts skip it.
 #
 # One image, four roles (set via `command:` in docker-compose):
 #   frappe-web       → /home/frappe/init-site.sh  (default)
@@ -16,7 +20,7 @@ FROM python:3.11
 
 # ---------------------------------------------------------------------------
 # System dependencies
-# nodejs is available directly in Debian Bookworm repos (no nodesource needed)
+# nodejs from Debian Bookworm repos (no nodesource needed)
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
@@ -41,50 +45,30 @@ RUN useradd -ms /bin/bash frappe
 WORKDIR /home/frappe
 
 # ---------------------------------------------------------------------------
-# Install frappe-bench CLI
+# Install frappe-bench CLI (system-wide, available to frappe user)
 # ---------------------------------------------------------------------------
 RUN pip install --no-cache-dir frappe-bench
 
 # ---------------------------------------------------------------------------
-# Initialise bench with Frappe framework (develop branch HEAD)
-# --skip-assets: no DB available at build time
+# Copy CRM app source so init-site.sh can install it into the bench
 # ---------------------------------------------------------------------------
-USER frappe
-RUN bench init \
-    --frappe-branch develop \
-    --frappe-path https://github.com/frappe/frappe \
-    --skip-assets \
-    --python python3 \
-    frappe-bench
-
-WORKDIR /home/frappe/frappe-bench
+COPY --chown=frappe:frappe crm/             /home/frappe/crm-app/
+COPY --chown=frappe:frappe setup.py         /home/frappe/crm-app/setup.py
+COPY --chown=frappe:frappe pyproject.toml   /home/frappe/crm-app/pyproject.toml
+COPY --chown=frappe:frappe requirements.txt /home/frappe/crm-app/requirements.txt
+COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/crm-app/MANIFEST.in
 
 # ---------------------------------------------------------------------------
-# Install frappe-mcp (PyPI v0.1.0)
-# ---------------------------------------------------------------------------
-RUN ./env/bin/pip install --no-cache-dir frappe-mcp==0.1.0
-
-# ---------------------------------------------------------------------------
-# Copy CRM app source into the bench (from this repo's crm/ directory)
-# ---------------------------------------------------------------------------
-COPY --chown=frappe:frappe crm/                apps/crm/
-COPY --chown=frappe:frappe setup.py            apps/crm/setup.py
-COPY --chown=frappe:frappe pyproject.toml      apps/crm/pyproject.toml
-COPY --chown=frappe:frappe requirements.txt    apps/crm/requirements.txt
-COPY --chown=frappe:frappe MANIFEST.in         apps/crm/MANIFEST.in
-
-# Install CRM into the bench virtualenv
-RUN ./env/bin/pip install --no-cache-dir -e apps/crm
-
-# Register app so `bench install-app crm` works
-RUN echo "crm" >> sites/apps.txt
-
-# ---------------------------------------------------------------------------
-# Startup script
+# Startup script (runs bench init + site creation at container start)
 # ---------------------------------------------------------------------------
 COPY --chown=frappe:frappe init-site.sh /home/frappe/init-site.sh
 RUN chmod +x /home/frappe/init-site.sh
 
+# bench-bench directory is created at runtime and mounted as a persistent volume
+# so we just create the parent directory here
+RUN mkdir -p /home/frappe/frappe-bench && chown frappe:frappe /home/frappe/frappe-bench
+
 EXPOSE 8000 9000
 
+USER frappe
 CMD ["/home/frappe/init-site.sh"]
