@@ -84,7 +84,7 @@ def run_bench(args, capture=True):
     cmd = ["/usr/local/bin/bench"] + args
     log(f"Running: {' '.join(str(a) for a in cmd)}")
     env = {**os.environ, "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", "")}
-    result = subprocess.run(cmd, cwd=BENCH_DIR, env=env, capture_output=capture, text=capture, timeout=600)
+    result = subprocess.run(cmd, cwd=BENCH_DIR, env=env, capture_output=capture, text=capture, timeout=1800)
     if capture:
         if result.stdout:
             for line in result.stdout.strip().split('\n')[-20:]:
