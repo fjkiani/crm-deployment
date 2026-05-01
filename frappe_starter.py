@@ -82,35 +82,39 @@ def setup_site():
         json.dump(config, f, indent=2)
     log("common_site_config.json updated")
     
-    # Wait for MariaDB
-    log("Waiting for MariaDB...")
+    # Wait for MariaDB using root credentials (crm_db user doesn't exist until bench new-site creates it)
+    log("Waiting for MariaDB (using root credentials)...")
     import pymysql
     
+    has_root = False
     for i in range(200):
         try:
-            conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_NAME, password=DB_PASSWORD, database=DB_NAME, connect_timeout=5)
+            conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user="root", password=DB_ROOT_PASSWORD, connect_timeout=5)
             conn.close()
-            log(f"MariaDB ready (attempt {i+1})")
+            log(f"MariaDB ready with root access (attempt {i+1})")
+            has_root = True
             break
         except Exception as e:
             if i % 10 == 0:
-                log(f"Waiting for MariaDB (attempt {i+1}): {e}")
+                log(f"Waiting for MariaDB root access (attempt {i+1}): {e}")
             time.sleep(3)
     else:
-        log("ERROR: MariaDB timeout")
-        SETUP_DONE.set()
-        return
-    
-    # Test root access
-    log("Testing root access...")
-    try:
-        conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user="root", password=DB_ROOT_PASSWORD, connect_timeout=5)
-        conn.close()
-        log("Root access OK!")
-        has_root = True
-    except Exception as e:
-        log(f"Root access FAILED: {e}")
-        has_root = False
+        log("ERROR: MariaDB root access timeout - trying crm_db user as fallback...")
+        # Fallback: try crm_db user (site may already be set up)
+        for i in range(30):
+            try:
+                conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_NAME, password=DB_PASSWORD, database=DB_NAME, connect_timeout=5)
+                conn.close()
+                log(f"MariaDB ready with crm_db user (attempt {i+1})")
+                break
+            except Exception as e:
+                if i % 10 == 0:
+                    log(f"Waiting for MariaDB crm_db (attempt {i+1}): {e}")
+                time.sleep(3)
+        else:
+            log("ERROR: MariaDB completely unreachable")
+            SETUP_DONE.set()
+            return
     
     if has_root:
         log("Running bench new-site...")
