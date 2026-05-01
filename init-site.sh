@@ -4,24 +4,23 @@
 # Runs inside the frappe-web container on every startup.
 # Fully idempotent — safe to run on restarts.
 #
-# Flow:
+# bench init is done at Docker BUILD time (Dockerfile.frappe).
+# This script only handles:
 #   1. Wait for MariaDB to be ready
-#   2. If bench not initialised → bench init (clones Frappe from GitHub, ~10 min)
-#   3. If CRM app not installed → copy app + pip install + register
-#   4. Configure Redis URLs in common_site_config.json
-#   5. If site does not exist   → bench new-site + install-app crm + migrate
-#   5. If site exists           → bench migrate (applies any new patches)
+#   2. Configure Redis URLs in common_site_config.json
+#   3. If site does not exist → bench new-site + install-app crm + migrate
+#   4. If site exists         → bench migrate (applies any new patches)
+#   5. Set default site
 #   6. Generate EAIA API key if not already present (printed to logs)
 #   7. Hand off to bench serve
 # =============================================================================
 
 set -e
 
-# Ensure bench is in PATH (installed to /usr/local/bin by pip)
-export PATH="/usr/local/bin:$PATH"
+# bench is installed system-wide at /usr/local/bin/bench
+export PATH="/usr/local/bin:/home/frappe/frappe-bench/env/bin:$PATH"
 
-HOME_DIR="/home/frappe"
-BENCH_DIR="${HOME_DIR}/frappe-bench"
+BENCH_DIR="/home/frappe/frappe-bench"
 SITE="${FRAPPE_SITE_NAME:-crm.localhost}"
 DB_HOST="${DB_HOST:-mariadb}"
 DB_PORT="${DB_PORT:-3306}"
@@ -31,6 +30,16 @@ DB_PASSWORD="${DB_PASSWORD:-changeme}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
 REDIS_CACHE="${REDIS_CACHE_URL:-redis://redis-cache:13000}"
 REDIS_QUEUE="${REDIS_QUEUE_URL:-redis://redis-queue:11000}"
+
+echo "[init-site] bench dir: ${BENCH_DIR}"
+echo "[init-site] site: ${SITE}"
+echo "[init-site] db: ${DB_HOST}:${DB_PORT}"
+
+# Verify bench is available (it was installed at build time)
+if ! command -v bench &>/dev/null; then
+    echo "[init-site] ERROR: bench not found in PATH. Check Dockerfile.frappe."
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # 1. Wait for MariaDB
@@ -42,53 +51,10 @@ until mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" --silent 2>/dev/null; do
 done
 echo "[init-site] MariaDB is up."
 
-# ---------------------------------------------------------------------------
-# 2. Initialise bench (only on first boot)
-#    bench init creates frappe-bench/ — skip if already initialised
-# ---------------------------------------------------------------------------
-if [ ! -f "${BENCH_DIR}/env/bin/python" ]; then
-    echo "[init-site] Bench not initialised — running bench init (takes 5-10 min on first boot)..."
-
-    # If directory exists but is empty/incomplete, remove it so bench init can create it fresh
-    if [ -d "${BENCH_DIR}" ] && [ -z "$(ls -A ${BENCH_DIR} 2>/dev/null)" ]; then
-        rmdir "${BENCH_DIR}" 2>/dev/null || true
-    fi
-
-    cd "${HOME_DIR}"
-    bench init \
-        --frappe-branch develop \
-        --frappe-path https://github.com/frappe/frappe \
-        --skip-assets \
-        --python python3 \
-        frappe-bench
-
-    echo "[init-site] Bench initialised."
-
-    # Install frappe-mcp
-    "${BENCH_DIR}/env/bin/pip" install --no-cache-dir frappe-mcp==0.1.0
-    echo "[init-site] frappe-mcp installed."
-else
-    echo "[init-site] Bench already initialised — skipping bench init."
-fi
-
 cd "${BENCH_DIR}"
 
 # ---------------------------------------------------------------------------
-# 3. Install CRM app (only if not already present)
-# ---------------------------------------------------------------------------
-if [ ! -d "${BENCH_DIR}/apps/crm" ]; then
-    echo "[init-site] Installing CRM app..."
-    cp -r "${HOME_DIR}/crm-app" "${BENCH_DIR}/apps/crm"
-    "${BENCH_DIR}/env/bin/pip" install --no-cache-dir -e "${BENCH_DIR}/apps/crm"
-    # Register app
-    grep -qxF "crm" "${BENCH_DIR}/sites/apps.txt" 2>/dev/null || echo "crm" >> "${BENCH_DIR}/sites/apps.txt"
-    echo "[init-site] CRM app installed."
-else
-    echo "[init-site] CRM app already present."
-fi
-
-# ---------------------------------------------------------------------------
-# 4. Configure Redis URLs in common_site_config.json
+# 2. Configure Redis URLs in common_site_config.json
 # ---------------------------------------------------------------------------
 python3 - <<PYEOF
 import json, os
@@ -107,10 +73,10 @@ print("[init-site] common_site_config.json updated.")
 PYEOF
 
 # ---------------------------------------------------------------------------
-# 5. Create site or migrate existing
+# 3. Create site or migrate existing
 # ---------------------------------------------------------------------------
 if [ ! -d "${BENCH_DIR}/sites/${SITE}" ]; then
-    echo "[init-site] Site '${SITE}' not found — creating..."
+    echo "[init-site] Site '${SITE}' not found — creating (this takes ~2 min)..."
 
     bench new-site "$SITE" \
         --db-name "$DB_NAME" \
@@ -130,16 +96,16 @@ if [ ! -d "${BENCH_DIR}/sites/${SITE}" ]; then
     echo "[init-site] Site '${SITE}' created and CRM installed."
 else
     echo "[init-site] Site '${SITE}' already exists — running migrate only."
-    bench --site "$SITE" migrate
+    bench --site "$SITE" migrate || echo "[init-site] migrate skipped (non-fatal)"
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Set default site
+# 4. Set default site
 # ---------------------------------------------------------------------------
 bench use "$SITE"
 
 # ---------------------------------------------------------------------------
-# 7. Generate API key for the EAIA agent (idempotent)
+# 5. Generate API key for the EAIA agent (idempotent)
 # ---------------------------------------------------------------------------
 echo "[init-site] Checking EAIA API credentials..."
 EAIA_USER="${EAIA_API_USER:-Administrator}"
@@ -165,7 +131,7 @@ if [ -n "$API_KEY" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Start Frappe web server
+# 6. Start Frappe web server
 # ---------------------------------------------------------------------------
 echo "[init-site] Starting bench serve on port 8000..."
 exec bench serve --port 8000

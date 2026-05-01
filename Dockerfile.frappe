@@ -1,72 +1,111 @@
 # =============================================================================
-# Dockerfile.frappe
-# Frappe (develop branch) + CRM app — self-hosted, platform-agnostic
+# Dockerfile.frappe  —  multi-stage build
 #
-# DESIGN: This Dockerfile only installs system tools and the frappe-bench CLI.
-# bench init (cloning Frappe from GitHub) runs at CONTAINER STARTUP in init-site.sh.
-# This avoids GitHub network access during Docker build (which can fail in CI).
+# Stage 1 (builder): installs system build deps + runs bench init (clones
+#   Frappe from GitHub + installs Python env).  This is the slow step (~8 min)
+#   but it only runs when the image is rebuilt, not on every container start.
 #
-# The /home/frappe/frappe-bench directory is mounted as a persistent volume on Render,
-# so bench init only runs once (on first boot). Subsequent starts skip it.
+# Stage 2 (runtime): copies the finished bench from builder, adds our CRM app,
+#   and sets the entrypoint.  Container startup is fast (<60 s) because bench
+#   is already initialised — only site creation / migration runs at runtime.
 #
-# One image, four roles (set via `command:` in docker-compose):
-#   frappe-web       → /home/frappe/init-site.sh  (default)
+# One image, four roles (set via CMD override in Render / docker-compose):
+#   frappe-web       → /home/frappe/init-site.sh   (default)
 #   frappe-worker    → bench worker --queue long,default,short
 #   frappe-scheduler → bench schedule
-#   frappe-socketio  → node apps/frappe/socketio.js
 # =============================================================================
 
-FROM python:3.11
+# ── Stage 1: builder ─────────────────────────────────────────────────────────
+FROM python:3.11-slim-bookworm AS builder
 
-# ---------------------------------------------------------------------------
-# System dependencies
-# nodejs from Debian Bookworm repos (no nodesource needed)
-# ---------------------------------------------------------------------------
+# Build-time deps (not needed at runtime)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nodejs \
-    npm \
-    default-libmysqlclient-dev \
-    mariadb-client \
     git \
-    redis-tools \
-    gettext \
+    curl \
+    build-essential \
     libffi-dev \
     libssl-dev \
     libjpeg-dev \
     libpng-dev \
+    libmariadb-dev \
+    pkg-config \
+    nodejs \
+    npm \
     && npm install -g yarn \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ---------------------------------------------------------------------------
-# Non-root user (Frappe convention)
-# ---------------------------------------------------------------------------
+RUN useradd -ms /bin/bash frappe
+RUN pip install --no-cache-dir frappe-bench
+
+USER frappe
+WORKDIR /home/frappe
+
+# bench init: clones Frappe framework from GitHub and sets up the Python venv.
+# --skip-assets  → we build assets separately (or skip for API-only use)
+# --no-procfile  → we manage processes ourselves
+# --no-backups   → no cron backup setup needed
+# This step takes ~8-12 min on first build; subsequent builds use Docker cache.
+RUN bench init \
+    --frappe-branch develop \
+    --frappe-path https://github.com/frappe/frappe \
+    --skip-assets \
+    --no-procfile \
+    --no-backups \
+    --skip-redis-config-generation \
+    frappe-bench
+
+# Remove .git dirs to slim the image
+RUN find /home/frappe/frappe-bench/apps -mindepth 1 -name ".git" -type d | xargs rm -rf
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM python:3.11-slim-bookworm AS runtime
+
+# Runtime deps only (no build tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    nodejs \
+    npm \
+    mariadb-client \
+    redis-tools \
+    gettext \
+    libmariadb3 \
+    libssl3 \
+    libjpeg62-turbo \
+    libpng16-16 \
+    && npm install -g yarn \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN useradd -ms /bin/bash frappe
 
-# ---------------------------------------------------------------------------
-# Install frappe-bench CLI (system-wide, /usr/local/bin/bench)
-# ---------------------------------------------------------------------------
+# Copy the fully-initialised bench from builder
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
+
+# Install frappe-bench CLI in the runtime image (needed for bench commands)
 RUN pip install --no-cache-dir frappe-bench
 
 # ---------------------------------------------------------------------------
-# Copy CRM app source so init-site.sh can install it into the bench at runtime
+# Copy CRM app source into the bench apps directory and pip-install it
 # ---------------------------------------------------------------------------
-COPY --chown=frappe:frappe crm/             /home/frappe/crm-app/
-COPY --chown=frappe:frappe setup.py         /home/frappe/crm-app/setup.py
-COPY --chown=frappe:frappe pyproject.toml   /home/frappe/crm-app/pyproject.toml
-COPY --chown=frappe:frappe requirements.txt /home/frappe/crm-app/requirements.txt
-COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/crm-app/MANIFEST.in
+COPY --chown=frappe:frappe crm/             /home/frappe/frappe-bench/apps/crm/crm/
+COPY --chown=frappe:frappe setup.py         /home/frappe/frappe-bench/apps/crm/setup.py
+COPY --chown=frappe:frappe pyproject.toml   /home/frappe/frappe-bench/apps/crm/pyproject.toml
+COPY --chown=frappe:frappe requirements.txt /home/frappe/frappe-bench/apps/crm/requirements.txt
+COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/frappe-bench/apps/crm/MANIFEST.in
+
+# Install CRM app into the bench venv
+RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
+    -e /home/frappe/frappe-bench/apps/crm \
+    frappe-mcp==0.1.0
+
+# Register CRM in apps.txt
+RUN grep -qxF "crm" /home/frappe/frappe-bench/sites/apps.txt 2>/dev/null \
+    || echo "crm" >> /home/frappe/frappe-bench/sites/apps.txt
 
 # ---------------------------------------------------------------------------
-# Startup script
+# Startup script (handles site creation / migration at runtime)
 # ---------------------------------------------------------------------------
 COPY --chown=frappe:frappe init-site.sh /home/frappe/init-site.sh
 RUN chmod +x /home/frappe/init-site.sh
-
-# NOTE: Do NOT mkdir /home/frappe/frappe-bench here.
-# The persistent volume is mounted at /home/frappe/frappe-bench at runtime.
-# bench init creates this directory — if it already exists and is non-empty,
-# init-site.sh skips bench init (idempotent check on env/bin/python).
 
 EXPOSE 8000 9000
 
