@@ -6,6 +6,8 @@ on:
     paths:
       - 'Dockerfile.frappe'
       - 'init-site.sh'
+      - 'frappe_starter.py'
+      - 'setup_frappe_site.py'
       - 'crm/**'
       - 'setup.py'
       - 'pyproject.toml'
