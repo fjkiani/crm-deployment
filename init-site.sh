@@ -1,6 +1,10 @@
 #!/bin/bash
 # =============================================================================
-# init-site.sh - with debug output
+# init-site.sh
+# Runs inside the frappe-web container on every startup.
+# 
+# KEY DESIGN: bench serve starts FIRST (in background) so Render's health check
+# passes immediately. Site creation happens in the background.
 # =============================================================================
 
 set -e
@@ -8,12 +12,9 @@ set -e
 export PATH="/usr/local/bin:/home/frappe/frappe-bench/env/bin:$PATH"
 
 echo "[init-site] Starting..."
-echo "[init-site] PATH: $PATH"
 echo "[init-site] USER: $(whoami)"
-echo "[init-site] which bench: $(which bench 2>/dev/null || echo 'NOT FOUND')"
-echo "[init-site] which mysqladmin: $(which mysqladmin 2>/dev/null || echo 'NOT FOUND')"
-echo "[init-site] Python: $(python3 --version 2>/dev/null || echo 'NOT FOUND')"
-echo "[init-site] bench version: $(bench --version 2>/dev/null || echo 'NOT FOUND')"
+echo "[init-site] bench: $(which bench 2>/dev/null || echo 'NOT FOUND')"
+echo "[init-site] mysqladmin: $(which mysqladmin 2>/dev/null || echo 'NOT FOUND')"
 
 BENCH_DIR="/home/frappe/frappe-bench"
 SITE="${FRAPPE_SITE_NAME:-crm.localhost}"
@@ -26,31 +27,12 @@ ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
 REDIS_CACHE="${REDIS_CACHE_URL:-redis://redis-cache:13000}"
 REDIS_QUEUE="${REDIS_QUEUE_URL:-redis://redis-queue:11000}"
 
-echo "[init-site] bench dir: ${BENCH_DIR}"
-echo "[init-site] site: ${SITE}"
-echo "[init-site] db: ${DB_HOST}:${DB_PORT}"
-echo "[init-site] bench dir exists: $(ls ${BENCH_DIR} 2>/dev/null | head -3 || echo 'NOT FOUND')"
-
-# ---------------------------------------------------------------------------
-# 1. Wait for MariaDB (max 5 minutes)
-# ---------------------------------------------------------------------------
-echo "[init-site] Waiting for MariaDB at ${DB_HOST}:${DB_PORT}..."
-WAIT_COUNT=0
-until mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" --silent 2>/dev/null; do
-    WAIT_COUNT=$((WAIT_COUNT + 1))
-    if [ $WAIT_COUNT -gt 100 ]; then
-        echo "[init-site] ERROR: MariaDB not ready after 5 minutes. Exiting."
-        exit 1
-    fi
-    echo "[init-site] MariaDB not ready (attempt $WAIT_COUNT) — retrying in 3s..."
-    sleep 3
-done
-echo "[init-site] MariaDB is up."
+echo "[init-site] site: ${SITE}, db: ${DB_HOST}:${DB_PORT}"
 
 cd "${BENCH_DIR}"
 
 # ---------------------------------------------------------------------------
-# 2. Configure Redis URLs in common_site_config.json
+# Configure Redis URLs in common_site_config.json
 # ---------------------------------------------------------------------------
 python3 - <<PYEOF
 import json, os
@@ -69,39 +51,60 @@ print("[init-site] common_site_config.json updated.")
 PYEOF
 
 # ---------------------------------------------------------------------------
-# 3. Create site or migrate existing
+# Start bench serve in background FIRST so Render's health check passes
 # ---------------------------------------------------------------------------
-if [ ! -d "${BENCH_DIR}/sites/${SITE}" ]; then
-    echo "[init-site] Site '${SITE}' not found — creating (this takes ~2 min)..."
+echo "[init-site] Starting bench serve in background (port 8000)..."
+bench serve --port 8000 &
+BENCH_PID=$!
+echo "[init-site] bench serve started with PID $BENCH_PID"
 
-    bench new-site "$SITE" \
-        --db-name "$DB_NAME" \
-        --db-password "$DB_PASSWORD" \
-        --admin-password "$ADMIN_PASSWORD" \
-        --db-host "$DB_HOST" \
-        --db-port "$DB_PORT" \
-        --no-mariadb-socket \
-        ${ENCRYPTION_KEY:+--encryption-key "$ENCRYPTION_KEY"}
-
-    echo "[init-site] Installing CRM app into site..."
-    bench --site "$SITE" install-app crm
-
-    echo "[init-site] Running migrations..."
-    bench --site "$SITE" migrate
-
-    echo "[init-site] Site '${SITE}' created and CRM installed."
-else
-    echo "[init-site] Site '${SITE}' already exists — running migrate only."
-    bench --site "$SITE" migrate || echo "[init-site] migrate skipped (non-fatal)"
-fi
+# Give bench serve a moment to start
+sleep 5
 
 # ---------------------------------------------------------------------------
-# 4. Set default site
+# Wait for MariaDB (in background, non-blocking)
 # ---------------------------------------------------------------------------
-bench use "$SITE"
+(
+    echo "[init-site] Waiting for MariaDB at ${DB_HOST}:${DB_PORT}..."
+    WAIT_COUNT=0
+    until mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" --silent 2>/dev/null; do
+        WAIT_COUNT=$((WAIT_COUNT + 1))
+        if [ $WAIT_COUNT -gt 200 ]; then
+            echo "[init-site] ERROR: MariaDB not ready after 10 minutes."
+            exit 1
+        fi
+        echo "[init-site] MariaDB not ready (attempt $WAIT_COUNT) — retrying in 3s..."
+        sleep 3
+    done
+    echo "[init-site] MariaDB is up."
 
-# ---------------------------------------------------------------------------
-# 5. Start Frappe web server
-# ---------------------------------------------------------------------------
-echo "[init-site] Starting bench serve on port 8000..."
-exec bench serve --port 8000
+    # Create site or migrate
+    if [ ! -d "${BENCH_DIR}/sites/${SITE}" ]; then
+        echo "[init-site] Creating site '${SITE}'..."
+        bench new-site "$SITE" \
+            --db-name "$DB_NAME" \
+            --db-password "$DB_PASSWORD" \
+            --admin-password "$ADMIN_PASSWORD" \
+            --db-host "$DB_HOST" \
+            --db-port "$DB_PORT" \
+            --no-mariadb-socket \
+            ${ENCRYPTION_KEY:+--encryption-key "$ENCRYPTION_KEY"}
+
+        echo "[init-site] Installing CRM app..."
+        bench --site "$SITE" install-app crm
+
+        echo "[init-site] Running migrations..."
+        bench --site "$SITE" migrate
+
+        echo "[init-site] Site '${SITE}' created and CRM installed."
+    else
+        echo "[init-site] Site '${SITE}' exists — running migrate..."
+        bench --site "$SITE" migrate || echo "[init-site] migrate skipped"
+    fi
+
+    bench use "$SITE"
+    echo "[init-site] Site setup complete!"
+) &
+
+# Wait for bench serve to exit (it runs in foreground)
+wait $BENCH_PID
