@@ -1,22 +1,19 @@
 #!/bin/bash
 # =============================================================================
-# init-site.sh
-# Runs inside the frappe-web container on every startup.
-# Fully idempotent — safe to run on restarts.
-#
-# The bench is pre-installed in the base image (frappe/erpnext:develop).
-# This script only handles:
-#   1. Wait for MariaDB to be ready
-#   2. Configure Redis URLs in common_site_config.json
-#   3. If site does not exist → bench new-site + install-app crm + migrate
-#   4. If site exists         → bench migrate (applies any new patches)
-#   5. Set default site
-#   6. Start bench serve
+# init-site.sh - with debug output
 # =============================================================================
 
 set -e
 
 export PATH="/usr/local/bin:/home/frappe/frappe-bench/env/bin:$PATH"
+
+echo "[init-site] Starting..."
+echo "[init-site] PATH: $PATH"
+echo "[init-site] USER: $(whoami)"
+echo "[init-site] which bench: $(which bench 2>/dev/null || echo 'NOT FOUND')"
+echo "[init-site] which mysqladmin: $(which mysqladmin 2>/dev/null || echo 'NOT FOUND')"
+echo "[init-site] Python: $(python3 --version 2>/dev/null || echo 'NOT FOUND')"
+echo "[init-site] bench version: $(bench --version 2>/dev/null || echo 'NOT FOUND')"
 
 BENCH_DIR="/home/frappe/frappe-bench"
 SITE="${FRAPPE_SITE_NAME:-crm.localhost}"
@@ -32,19 +29,20 @@ REDIS_QUEUE="${REDIS_QUEUE_URL:-redis://redis-queue:11000}"
 echo "[init-site] bench dir: ${BENCH_DIR}"
 echo "[init-site] site: ${SITE}"
 echo "[init-site] db: ${DB_HOST}:${DB_PORT}"
-
-# Verify bench is available
-if ! command -v bench &>/dev/null; then
-    echo "[init-site] ERROR: bench not found in PATH."
-    exit 1
-fi
+echo "[init-site] bench dir exists: $(ls ${BENCH_DIR} 2>/dev/null | head -3 || echo 'NOT FOUND')"
 
 # ---------------------------------------------------------------------------
-# 1. Wait for MariaDB
+# 1. Wait for MariaDB (max 5 minutes)
 # ---------------------------------------------------------------------------
 echo "[init-site] Waiting for MariaDB at ${DB_HOST}:${DB_PORT}..."
+WAIT_COUNT=0
 until mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" --silent 2>/dev/null; do
-    echo "[init-site] MariaDB not ready — retrying in 3s..."
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+    if [ $WAIT_COUNT -gt 100 ]; then
+        echo "[init-site] ERROR: MariaDB not ready after 5 minutes. Exiting."
+        exit 1
+    fi
+    echo "[init-site] MariaDB not ready (attempt $WAIT_COUNT) — retrying in 3s..."
     sleep 3
 done
 echo "[init-site] MariaDB is up."
