@@ -1,13 +1,5 @@
-# =============================================================================
-# Dockerfile.frappe
-#
-# Pulls the pre-built image from GHCR and overrides the entrypoint.
-# The actual build happens in GitHub Actions (.github/workflows/build-frappe.yml).
-# =============================================================================
-
+# TEST: Simple container that just sleeps to verify the base image works
 FROM ghcr.io/fjkiani/crm-frappe:main
 
-# Override entrypoint to skip asset linking (not needed for API-only mode)
-# and run init-site.sh directly
 ENTRYPOINT []
-CMD ["/home/frappe/init-site.sh"]
+CMD ["sh", "-c", "echo 'Container started successfully' && sleep 3600"]
