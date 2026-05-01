@@ -38,9 +38,12 @@ COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/frappe-bench/apps/crm/M
 RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
     -e /home/frappe/frappe-bench/apps/crm
 
-# Register CRM in apps.txt
-RUN grep -qxF "crm" /home/frappe/frappe-bench/sites/apps.txt 2>/dev/null \
-    || echo "crm" >> /home/frappe/frappe-bench/sites/apps.txt
+# Fix apps.txt: the base image (frappe/erpnext:develop) registers 'erpnextcrm'
+# (old name for the CRM app) which has no Python package installed, causing
+# every `bench` command to crash with ModuleNotFoundError: No module named 'erpnextcrm'.
+# Overwrite apps.txt with only the apps that are actually installed.
+RUN printf 'frappe\nerpnext\ncrm\n' > /home/frappe/frappe-bench/sites/apps.txt && \
+    echo "=== apps.txt ===" && cat /home/frappe/frappe-bench/sites/apps.txt
 
 # ---------------------------------------------------------------------------
 # Startup script (handles site creation / migration at runtime)
