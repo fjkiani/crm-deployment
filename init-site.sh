@@ -4,20 +4,18 @@
 # Runs inside the frappe-web container on every startup.
 # Fully idempotent — safe to run on restarts.
 #
-# bench init is done at Docker BUILD time (Dockerfile.frappe).
+# The bench is pre-installed in the base image (frappe/erpnext:develop).
 # This script only handles:
 #   1. Wait for MariaDB to be ready
 #   2. Configure Redis URLs in common_site_config.json
 #   3. If site does not exist → bench new-site + install-app crm + migrate
 #   4. If site exists         → bench migrate (applies any new patches)
 #   5. Set default site
-#   6. Generate EAIA API key if not already present (printed to logs)
-#   7. Hand off to bench serve
+#   6. Start bench serve
 # =============================================================================
 
 set -e
 
-# bench is installed system-wide at /usr/local/bin/bench
 export PATH="/usr/local/bin:/home/frappe/frappe-bench/env/bin:$PATH"
 
 BENCH_DIR="/home/frappe/frappe-bench"
@@ -35,9 +33,9 @@ echo "[init-site] bench dir: ${BENCH_DIR}"
 echo "[init-site] site: ${SITE}"
 echo "[init-site] db: ${DB_HOST}:${DB_PORT}"
 
-# Verify bench is available (it was installed at build time)
+# Verify bench is available
 if ! command -v bench &>/dev/null; then
-    echo "[init-site] ERROR: bench not found in PATH. Check Dockerfile.frappe."
+    echo "[init-site] ERROR: bench not found in PATH."
     exit 1
 fi
 
@@ -105,33 +103,7 @@ fi
 bench use "$SITE"
 
 # ---------------------------------------------------------------------------
-# 5. Generate API key for the EAIA agent (idempotent)
-# ---------------------------------------------------------------------------
-echo "[init-site] Checking EAIA API credentials..."
-EAIA_USER="${EAIA_API_USER:-Administrator}"
-
-API_KEY=$(bench --site "$SITE" execute frappe.core.doctype.user.user.generate_keys \
-    --args "['${EAIA_USER}']" 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data.get('api_key',''))
-except Exception:
-    pass
-" 2>/dev/null || echo "")
-
-if [ -n "$API_KEY" ]; then
-    echo ""
-    echo "================================================================"
-    echo "  EAIA API CREDENTIALS (set these as env vars in eaia-agent)"
-    echo "  FRAPPE_API_KEY=${API_KEY}"
-    echo "  FRAPPE_API_SECRET=<see Frappe user settings for ${EAIA_USER}>"
-    echo "================================================================"
-    echo ""
-fi
-
-# ---------------------------------------------------------------------------
-# 6. Start Frappe web server
+# 5. Start Frappe web server
 # ---------------------------------------------------------------------------
 echo "[init-site] Starting bench serve on port 8000..."
 exec bench serve --port 8000

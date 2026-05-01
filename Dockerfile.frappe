@@ -1,80 +1,25 @@
 # =============================================================================
-# Dockerfile.frappe  —  multi-stage build
+# Dockerfile.frappe
 #
-# This image is built by GitHub Actions and pushed to GHCR.
-# Render pulls the pre-built image instead of building it.
-# See .github/workflows/build-frappe.yml
+# Uses frappe/erpnext:develop as base (pre-built with bench + frappe + erpnext).
+# We add our CRM app on top. No bench init needed — fast build (~2-3 min).
 #
-# Stage 1 (builder): runs bench init (clones Frappe from GitHub).
-# Stage 2 (runtime): copies bench from builder, adds CRM app, sets entrypoint.
-#   Container startup only does site creation / migration (fast, <2 min).
+# One image, four roles (set via CMD override in Render / docker-compose):
+#   frappe-web       → /home/frappe/init-site.sh   (default)
+#   frappe-worker    → bench worker --queue long,default,short
+#   frappe-scheduler → bench schedule
 # =============================================================================
 
-# ── Stage 1: builder ─────────────────────────────────────────────────────────
-FROM python:3.11 AS builder
+FROM frappe/erpnext:develop
 
-# git is the only extra dep needed for bench init
+USER root
+
+# Install mariadb-client for mysqladmin (health check in init-site.sh)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
+    mariadb-client \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN useradd -ms /bin/bash frappe
-
-# Configure git globally (required by bench init)
-RUN git config --global user.email "frappe@example.com" && \
-    git config --global user.name "Frappe"
-
-RUN pip install --no-cache-dir frappe-bench
 
 USER frappe
-WORKDIR /home/frappe
-
-# Configure git for frappe user
-RUN git config --global user.email "frappe@example.com" && \
-    git config --global user.name "Frappe"
-
-# bench init: clones Frappe from GitHub and sets up the Python venv.
-# --skip-assets  → no Node.js/yarn needed
-# --no-procfile  → we manage processes ourselves
-# --no-backups   → no cron backup setup
-# GitHub Actions has no rate limits for git clone (authenticated).
-RUN bench init \
-    --frappe-branch develop \
-    --frappe-path https://github.com/frappe/frappe \
-    --skip-assets \
-    --no-procfile \
-    --no-backups \
-    --skip-redis-config-generation \
-    frappe-bench
-
-# Remove .git dirs to slim the image
-RUN find /home/frappe/frappe-bench/apps -mindepth 1 -name ".git" -type d | xargs rm -rf
-
-# ── Stage 2: runtime ─────────────────────────────────────────────────────────
-FROM python:3.11-slim-bookworm AS runtime
-
-# Runtime deps: Node.js for asset serving, MariaDB client for mysqladmin
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    nodejs \
-    npm \
-    mariadb-client \
-    redis-tools \
-    gettext \
-    libmariadb3 \
-    libssl3 \
-    libjpeg62-turbo \
-    libpng16-16 \
-    && npm install -g yarn \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN useradd -ms /bin/bash frappe
-
-# Copy the fully-initialised bench from builder
-COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
-
-# Install frappe-bench CLI in the runtime image (needed for bench commands)
-RUN pip install --no-cache-dir frappe-bench
 
 # ---------------------------------------------------------------------------
 # Copy CRM app source into the bench apps directory and pip-install it
@@ -97,12 +42,13 @@ RUN grep -qxF "crm" /home/frappe/frappe-bench/sites/apps.txt 2>/dev/null \
 # ---------------------------------------------------------------------------
 # Startup script (handles site creation / migration at runtime)
 # ---------------------------------------------------------------------------
-COPY --chown=frappe:frappe init-site.sh /home/frappe/init-site.sh
-RUN chmod +x /home/frappe/init-site.sh
-
-EXPOSE 8000 9000
+USER root
+COPY init-site.sh /home/frappe/init-site.sh
+RUN chmod +x /home/frappe/init-site.sh && chown frappe:frappe /home/frappe/init-site.sh
 
 USER frappe
 WORKDIR /home/frappe
+
+EXPOSE 8000 9000
 
 CMD ["/home/frappe/init-site.sh"]
