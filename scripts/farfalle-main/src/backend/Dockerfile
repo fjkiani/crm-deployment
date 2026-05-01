@@ -22,7 +22,8 @@ COPY src/backend/ src/backend/
 # Copy the crm/ client package (used by backend/intel/router.py)
 COPY crm/ crm/
 
-RUN pip install --no-cache-dir poetry && poetry install
+# Pin poetry to 1.8.x to match the lockfile format (Poetry 2.x breaks 1.x lockfiles)
+RUN pip install --no-cache-dir "poetry>=1.8.0,<2.0.0" && poetry install --no-root
 
 EXPOSE 8000
 
