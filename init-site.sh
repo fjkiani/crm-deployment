@@ -3,14 +3,13 @@
 # init-site.sh
 # Runs inside the frappe-web container on every startup.
 # 
-# KEY DESIGN: bench serve starts FIRST (in background) so Render's health check
-# passes immediately. Site creation happens in the background.
+# KEY DESIGN: gunicorn starts FIRST (in background) so Render's health check
+# passes immediately (port 10000 open). Site creation happens in background.
 # 
-# Render sets PORT=10000 for web services. We use $PORT.
+# Render sets PORT=10000 for web services.
 # =============================================================================
 
-set -e
-
+# Don't use set -e here - we want to handle errors gracefully
 export PATH="/usr/local/bin:/home/frappe/frappe-bench/env/bin:$PATH"
 
 # Render sets PORT=10000 for web services
@@ -18,7 +17,9 @@ SERVE_PORT="${PORT:-8000}"
 
 echo "[init-site] Starting on port $SERVE_PORT..."
 echo "[init-site] USER: $(whoami)"
-echo "[init-site] bench: $(which bench 2>/dev/null || echo 'NOT FOUND')"
+echo "[init-site] Python: $(python3 --version 2>&1)"
+echo "[init-site] gunicorn: $(which gunicorn 2>&1 || echo 'NOT FOUND')"
+echo "[init-site] bench: $(which bench 2>&1 || echo 'NOT FOUND')"
 
 BENCH_DIR="/home/frappe/frappe-bench"
 SITE="${FRAPPE_SITE_NAME:-crm.localhost}"
@@ -55,16 +56,25 @@ print("[init-site] common_site_config.json updated.")
 PYEOF
 
 # ---------------------------------------------------------------------------
-# Start bench serve in background FIRST so Render's health check passes
-# Render requires the service to listen on $PORT (default 10000)
+# Start gunicorn in background FIRST so Render's health check passes
+# This is the same command as the production image's CMD, but on $PORT
 # ---------------------------------------------------------------------------
-echo "[init-site] Starting bench serve on port $SERVE_PORT..."
-bench serve --port "$SERVE_PORT" &
-BENCH_PID=$!
-echo "[init-site] bench serve started with PID $BENCH_PID"
+echo "[init-site] Starting gunicorn on port $SERVE_PORT..."
+/home/frappe/frappe-bench/env/bin/gunicorn \
+    --chdir=/home/frappe/frappe-bench/sites \
+    --bind=0.0.0.0:${SERVE_PORT} \
+    --threads=4 \
+    --workers=2 \
+    --worker-class=gthread \
+    --timeout=120 \
+    frappe.app:application \
+    --preload &
+GUNICORN_PID=$!
+echo "[init-site] gunicorn started with PID $GUNICORN_PID"
 
-# Give bench serve a moment to start
-sleep 5
+# Give gunicorn a moment to start
+sleep 3
+echo "[init-site] gunicorn status: $(kill -0 $GUNICORN_PID 2>&1 && echo 'running' || echo 'FAILED')"
 
 # ---------------------------------------------------------------------------
 # Wait for MariaDB and do site setup in background
@@ -111,5 +121,8 @@ sleep 5
     echo "[init-site] Site setup complete! Frappe is ready."
 ) &
 
-# Wait for bench serve to exit (it runs in foreground)
-wait $BENCH_PID
+# Wait for gunicorn to exit (it runs in foreground)
+wait $GUNICORN_PID
+EXIT_CODE=$?
+echo "[init-site] gunicorn exited with code $EXIT_CODE"
+exit $EXIT_CODE
