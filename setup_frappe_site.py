@@ -2,6 +2,7 @@
 """
 Frappe site setup script.
 Runs in background after gunicorn starts.
+Uses bench new-site with root password (MariaDB init script grants root@% access).
 """
 import os
 import sys
@@ -17,6 +18,7 @@ DB_HOST = os.environ.get("DB_HOST", "mariadb")
 DB_PORT = int(os.environ.get("DB_PORT", "3306"))
 DB_NAME = os.environ.get("DB_NAME", "crm_db")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "changeme")
+DB_ROOT_PASSWORD = os.environ.get("DB_ROOT_PASSWORD", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
 GUNICORN_PID = int(os.environ.get("GUNICORN_PID", "0"))
@@ -27,6 +29,7 @@ def log(msg):
 log(f"Starting site setup at {time.strftime('%Y-%m-%d %H:%M:%S')}")
 log(f"SITE={SITE} DB={DB_HOST}:{DB_PORT}/{DB_NAME}")
 log(f"GUNICORN_PID={GUNICORN_PID}")
+log(f"DB_ROOT_PASSWORD={'SET' if DB_ROOT_PASSWORD else 'NOT SET'}")
 
 # Wait for MariaDB
 log("Waiting for MariaDB...")
@@ -50,59 +53,61 @@ else:
     log("ERROR: MariaDB timeout after 10 minutes")
     sys.exit(1)
 
-# Check table count
+# Test root access
+log("Testing root access...")
 try:
     conn = pymysql.connect(
         host=DB_HOST, port=DB_PORT,
-        user=DB_NAME, password=DB_PASSWORD,
-        database=DB_NAME, connect_timeout=10
+        user="root", password=DB_ROOT_PASSWORD,
+        connect_timeout=5
     )
-    cursor = conn.cursor()
-    cursor.execute(f'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema="{DB_NAME}"')
-    table_count = cursor.fetchone()[0]
     conn.close()
-    log(f"Table count: {table_count}")
+    log("Root access OK!")
+    has_root = True
 except Exception as e:
-    log(f"ERROR checking table count: {e}")
-    table_count = 0
+    log(f"Root access FAILED: {e}")
+    has_root = False
 
-def run_bench(args, check=False):
+def run_bench(args):
     """Run a bench command and return exit code."""
     cmd = ["/usr/local/bin/bench"] + args
-    log(f"Running: {' '.join(cmd)}")
+    log(f"Running: {' '.join(str(a) for a in cmd)}")
     result = subprocess.run(
         cmd,
         cwd=BENCH_DIR,
-        capture_output=False,
-        text=True
+        env={**os.environ, "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", "")},
     )
     log(f"Exit code: {result.returncode}")
     return result.returncode
 
-if table_count > 50:
-    log(f"DB has {table_count} tables - restoring site config...")
-    
-    # Create site directory and config
-    site_dir = os.path.join(BENCH_DIR, "sites", SITE)
-    os.makedirs(site_dir, exist_ok=True)
-    
-    site_config = {
-        "db_name": DB_NAME,
-        "db_password": DB_PASSWORD,
-        "db_host": DB_HOST,
-        "db_port": DB_PORT,
-    }
+if has_root:
+    # Use bench new-site with root password
+    log("Running bench new-site...")
+    args = [
+        "new-site", SITE,
+        "--db-name", DB_NAME,
+        "--db-password", DB_PASSWORD,
+        "--admin-password", ADMIN_PASSWORD,
+        "--db-host", DB_HOST,
+        "--db-port", str(DB_PORT),
+        "--no-mariadb-socket",
+        "--force",
+    ]
+    if DB_ROOT_PASSWORD:
+        args += ["--db-root-password", DB_ROOT_PASSWORD]
     if ENCRYPTION_KEY:
-        site_config["encryption_key"] = ENCRYPTION_KEY
+        args += ["--encryption-key", ENCRYPTION_KEY]
     
-    with open(os.path.join(site_dir, "site_config.json"), "w") as f:
-        json.dump(site_config, f, indent=2)
-    log("site_config.json written")
+    rc = run_bench(args)
+    log(f"bench new-site exit: {rc}")
     
-    run_bench(["--site", SITE, "migrate"])
-    run_bench(["--site", SITE, "set-admin-password", ADMIN_PASSWORD])
+    if rc == 0:
+        log("Installing CRM app...")
+        rc = run_bench(["--site", SITE, "install-app", "crm"])
+        log(f"install-app crm exit: {rc}")
 else:
-    log(f"Fresh/partial DB ({table_count} tables) - dropping and reinstalling...")
+    # No root access - use install-app approach
+    log("No root access - using install-app approach...")
     
     # Drop all tables
     try:
@@ -113,7 +118,7 @@ else:
         )
         cursor = conn.cursor()
         cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
-        cursor.execute(f'SELECT table_name FROM information_schema.tables WHERE table_schema = "{DB_NAME}"')
+        cursor.execute(f'SELECT table_name FROM information_schema.tables WHERE table_schema="{DB_NAME}"')
         tables = [row[0] for row in cursor.fetchall()]
         log(f"Dropping {len(tables)} tables...")
         for table in tables:
@@ -142,16 +147,13 @@ else:
         json.dump(site_config, f, indent=2)
     log("site_config.json written")
     
-    # Install apps
     log("Installing frappe app...")
     rc = run_bench(["--site", SITE, "install-app", "frappe"])
-    log(f"install-app frappe: exit {rc}")
+    log(f"install-app frappe exit: {rc}")
     
     log("Installing crm app...")
     rc = run_bench(["--site", SITE, "install-app", "crm"])
-    log(f"install-app crm: exit {rc}")
-    
-    run_bench(["--site", SITE, "set-admin-password", ADMIN_PASSWORD])
+    log(f"install-app crm exit: {rc}")
 
 # Set current site
 run_bench(["use", SITE])
