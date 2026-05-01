@@ -1,47 +1,42 @@
 # =============================================================================
 # Dockerfile.frappe  —  multi-stage build
 #
-# Stage 1 (builder): installs system build deps + runs bench init (clones
-#   Frappe from GitHub + installs Python env).  This is the slow step (~8 min)
-#   but it only runs when the image is rebuilt, not on every container start.
-#   Node.js/yarn are NOT needed here because we use --skip-assets.
+# Stage 1 (builder): runs bench init (clones Frappe from GitHub).
+#   Uses python:3.11 (full image) to avoid missing library issues.
+#   Node.js/yarn NOT needed (--skip-assets).
 #
-# Stage 2 (runtime): copies the finished bench from builder, adds our CRM app,
-#   installs Node.js for serving assets, and sets the entrypoint.
-#   Container startup is fast (<60 s) — only site creation / migration runs.
-#
-# One image, four roles (set via CMD override in Render / docker-compose):
-#   frappe-web       → /home/frappe/init-site.sh   (default)
-#   frappe-worker    → bench worker --queue long,default,short
-#   frappe-scheduler → bench schedule
+# Stage 2 (runtime): copies bench from builder, adds CRM app, sets entrypoint.
+#   Container startup only does site creation / migration (fast, <2 min).
 # =============================================================================
 
 # ── Stage 1: builder ─────────────────────────────────────────────────────────
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.11 AS builder
 
-# Minimal build deps — no Node.js needed (--skip-assets during bench init)
+# git is the only extra dep needed for bench init
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    curl \
-    build-essential \
-    libffi-dev \
-    libssl-dev \
-    libjpeg-dev \
-    libpng-dev \
-    pkg-config \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -ms /bin/bash frappe
+
+# Configure git globally (required by bench init which does git operations)
+RUN git config --global user.email "frappe@example.com" && \
+    git config --global user.name "Frappe"
+
 RUN pip install --no-cache-dir frappe-bench
 
 USER frappe
 WORKDIR /home/frappe
 
-# bench init: clones Frappe framework from GitHub and sets up the Python venv.
-# --skip-assets  → no Node.js/yarn needed during build
+# Configure git for frappe user
+RUN git config --global user.email "frappe@example.com" && \
+    git config --global user.name "Frappe"
+
+# bench init: clones Frappe from GitHub and sets up the Python venv.
+# --skip-assets  → no Node.js/yarn needed
 # --no-procfile  → we manage processes ourselves
-# --no-backups   → no cron backup setup needed
-# This step takes ~8-12 min on first build; subsequent builds use Docker cache.
+# --no-backups   → no cron backup setup
+# This step takes ~8-12 min; subsequent builds use Docker layer cache.
 RUN bench init \
     --frappe-branch develop \
     --frappe-path https://github.com/frappe/frappe \
