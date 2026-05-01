@@ -48,7 +48,9 @@ RUN grep -qxF "crm" /home/frappe/frappe-bench/sites/apps.txt 2>/dev/null \
 # ---------------------------------------------------------------------------
 USER root
 COPY init-site.sh /home/frappe/init-site.sh
-RUN chmod +x /home/frappe/init-site.sh && chown frappe:frappe /home/frappe/init-site.sh
+COPY setup_frappe_site.py /home/frappe/setup_frappe_site.py
+RUN chmod +x /home/frappe/init-site.sh && \
+    chown frappe:frappe /home/frappe/init-site.sh /home/frappe/setup_frappe_site.py
 
 USER frappe
 WORKDIR /home/frappe
