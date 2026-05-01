@@ -60,3 +60,5 @@ WORKDIR /home/frappe
 EXPOSE 10000 8000 9000
 
 CMD ["/home/frappe/init-site.sh"]
+
+# Updated: 2026-05-01T07:31:02Z
