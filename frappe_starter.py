@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Frappe starter - serves health check while site setup runs.
-After setup, switches to gunicorn.
+After SUCCESSFUL setup, switches to gunicorn.
+If setup FAILS, keeps health server running so logs are visible.
 """
 import os
 import sys
@@ -25,6 +26,7 @@ ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
 REDIS_CACHE = os.environ.get("REDIS_CACHE_URL", "redis://redis-cache:13000")
 REDIS_QUEUE = os.environ.get("REDIS_QUEUE_URL", "redis://redis-queue:11000")
 SERVE_PORT = int(os.environ.get("PORT", "8000"))
+LOG_FILE = "/tmp/frappe_setup.log"
 
 LOG_LINES = []
 SETUP_DONE = threading.Event()
@@ -34,6 +36,12 @@ def log(msg):
     line = f"[{time.strftime('%H:%M:%S')}] {msg}"
     print(line, flush=True)
     LOG_LINES.append(line)
+    # Also write to file for persistence
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(line + "\n")
+    except:
+        pass
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -44,27 +52,38 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", len(body))
             self.end_headers()
             self.wfile.write(body)
-        else:
-            body = b"Frappe CRM - initializing...\n"
+        elif self.path == "/health":
+            body = b"OK"
             self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", len(body))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            if SETUP_DONE.is_set() and not SETUP_SUCCESS:
+                body = b"Setup FAILED - check /setup-log for details\n"
+                self.send_response(503)
+            else:
+                body = b"Frappe CRM - initializing...\n"
+                self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.send_header("Content-Length", len(body))
             self.end_headers()
             self.wfile.write(body)
     def log_message(self, *a): pass
 
-def run_bench(args, capture=False):
+def run_bench(args, capture=True):
     cmd = ["/usr/local/bin/bench"] + args
     log(f"Running: {' '.join(str(a) for a in cmd)}")
     env = {**os.environ, "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", "")}
+    result = subprocess.run(cmd, cwd=BENCH_DIR, env=env, capture_output=capture, text=capture)
     if capture:
-        result = subprocess.run(cmd, cwd=BENCH_DIR, env=env, capture_output=True, text=True)
         if result.stdout:
-            log(f"stdout: {result.stdout[:500]}")
+            for line in result.stdout.strip().split('\n')[-20:]:  # last 20 lines
+                log(f"  stdout: {line}")
         if result.stderr:
-            log(f"stderr: {result.stderr[:500]}")
-    else:
-        result = subprocess.run(cmd, cwd=BENCH_DIR, env=env)
+            for line in result.stderr.strip().split('\n')[-20:]:
+                log(f"  stderr: {line}")
     log(f"Exit code: {result.returncode}")
     return result.returncode
 
@@ -91,6 +110,7 @@ def test_root_access():
     """Test root MySQL access using pymysql."""
     try:
         import pymysql
+        log(f"Testing root access: host={DB_HOST} port={DB_PORT} user=root")
         conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user="root", password=DB_ROOT_PASSWORD, connect_timeout=10)
         conn.close()
         log("Root MySQL access OK!")
@@ -118,6 +138,8 @@ def _setup_site_inner():
     
     log(f"Site setup starting at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     log(f"SITE={SITE} DB={DB_HOST}:{DB_PORT}/{DB_NAME}")
+    log(f"DB_ROOT_PASSWORD set: {'yes' if DB_ROOT_PASSWORD else 'NO - MISSING!'}")
+    log(f"ADMIN_PASSWORD set: {'yes' if ADMIN_PASSWORD else 'NO - MISSING!'}")
     
     # Update common_site_config.json
     config_path = os.path.join(BENCH_DIR, "sites", "common_site_config.json")
@@ -140,8 +162,8 @@ def _setup_site_inner():
         return
     
     # Small extra wait for MariaDB to fully initialize
-    log("MariaDB TCP ready, waiting 5s for full initialization...")
-    time.sleep(5)
+    log("MariaDB TCP ready, waiting 10s for full initialization...")
+    time.sleep(10)
     
     # Test root access
     has_root = test_root_access()
@@ -154,7 +176,7 @@ def _setup_site_inner():
     
     if site_exists:
         log("Site already configured - running migrate...")
-        run_bench(["--site", SITE, "migrate"], capture=True)
+        run_bench(["--site", SITE, "migrate"])
         run_bench(["use", SITE])
         SETUP_SUCCESS = True
         log(f"Site migration done at {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -175,11 +197,11 @@ def _setup_site_inner():
         if ENCRYPTION_KEY:
             args += ["--encryption-key", ENCRYPTION_KEY]
         
-        rc = run_bench(args, capture=True)
+        rc = run_bench(args)
         if rc == 0:
             log("bench new-site succeeded!")
             log("Installing CRM app...")
-            run_bench(["--site", SITE, "install-app", "crm"], capture=True)
+            run_bench(["--site", SITE, "install-app", "crm"])
         else:
             log(f"bench new-site FAILED with exit code {rc}")
             log("Trying install-app fallback...")
@@ -224,8 +246,8 @@ def _install_app_fallback():
         json.dump(cfg, f, indent=2)
     log("site_config.json written")
     
-    rc1 = run_bench(["--site", SITE, "install-app", "frappe"], capture=True)
-    rc2 = run_bench(["--site", SITE, "install-app", "crm"], capture=True)
+    rc1 = run_bench(["--site", SITE, "install-app", "frappe"])
+    rc2 = run_bench(["--site", SITE, "install-app", "crm"])
     run_bench(["use", SITE])
     
     if rc1 == 0 and rc2 == 0:
@@ -259,27 +281,59 @@ SETUP_DONE.wait()
 
 if SETUP_SUCCESS:
     log("Site setup succeeded! Switching to gunicorn...")
+    # Stop health check server
+    server.shutdown()
+    log("Health check server stopped")
+    
+    # Start gunicorn
+    log(f"Starting gunicorn on port {SERVE_PORT}...")
+    env = {**os.environ, "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", "")}
+    os.execve(
+        "/home/frappe/frappe-bench/env/bin/gunicorn",
+        [
+            "gunicorn",
+            "--chdir=/home/frappe/frappe-bench/sites",
+            f"--bind=0.0.0.0:{SERVE_PORT}",
+            "--threads=4",
+            "--workers=2",
+            "--worker-class=gthread",
+            "--timeout=120",
+            "frappe.app:application",
+        ],
+        env
+    )
 else:
-    log("Site setup FAILED! Starting gunicorn anyway (will show error page)...")
-
-# Stop health check server
-server.shutdown()
-log("Health check server stopped")
-
-# Start gunicorn
-log(f"Starting gunicorn on port {SERVE_PORT}...")
-env = {**os.environ, "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", "")}
-os.execve(
-    "/home/frappe/frappe-bench/env/bin/gunicorn",
-    [
-        "gunicorn",
-        "--chdir=/home/frappe/frappe-bench/sites",
-        f"--bind=0.0.0.0:{SERVE_PORT}",
-        "--threads=4",
-        "--workers=2",
-        "--worker-class=gthread",
-        "--timeout=120",
-        "frappe.app:application",
-    ],
-    env
-)
+    log("Site setup FAILED! Keeping health server running so you can check /setup-log")
+    log("Will retry setup in 60 seconds...")
+    
+    # Keep retrying setup every 60 seconds
+    while True:
+        time.sleep(60)
+        log("Retrying site setup...")
+        SETUP_DONE.clear()
+        SETUP_SUCCESS = False
+        setup_thread = threading.Thread(target=setup_site)
+        setup_thread.daemon = True
+        setup_thread.start()
+        SETUP_DONE.wait()
+        
+        if SETUP_SUCCESS:
+            log("Retry succeeded! Switching to gunicorn...")
+            server.shutdown()
+            env = {**os.environ, "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", "")}
+            os.execve(
+                "/home/frappe/frappe-bench/env/bin/gunicorn",
+                [
+                    "gunicorn",
+                    "--chdir=/home/frappe/frappe-bench/sites",
+                    f"--bind=0.0.0.0:{SERVE_PORT}",
+                    "--threads=4",
+                    "--workers=2",
+                    "--worker-class=gthread",
+                    "--timeout=120",
+                    "frappe.app:application",
+                ],
+                env
+            )
+        else:
+            log("Retry failed. Will try again in 60 seconds...")
