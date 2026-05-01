@@ -51,8 +51,9 @@ WORKDIR /home/frappe
 RUN pip install --no-cache-dir frappe-bench
 
 # ---------------------------------------------------------------------------
-# Initialise bench with Frappe framework (pinned commit from apps.json)
-# --skip-assets: no DB available at build time, assets built at runtime
+# Initialise bench with Frappe framework (develop branch HEAD)
+# The CRM app commit 3b61c0ba is in THIS repo's crm/ directory — copied below.
+# --skip-assets: no DB available at build time
 # ---------------------------------------------------------------------------
 USER frappe
 RUN bench init \
@@ -60,9 +61,7 @@ RUN bench init \
     --frappe-path https://github.com/frappe/frappe \
     --skip-assets \
     --python python3 \
-    frappe-bench \
-    && cd frappe-bench \
-    && git -C apps/frappe checkout 3b61c0ba8f362e83c578f9d7aa0a61b4e8956191 2>/dev/null || true
+    frappe-bench
 
 WORKDIR /home/frappe/frappe-bench
 
@@ -72,7 +71,7 @@ WORKDIR /home/frappe/frappe-bench
 RUN ./env/bin/pip install --no-cache-dir frappe-mcp==0.1.0
 
 # ---------------------------------------------------------------------------
-# Copy CRM app source into the bench
+# Copy CRM app source into the bench (from this repo's crm/ directory)
 # ---------------------------------------------------------------------------
 COPY --chown=frappe:frappe crm/                apps/crm/
 COPY --chown=frappe:frappe setup.py            apps/crm/setup.py
