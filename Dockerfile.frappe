@@ -1,5 +1,59 @@
-# TEST: Simple container that just sleeps to verify the base image works
-FROM ghcr.io/fjkiani/crm-frappe:main
+# =============================================================================
+# Dockerfile.frappe
+#
+# Uses frappe/erpnext:develop as base (pre-built with bench + frappe + erpnext).
+# We add our CRM app on top. No bench init needed — fast build (~2-3 min).
+#
+# Note: frappe-mcp is excluded because it requires Python ≤3.13 (PyO3 limitation)
+# and frappe/erpnext:develop uses Python 3.14. MCP server endpoint is disabled.
+#
+# One image, four roles (set via CMD override in Render / docker-compose):
+#   frappe-web       → /home/frappe/init-site.sh   (default)
+#   frappe-worker    → bench worker --queue long,default,short
+#   frappe-scheduler → bench schedule
+# =============================================================================
 
-ENTRYPOINT []
-CMD ["sh", "-c", "echo 'Container started successfully' && sleep 3600"]
+FROM frappe/erpnext:develop
+
+USER root
+
+# Install build tools (needed for some Python packages) and mariadb-client
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    mariadb-client \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+USER frappe
+
+# ---------------------------------------------------------------------------
+# Copy CRM app source into the bench apps directory and pip-install it
+# ---------------------------------------------------------------------------
+COPY --chown=frappe:frappe crm/             /home/frappe/frappe-bench/apps/crm/crm/
+COPY --chown=frappe:frappe setup.py         /home/frappe/frappe-bench/apps/crm/setup.py
+COPY --chown=frappe:frappe pyproject.toml   /home/frappe/frappe-bench/apps/crm/pyproject.toml
+COPY --chown=frappe:frappe requirements.txt /home/frappe/frappe-bench/apps/crm/requirements.txt
+COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/frappe-bench/apps/crm/MANIFEST.in
+
+# Install CRM app into the bench venv (frappe-mcp excluded: requires Python ≤3.13)
+RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
+    -e /home/frappe/frappe-bench/apps/crm
+
+# Register CRM in apps.txt
+RUN grep -qxF "crm" /home/frappe/frappe-bench/sites/apps.txt 2>/dev/null \
+    || echo "crm" >> /home/frappe/frappe-bench/sites/apps.txt
+
+# ---------------------------------------------------------------------------
+# Startup script (handles site creation / migration at runtime)
+# Render sets PORT=10000 for web services; bench serve uses $PORT
+# ---------------------------------------------------------------------------
+USER root
+COPY init-site.sh /home/frappe/init-site.sh
+RUN chmod +x /home/frappe/init-site.sh && chown frappe:frappe /home/frappe/init-site.sh
+
+USER frappe
+WORKDIR /home/frappe
+
+# Render uses PORT=10000; bench serve listens on $PORT
+EXPOSE 10000 8000 9000
+
+CMD ["/home/frappe/init-site.sh"]
