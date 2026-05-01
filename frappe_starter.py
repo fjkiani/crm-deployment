@@ -9,7 +9,6 @@ import json
 import time
 import threading
 import subprocess
-import signal
 import socket
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -54,15 +53,67 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
     def log_message(self, *a): pass
 
-def run_bench(args):
+def run_bench(args, capture=False):
     cmd = ["/usr/local/bin/bench"] + args
     log(f"Running: {' '.join(str(a) for a in cmd)}")
     env = {**os.environ, "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", "")}
-    result = subprocess.run(cmd, cwd=BENCH_DIR, env=env)
+    if capture:
+        result = subprocess.run(cmd, cwd=BENCH_DIR, env=env, capture_output=True, text=True)
+        if result.stdout:
+            log(f"stdout: {result.stdout[:500]}")
+        if result.stderr:
+            log(f"stderr: {result.stderr[:500]}")
+    else:
+        result = subprocess.run(cmd, cwd=BENCH_DIR, env=env)
     log(f"Exit code: {result.returncode}")
     return result.returncode
 
+def wait_for_tcp(host, port, timeout=600):
+    """Wait for TCP port to be open using raw socket (no pymysql needed)."""
+    log(f"Waiting for TCP {host}:{port}...")
+    start = time.time()
+    attempt = 0
+    while time.time() - start < timeout:
+        try:
+            s = socket.create_connection((host, port), timeout=5)
+            s.close()
+            log(f"TCP {host}:{port} is open (attempt {attempt+1}, {int(time.time()-start)}s)")
+            return True
+        except Exception as e:
+            if attempt % 10 == 0:
+                log(f"TCP {host}:{port} not ready (attempt {attempt+1}): {e}")
+            attempt += 1
+            time.sleep(3)
+    log(f"ERROR: TCP {host}:{port} timeout after {timeout}s")
+    return False
+
+def test_root_access():
+    """Test root MySQL access using pymysql."""
+    try:
+        import pymysql
+        conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user="root", password=DB_ROOT_PASSWORD, connect_timeout=10)
+        conn.close()
+        log("Root MySQL access OK!")
+        return True
+    except ImportError:
+        log("pymysql not available - will rely on bench new-site for root access")
+        return True  # Assume root access works, bench new-site will tell us
+    except Exception as e:
+        log(f"Root MySQL access FAILED: {e}")
+        return False
+
 def setup_site():
+    global SETUP_SUCCESS
+    try:
+        _setup_site_inner()
+    except Exception as e:
+        log(f"FATAL ERROR in setup_site: {e}")
+        import traceback
+        log(traceback.format_exc())
+    finally:
+        SETUP_DONE.set()
+
+def _setup_site_inner():
     global SETUP_SUCCESS
     
     log(f"Site setup starting at {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -73,7 +124,8 @@ def setup_site():
     try:
         with open(config_path) as f:
             config = json.load(f)
-    except:
+    except Exception as e:
+        log(f"Could not read common_site_config.json: {e}")
         config = {}
     config["redis_cache"] = REDIS_CACHE
     config["redis_queue"] = REDIS_QUEUE
@@ -82,90 +134,109 @@ def setup_site():
         json.dump(config, f, indent=2)
     log("common_site_config.json updated")
     
-    # Wait for MariaDB using root credentials (crm_db user doesn't exist until bench new-site creates it)
-    log("Waiting for MariaDB (using root credentials)...")
-    import pymysql
+    # Wait for MariaDB using TCP socket (no pymysql needed)
+    if not wait_for_tcp(DB_HOST, DB_PORT, timeout=600):
+        log("ERROR: MariaDB TCP timeout")
+        return
     
-    has_root = False
-    for i in range(200):
-        try:
-            conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user="root", password=DB_ROOT_PASSWORD, connect_timeout=5)
-            conn.close()
-            log(f"MariaDB ready with root access (attempt {i+1})")
-            has_root = True
-            break
-        except Exception as e:
-            if i % 10 == 0:
-                log(f"Waiting for MariaDB root access (attempt {i+1}): {e}")
-            time.sleep(3)
-    else:
-        log("ERROR: MariaDB root access timeout - trying crm_db user as fallback...")
-        # Fallback: try crm_db user (site may already be set up)
-        for i in range(30):
-            try:
-                conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_NAME, password=DB_PASSWORD, database=DB_NAME, connect_timeout=5)
-                conn.close()
-                log(f"MariaDB ready with crm_db user (attempt {i+1})")
-                break
-            except Exception as e:
-                if i % 10 == 0:
-                    log(f"Waiting for MariaDB crm_db (attempt {i+1}): {e}")
-                time.sleep(3)
-        else:
-            log("ERROR: MariaDB completely unreachable")
-            SETUP_DONE.set()
-            return
+    # Small extra wait for MariaDB to fully initialize
+    log("MariaDB TCP ready, waiting 5s for full initialization...")
+    time.sleep(5)
+    
+    # Test root access
+    has_root = test_root_access()
+    
+    # Check if site already exists
+    site_dir = os.path.join(BENCH_DIR, "sites", SITE)
+    site_config = os.path.join(site_dir, "site_config.json")
+    site_exists = os.path.exists(site_config)
+    log(f"Site directory exists: {site_exists} ({site_dir})")
+    
+    if site_exists:
+        log("Site already configured - running migrate...")
+        run_bench(["--site", SITE, "migrate"], capture=True)
+        run_bench(["use", SITE])
+        SETUP_SUCCESS = True
+        log(f"Site migration done at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        return
     
     if has_root:
-        log("Running bench new-site...")
-        args = ["new-site", SITE, "--db-name", DB_NAME, "--db-password", DB_PASSWORD,
-                "--admin-password", ADMIN_PASSWORD, "--db-host", DB_HOST, "--db-port", str(DB_PORT),
-                "--no-mariadb-socket", "--force"]
+        log("Running bench new-site with root access...")
+        args = ["new-site", SITE,
+                "--db-name", DB_NAME,
+                "--db-password", DB_PASSWORD,
+                "--admin-password", ADMIN_PASSWORD,
+                "--db-host", DB_HOST,
+                "--db-port", str(DB_PORT),
+                "--no-mariadb-socket",
+                "--force"]
         if DB_ROOT_PASSWORD:
             args += ["--db-root-password", DB_ROOT_PASSWORD]
         if ENCRYPTION_KEY:
             args += ["--encryption-key", ENCRYPTION_KEY]
         
-        rc = run_bench(args)
+        rc = run_bench(args, capture=True)
         if rc == 0:
             log("bench new-site succeeded!")
             log("Installing CRM app...")
-            run_bench(["--site", SITE, "install-app", "crm"])
+            run_bench(["--site", SITE, "install-app", "crm"], capture=True)
         else:
             log(f"bench new-site FAILED with exit code {rc}")
+            log("Trying install-app fallback...")
+            _install_app_fallback()
+            return
     else:
-        log("No root access - using install-app approach...")
-        # Drop tables and reinstall
-        try:
-            conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_NAME, password=DB_PASSWORD, database=DB_NAME, connect_timeout=10)
-            cursor = conn.cursor()
-            cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
-            cursor.execute(f'SELECT table_name FROM information_schema.tables WHERE table_schema="{DB_NAME}"')
-            tables = [row[0] for row in cursor.fetchall()]
-            log(f"Dropping {len(tables)} tables...")
-            for table in tables:
-                cursor.execute(f"DROP TABLE IF EXISTS `{table}`")
-            cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            log(f"Error dropping tables: {e}")
-        
-        site_dir = os.path.join(BENCH_DIR, "sites", SITE)
-        os.makedirs(site_dir, exist_ok=True)
-        cfg = {"db_name": DB_NAME, "db_password": DB_PASSWORD, "db_host": DB_HOST, "db_port": DB_PORT}
-        if ENCRYPTION_KEY:
-            cfg["encryption_key"] = ENCRYPTION_KEY
-        with open(os.path.join(site_dir, "site_config.json"), "w") as f:
-            json.dump(cfg, f, indent=2)
-        
-        run_bench(["--site", SITE, "install-app", "frappe"])
-        run_bench(["--site", SITE, "install-app", "crm"])
+        log("No root access - using install-app fallback...")
+        _install_app_fallback()
+        return
     
     run_bench(["use", SITE])
     log(f"Site setup done at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     SETUP_SUCCESS = True
-    SETUP_DONE.set()
+
+def _install_app_fallback():
+    """Install frappe/crm without root DB access."""
+    global SETUP_SUCCESS
+    
+    # Drop tables using crm_db user
+    try:
+        import pymysql
+        conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_NAME, password=DB_PASSWORD, database=DB_NAME, connect_timeout=10)
+        cursor = conn.cursor()
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+        cursor.execute(f'SELECT table_name FROM information_schema.tables WHERE table_schema="{DB_NAME}"')
+        tables = [row[0] for row in cursor.fetchall()]
+        log(f"Dropping {len(tables)} tables...")
+        for table in tables:
+            cursor.execute(f"DROP TABLE IF EXISTS `{table}`")
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log(f"Error dropping tables (may be OK if DB is empty): {e}")
+    
+    site_dir = os.path.join(BENCH_DIR, "sites", SITE)
+    os.makedirs(site_dir, exist_ok=True)
+    cfg = {"db_name": DB_NAME, "db_password": DB_PASSWORD, "db_host": DB_HOST, "db_port": DB_PORT}
+    if ENCRYPTION_KEY:
+        cfg["encryption_key"] = ENCRYPTION_KEY
+    with open(os.path.join(site_dir, "site_config.json"), "w") as f:
+        json.dump(cfg, f, indent=2)
+    log("site_config.json written")
+    
+    rc1 = run_bench(["--site", SITE, "install-app", "frappe"], capture=True)
+    rc2 = run_bench(["--site", SITE, "install-app", "crm"], capture=True)
+    run_bench(["use", SITE])
+    
+    if rc1 == 0 and rc2 == 0:
+        log("install-app fallback succeeded!")
+        SETUP_SUCCESS = True
+    else:
+        log(f"install-app fallback FAILED: frappe={rc1} crm={rc2}")
+    
+    log(f"Fallback done at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+# ─── Main ───────────────────────────────────────────────────────────────────
 
 # Start health check server
 log(f"Starting health check server on port {SERVE_PORT}...")
@@ -189,7 +260,7 @@ SETUP_DONE.wait()
 if SETUP_SUCCESS:
     log("Site setup succeeded! Switching to gunicorn...")
 else:
-    log("Site setup FAILED! Starting gunicorn anyway...")
+    log("Site setup FAILED! Starting gunicorn anyway (will show error page)...")
 
 # Stop health check server
 server.shutdown()
