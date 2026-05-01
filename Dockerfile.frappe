@@ -14,8 +14,9 @@ FROM frappe/erpnext:develop
 
 USER root
 
-# Install mariadb-client for mysqladmin (health check in init-site.sh)
+# Install build tools (needed for pydantic-core compilation) and mariadb-client
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     mariadb-client \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -31,6 +32,7 @@ COPY --chown=frappe:frappe requirements.txt /home/frappe/frappe-bench/apps/crm/r
 COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/frappe-bench/apps/crm/MANIFEST.in
 
 # Install CRM app into the bench venv
+# frappe-mcp requires pydantic 2.x which needs build-essential for compilation
 RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
     -e /home/frappe/frappe-bench/apps/crm \
     frappe-mcp==0.1.0
