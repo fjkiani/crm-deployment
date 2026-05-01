@@ -4,10 +4,11 @@
 # Stage 1 (builder): installs system build deps + runs bench init (clones
 #   Frappe from GitHub + installs Python env).  This is the slow step (~8 min)
 #   but it only runs when the image is rebuilt, not on every container start.
+#   Node.js/yarn are NOT needed here because we use --skip-assets.
 #
 # Stage 2 (runtime): copies the finished bench from builder, adds our CRM app,
-#   and sets the entrypoint.  Container startup is fast (<60 s) because bench
-#   is already initialised — only site creation / migration runs at runtime.
+#   installs Node.js for serving assets, and sets the entrypoint.
+#   Container startup is fast (<60 s) — only site creation / migration runs.
 #
 # One image, four roles (set via CMD override in Render / docker-compose):
 #   frappe-web       → /home/frappe/init-site.sh   (default)
@@ -18,7 +19,7 @@
 # ── Stage 1: builder ─────────────────────────────────────────────────────────
 FROM python:3.11-slim-bookworm AS builder
 
-# Build-time deps (not needed at runtime)
+# Minimal build deps — no Node.js needed (--skip-assets during bench init)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
@@ -27,11 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libjpeg-dev \
     libpng-dev \
-    libmariadb-dev \
     pkg-config \
-    nodejs \
-    npm \
-    && npm install -g yarn \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -ms /bin/bash frappe
@@ -41,7 +38,7 @@ USER frappe
 WORKDIR /home/frappe
 
 # bench init: clones Frappe framework from GitHub and sets up the Python venv.
-# --skip-assets  → we build assets separately (or skip for API-only use)
+# --skip-assets  → no Node.js/yarn needed during build
 # --no-procfile  → we manage processes ourselves
 # --no-backups   → no cron backup setup needed
 # This step takes ~8-12 min on first build; subsequent builds use Docker cache.
@@ -60,7 +57,7 @@ RUN find /home/frappe/frappe-bench/apps -mindepth 1 -name ".git" -type d | xargs
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM python:3.11-slim-bookworm AS runtime
 
-# Runtime deps only (no build tools)
+# Runtime deps: Node.js for asset serving, MariaDB client for mysqladmin
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     nodejs \
