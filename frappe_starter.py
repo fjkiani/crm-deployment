@@ -26,8 +26,8 @@ DB_PASS     = os.environ.get("DB_PASSWORD", "changeme")
 DB_ROOT     = os.environ.get("DB_ROOT_PASSWORD", "")
 ADMIN_PW    = os.environ.get("ADMIN_PASSWORD", "admin")
 ENC_KEY     = os.environ.get("ENCRYPTION_KEY", "")
-REDIS_CACHE = os.environ.get("REDIS_CACHE_URL", "redis://redis-cache:13000")
-REDIS_QUEUE = os.environ.get("REDIS_QUEUE_URL", "redis://redis-queue:11000")
+REDIS_CACHE = os.environ.get("REDIS_CACHE_URL", "redis://crm-redis-cache:10000")
+REDIS_QUEUE = os.environ.get("REDIS_QUEUE_URL", "redis://crm-redis-queue:10000")
 SERVE_PORT  = int(os.environ.get("PORT", "8000"))
 
 LOG_LINES     = []

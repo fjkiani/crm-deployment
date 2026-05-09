@@ -57,7 +57,7 @@ services:
     runtime: docker
     image:
       url: docker.io/library/redis:7-alpine
-    dockerCommand: redis-server --port 13000 --maxmemory 256mb --maxmemory-policy allkeys-lru
+    dockerCommand: redis-server --port 10000 --maxmemory 256mb --maxmemory-policy allkeys-lru
 
   # ── Redis Queue (private) ─────────────────────────────────────────────────
   - type: pserv
@@ -65,7 +65,7 @@ services:
     runtime: docker
     image:
       url: docker.io/library/redis:7-alpine
-    dockerCommand: redis-server --port 11000
+    dockerCommand: redis-server --port 10000
 
   # ── Frappe Web ────────────────────────────────────────────────────────────
   - type: web
