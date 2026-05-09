@@ -2,10 +2,10 @@
 """
 Frappe starter - serves health check while site setup runs.
 Strategy:
-  1. Wait for MariaDB AND Redis to be reachable
-  2. Run bench new-site with --skip-redis-config-generation (no Redis needed)
-  3. Stream bench output in real time so we can see progress / detect hangs
-  4. exec gunicorn on success; keep health server + retry on failure
+  1. Wait for MariaDB to be reachable
+  2. Run bench new-site (streams output, 7200s timeout — DocType install takes ~90 min)
+  3. Install CRM app
+  4. exec gunicorn on success; keep health server alive on failure
 """
 import os
 import sys
@@ -111,7 +111,7 @@ def get_env():
         "PATH": "/usr/local/bin:/home/frappe/.local/bin:/home/frappe/frappe-bench/env/bin:" + os.environ.get("PATH", ""),
     }
 
-def run_bench(args, timeout=1800):
+def run_bench(args, timeout=7200):
     """Run bench, stream output line-by-line. Returns exit code."""
     cmd = ["/usr/local/bin/bench"] + [str(a) for a in args]
     log(f"$ {' '.join(cmd)}")
@@ -157,21 +157,6 @@ def ensure_site_dirs():
     os.makedirs(os.path.join(site_dir, "logs"), exist_ok=True)
     return site_dir
 
-def write_site_config():
-    site_dir = ensure_site_dirs()
-    cfg = {
-        "db_name":     DB_NAME,
-        "db_password": DB_PASS,
-        "db_host":     DB_HOST,
-        "db_port":     DB_PORT,
-    }
-    if ENC_KEY:
-        cfg["encryption_key"] = ENC_KEY
-    path = os.path.join(site_dir, "site_config.json")
-    with open(path, "w") as f:
-        json.dump(cfg, f, indent=2)
-    log(f"site_config.json written")
-
 def patch_site_config(updates):
     path = os.path.join(BENCH_DIR, "sites", SITE, "site_config.json")
     try:
@@ -207,52 +192,53 @@ def _setup_site_inner():
     # 1. Write common_site_config.json
     write_common_site_config()
 
-    # 2. Wait for MariaDB
+    # 2. Wait for MariaDB (required)
     if not wait_for_tcp(DB_HOST, DB_PORT, "MariaDB", timeout=300):
-        log("ERROR: MariaDB unreachable")
+        log("ERROR: MariaDB unreachable after 5 min — aborting")
         return
     time.sleep(5)
 
-    # 3. Wait for Redis (required by bench migrate; bench new-site can skip it)
-    redis_ok = True
+    # 3. Wait for Redis (best-effort — bench new-site doesn't need it)
     rh, rp = parse_redis_url(REDIS_CACHE)
     if rh:
-        redis_ok = wait_for_tcp(rh, rp, "redis-cache", timeout=120)
+        redis_ok = wait_for_tcp(rh, rp, "redis-cache", timeout=60)
     rh2, rp2 = parse_redis_url(REDIS_QUEUE)
     if rh2:
-        wait_for_tcp(rh2, rp2, "redis-queue", timeout=60)
+        wait_for_tcp(rh2, rp2, "redis-queue", timeout=30)
 
-    # 4. Check if site already exists
+    # 4. Check if site already exists (idempotent restart)
     site_config_path = os.path.join(BENCH_DIR, "sites", SITE, "site_config.json")
     site_exists = os.path.exists(site_config_path)
     log(f"Site config exists: {site_exists}")
 
-    if site_exists and redis_ok:
-        log("Site exists + Redis OK -> trying migrate...")
-        rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=600)
+    if site_exists:
+        log("Site already exists -> running migrate to catch up...")
+        rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=3600)
         if rc == 0:
             log("Migrate succeeded!")
             run_bench(["use", SITE])
             SETUP_SUCCESS = True
             return
         else:
-            log(f"Migrate failed (rc={rc}) -> fresh install")
+            log(f"Migrate failed (rc={rc}) -> proceeding with fresh install")
             import shutil
             try:
                 shutil.rmtree(os.path.join(BENCH_DIR, "sites", SITE))
-                log("Removed stale site dir")
+                log("Removed stale site dir for fresh install")
             except Exception as e:
                 log(f"Could not remove site dir: {e}")
 
-    # 5. bench new-site (--skip-redis-config-generation = no Redis needed here)
-    log("Running bench new-site (streaming output)...")
+    # 5. bench new-site
+    # NOTE: DocType installation takes ~90 minutes on Render's network.
+    # Timeout is set to 7200s (2 hours) to allow completion.
+    log("Running bench new-site (this takes ~90 min on first run)...")
     args = [
         "new-site", SITE,
-        "--db-name",       DB_NAME,
-        "--db-password",   DB_PASS,
+        "--db-name",        DB_NAME,
+        "--db-password",    DB_PASS,
         "--admin-password", ADMIN_PW,
-        "--db-host",       DB_HOST,
-        "--db-port",       str(DB_PORT),
+        "--db-host",        DB_HOST,
+        "--db-port",        str(DB_PORT),
         "--mariadb-user-host-login-scope", "%",
         "--verbose",
         "--force",
@@ -260,37 +246,28 @@ def _setup_site_inner():
     if DB_ROOT:
         args += ["--db-root-password", DB_ROOT]
 
-    rc = run_bench(args, timeout=1800)
+    rc = run_bench(args, timeout=7200)
 
-    if rc == 0:
-        log("bench new-site succeeded!")
-        if ENC_KEY:
-            patch_site_config({"encryption_key": ENC_KEY})
-        log("Installing CRM app...")
-        rc2 = run_bench(["--site", SITE, "install-app", "crm"], timeout=600)
-        if rc2 == 0:
-            log("CRM installed!")
-        else:
-            log(f"CRM install failed (rc={rc2}) - Frappe still works")
-        run_bench(["use", SITE])
-        SETUP_SUCCESS = True
-        log(f"=== Setup complete {time.strftime('%H:%M:%S')} ===")
+    if rc != 0:
+        log(f"bench new-site FAILED (rc={rc}) — check /setup-log for details")
+        return
+
+    log("bench new-site succeeded!")
+    if ENC_KEY:
+        patch_site_config({"encryption_key": ENC_KEY})
+
+    # 6. Install CRM app
+    log("Installing CRM app (this may take 10-20 min)...")
+    rc2 = run_bench(["--site", SITE, "install-app", "crm"], timeout=3600)
+    if rc2 == 0:
+        log("CRM installed!")
     else:
-        log(f"bench new-site FAILED (rc={rc}) -> fallback")
-        _fallback_install()
+        log(f"CRM install failed (rc={rc2}) — Frappe will still work, CRM may be missing")
 
-def _fallback_install():
-    """Write site_config manually + install-app (for when bench new-site can't create DB)."""
-    global SETUP_SUCCESS
-    write_site_config()
-    rc1 = run_bench(["--site", SITE, "install-app", "frappe"], timeout=600)
-    rc2 = run_bench(["--site", SITE, "install-app", "crm"],    timeout=600)
+    # 7. Set current site
     run_bench(["use", SITE])
-    if rc1 == 0 and rc2 == 0:
-        log("Fallback install succeeded!")
-        SETUP_SUCCESS = True
-    else:
-        log(f"Fallback failed: frappe={rc1} crm={rc2}")
+    SETUP_SUCCESS = True
+    log(f"=== Setup complete {time.strftime('%H:%M:%S')} ===")
 
 # ── Gunicorn ──────────────────────────────────────────────────────────────────
 GUNICORN_CMD = [
@@ -348,25 +325,17 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 log(f"Health server up -> https://crm-frappe-web.onrender.com/setup-log")
 
 threading.Thread(target=setup_site, daemon=True).start()
-log("Waiting for setup...")
+log("Waiting for setup (bench new-site takes ~90 min on first run)...")
 SETUP_DONE.wait()
 
 if SETUP_SUCCESS:
-    log("Setup succeeded -> gunicorn")
+    log("Setup succeeded -> starting gunicorn")
     server.shutdown()
     exec_gunicorn()
 else:
-    log("Setup FAILED -> keeping health server, retrying in 60s")
+    log("Setup FAILED -> keeping health server alive. Check /setup-log for details.")
+    log("Will NOT retry automatically — fix the error and redeploy.")
+    # Keep process alive so Render doesn't restart in a crash loop
     while True:
-        time.sleep(60)
-        log("--- Retry ---")
-        SETUP_DONE.clear()
-        SETUP_SUCCESS = False
-        threading.Thread(target=setup_site, daemon=True).start()
-        SETUP_DONE.wait()
-        if SETUP_SUCCESS:
-            log("Retry succeeded -> gunicorn")
-            server.shutdown()
-            exec_gunicorn()
-        else:
-            log("Retry failed, trying again in 60s")
+        time.sleep(300)
+        log("Still alive (setup failed). Check /setup-log.")
