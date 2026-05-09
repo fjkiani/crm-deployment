@@ -254,7 +254,6 @@ def _setup_site_inner():
         "--db-host",       DB_HOST,
         "--db-port",       str(DB_PORT),
         "--mariadb-user-host-login-scope", "%",
-        "--skip-redis-config-generation",
         "--verbose",
         "--force",
     ]
