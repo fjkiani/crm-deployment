@@ -11,7 +11,7 @@ Boot logic:
     1. Start local Redis on 127.0.0.1:6380
     2. Write common_site_config.json pointing at local Redis
     3. Wait for MariaDB
-    4. Create DB + user, import framework_mariadb.sql (seconds)
+    4. Create DB + user (seconds)
     5. Write site_config.json
     6. bench migrate --skip-search-index  (~5-15 min, uses local Redis)
     7. bench install-app crm
@@ -355,16 +355,10 @@ FLUSH PRIVILEGES;
         log("ERROR: Could not create database/user — check DB_ROOT_PASSWORD")
         return
 
-    # 6. Import the base Frappe schema (milliseconds — SQL file already in image)
-    if os.path.exists(FRAMEWORK_SQL):
-        log(f"Importing base Frappe schema (fast SQL import)...")
-        rc = import_sql_file(FRAMEWORK_SQL, DB_NAME)
-        if rc != 0:
-            log("ERROR: Failed to import framework SQL")
-            return
-        log("Base schema imported!")
-    else:
-        log(f"WARNING: {FRAMEWORK_SQL} not found — migrate will create tables from scratch")
+    # 6. bench migrate creates all tables from scratch — do NOT pre-import
+    #    framework_mariadb.sql as it causes schema version mismatches with
+    #    the develop branch code.
+    log("Skipping SQL pre-import — bench migrate will create all tables")
 
     # 7. Write site_config.json so bench knows about this site
     write_site_config()
