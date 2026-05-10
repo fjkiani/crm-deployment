@@ -82,7 +82,7 @@ services:
       name: frappe-sites
       mountPath: /home/frappe/frappe-bench/sites
       sizeGB: 10
-    healthCheckPath: /health
+    healthCheckPath: /api/method/ping
     envVars:
       - key: FRAPPE_SITE_NAME
         value: crm-frappe-web.onrender.com
@@ -197,7 +197,7 @@ services:
     dockerfilePath: ./Dockerfile.eaia
     dockerContext: .
     plan: starter
-    healthCheckPath: /health
+    healthCheckPath: /api/method/ping
     envVars:
       - key: FRAPPE_SITE_URL
         fromService:
