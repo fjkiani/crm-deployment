@@ -1,67 +1,87 @@
 # =============================================================================
-# Dockerfile.frappe
+# Dockerfile.frappe  —  Build-time DB bake strategy
 #
-# Uses frappe/erpnext:develop as base (pre-built with bench + frappe + erpnext).
-# We add our CRM app on top. No bench init needed — fast build (~2-3 min).
+# Problem: bench new-site runs ~400 DocType migrations against a remote MariaDB
+# over the network. On Render standard plan this takes 4+ hours and always
+# times out before completing.
 #
-# Note: frappe-mcp is excluded because it requires Python ≤3.13 (PyO3 limitation)
-# and frappe/erpnext:develop uses Python 3.14. MCP server endpoint is disabled.
+# Solution: Run bench new-site at BUILD TIME against a local MariaDB inside
+# the Docker build. Dump the resulting database to a .sql.gz file baked into
+# the image. At runtime, restore the dump in seconds, patch credentials, start
+# gunicorn. First boot goes from 4 hours → ~30 seconds.
 #
-# One image, four roles (set via CMD override in Render / docker-compose):
-#   frappe-web       → /home/frappe/init-site.sh   (default)
+# Build stages:
+#   1. builder  — installs CRM app, runs bench new-site against local MariaDB,
+#                 dumps DB to /home/frappe/frappe-bench/sites/db_seed.sql.gz
+#   2. runtime  — copies bench + sites (including dump) from builder, adds
+#                 frappe_starter.py which restores dump at first boot
+#
+# One image, three roles (CMD override in Render / docker-compose):
+#   frappe-web       → python /home/frappe/frappe_starter.py  (default)
 #   frappe-worker    → bench worker --queue long,default,short
 #   frappe-scheduler → bench schedule
 # =============================================================================
 
-FROM frappe/erpnext:develop
+# ── Stage 1: builder ──────────────────────────────────────────────────────────
+FROM frappe/erpnext:develop AS builder
 
 USER root
 
-# Install build tools (needed for some Python packages) and mariadb-client
+# Install MariaDB server + client for build-time site creation
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+    mariadb-server \
     mariadb-client \
+    build-essential \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-USER frappe
+# Fix apps.txt: base image has stale 'erpnextcrm' entry
+RUN printf 'frappe\nerpnext\ncrm\n' > /home/frappe/frappe-bench/sites/apps.txt
 
-# ---------------------------------------------------------------------------
-# Copy CRM app source into the bench apps directory and pip-install it
-# ---------------------------------------------------------------------------
+# Copy CRM app source
 COPY --chown=frappe:frappe crm/             /home/frappe/frappe-bench/apps/crm/crm/
 COPY --chown=frappe:frappe setup.py         /home/frappe/frappe-bench/apps/crm/setup.py
 COPY --chown=frappe:frappe pyproject.toml   /home/frappe/frappe-bench/apps/crm/pyproject.toml
 COPY --chown=frappe:frappe requirements.txt /home/frappe/frappe-bench/apps/crm/requirements.txt
 COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/frappe-bench/apps/crm/MANIFEST.in
 
-# Install CRM app into the bench venv (frappe-mcp excluded: requires Python ≤3.13)
+# Install CRM app into bench venv
 RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
     -e /home/frappe/frappe-bench/apps/crm
 
-# Fix apps.txt: the base image (frappe/erpnext:develop) registers 'erpnextcrm'
-# (old name for the CRM app) which has no Python package installed, causing
-# every `bench` command to crash with ModuleNotFoundError: No module named 'erpnextcrm'.
-# Overwrite apps.txt with only the apps that are actually installed.
-RUN printf 'frappe\nerpnext\ncrm\n' > /home/frappe/frappe-bench/sites/apps.txt && \
-    echo "=== apps.txt ===" && cat /home/frappe/frappe-bench/sites/apps.txt
+# Copy the build-time site creation script
+COPY build_site.sh /build_site.sh
+RUN chmod +x /build_site.sh
 
-# ---------------------------------------------------------------------------
-# Startup script (handles site creation / migration at runtime)
-# Render sets PORT=10000 for web services; bench serve uses $PORT
-# ---------------------------------------------------------------------------
+# Run bench new-site against local MariaDB, then dump the DB
+# This is the slow step (~90 min) but it runs ONCE at build time in CI,
+# not on every container start.
+RUN /build_site.sh
+
+# ── Stage 2: runtime ──────────────────────────────────────────────────────────
+FROM frappe/erpnext:develop AS runtime
+
 USER root
-COPY init-site.sh /home/frappe/init-site.sh
-COPY setup_frappe_site.py /home/frappe/setup_frappe_site.py
+
+# Install only mariadb-client (needed for mysqldump/mysql restore at runtime)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mariadb-client \
+    build-essential \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy the fully-built bench from builder (includes installed CRM app + DB dump)
+COPY --from=builder --chown=frappe:frappe \
+    /home/frappe/frappe-bench/ \
+    /home/frappe/frappe-bench/
+
+# Copy startup script
 COPY frappe_starter.py /home/frappe/frappe_starter.py
-RUN chmod +x /home/frappe/init-site.sh /home/frappe/frappe_starter.py && \
-    chown frappe:frappe /home/frappe/init-site.sh /home/frappe/setup_frappe_site.py /home/frappe/frappe_starter.py
+COPY init-site.sh      /home/frappe/init-site.sh
+RUN chmod +x /home/frappe/frappe_starter.py /home/frappe/init-site.sh && \
+    chown frappe:frappe /home/frappe/frappe_starter.py /home/frappe/init-site.sh
 
 USER frappe
 WORKDIR /home/frappe
 
-# Render uses PORT=10000; bench serve listens on $PORT
 EXPOSE 10000 8000 9000
 
-CMD ["/home/frappe/init-site.sh"]
-
-# Updated: 2026-05-01T07:31:02Z
+CMD ["python", "/home/frappe/frappe_starter.py"]

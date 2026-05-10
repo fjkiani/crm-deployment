@@ -71,8 +71,8 @@ services:
   - type: web
     name: crm-frappe-web
     runtime: docker
-    dockerfilePath: ./Dockerfile.frappe
-    dockerContext: .
+    image:
+      url: ghcr.io/fjkiani/crm-frappe:latest
     plan: standard          # needs ≥1GB RAM
     disk:
       name: frappe-sites
@@ -88,7 +88,7 @@ services:
           type: pserv
           property: host
       - key: DB_PORT
-        value: "3306"
+        value: "10000"
       - key: DB_NAME
         value: crm_db
       - key: DB_PASSWORD
@@ -114,8 +114,8 @@ services:
   - type: worker
     name: crm-frappe-worker
     runtime: docker
-    dockerfilePath: ./Dockerfile.frappe
-    dockerContext: .
+    image:
+      url: ghcr.io/fjkiani/crm-frappe:latest
     plan: starter
     dockerCommand: >-
       bash -c "cd /home/frappe/frappe-bench && bench use crm-frappe-web.onrender.com && bench worker --queue long,default,short"
@@ -128,7 +128,7 @@ services:
           type: pserv
           property: host
       - key: DB_PORT
-        value: "3306"
+        value: "10000"
       - key: DB_NAME
         value: crm_db
       - key: DB_PASSWORD
@@ -152,8 +152,8 @@ services:
   - type: worker
     name: crm-frappe-scheduler
     runtime: docker
-    dockerfilePath: ./Dockerfile.frappe
-    dockerContext: .
+    image:
+      url: ghcr.io/fjkiani/crm-frappe:latest
     plan: starter
     dockerCommand: >-
       bash -c "cd /home/frappe/frappe-bench && bench use crm-frappe-web.onrender.com && bench schedule"
@@ -166,7 +166,7 @@ services:
           type: pserv
           property: host
       - key: DB_PORT
-        value: "3306"
+        value: "10000"
       - key: DB_NAME
         value: crm_db
       - key: DB_PASSWORD

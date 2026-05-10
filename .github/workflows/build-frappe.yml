@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'Dockerfile.frappe'
+      - 'build_site.sh'
       - 'init-site.sh'
       - 'frappe_starter.py'
       - 'setup_frappe_site.py'
@@ -22,6 +23,8 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # bench new-site takes ~90 min; allow 3 hours total for the full build
+    timeout-minutes: 180
     permissions:
       contents: read
       packages: write
@@ -58,6 +61,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Cache everything EXCEPT the build_site.sh RUN step
+          # (the DB dump must be rebuilt when CRM app changes)
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
