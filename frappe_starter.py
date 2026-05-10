@@ -1,33 +1,37 @@
 #!/usr/bin/env python3
 """
-Frappe starter — idempotent, fast startup.
-
-Key insight: bench migrate checks redis_cache connectivity before running.
-We start a local Redis inside the container just for the migrate step,
-then switch common_site_config.json to the real Redis before gunicorn.
+Frappe starter — idempotent, crash-resilient, fast startup.
 
 Boot logic:
-  FIRST BOOT  (site_config.json absent on persistent disk):
+  FIRST BOOT  (site_config.json absent, DB absent):
     1. Start local Redis on 127.0.0.1:6380
     2. Write common_site_config.json pointing at local Redis
     3. Wait for MariaDB
-    4. Create DB + user (seconds)
-    5. Write site_config.json
-    6. bench migrate --skip-search-index  (~5-15 min, uses local Redis)
-    7. bench install-app crm
-    8. Set admin password
-    9. Switch common_site_config.json to real Redis
-    10. exec gunicorn
+    4. bench new-site (creates DB, imports SQL, installs all DocTypes)
+       → runs with NO timeout, health server stays alive throughout
+    5. bench install-app crm
+    6. Switch common_site_config.json to real Redis
+    7. exec gunicorn
+
+  RESUME BOOT (site_config.json absent, DB EXISTS from crashed bench new-site):
+    1. Start local Redis
+    2. Write common_site_config.json pointing at local Redis
+    3. Wait for MariaDB
+    4. Write site_config.json (so bench can find the site)
+    5. bench migrate --skip-search-index (resumes from where new-site crashed)
+    6. bench install-app crm
+    7. Switch to real Redis
+    8. exec gunicorn
 
   SUBSEQUENT BOOTS (site_config.json present on persistent disk):
-    1. Start local Redis on 127.0.0.1:6380
+    1. Start local Redis
     2. Write common_site_config.json pointing at local Redis
     3. Wait for MariaDB
     4. bench migrate --skip-search-index  (~30s)
-    5. Switch common_site_config.json to real Redis
+    5. Switch to real Redis
     6. exec gunicorn
 
-Health endpoints (always available):
+Health endpoints (always available from second 0):
   GET /health          → 200 OK
   GET /api/method/ping → 200 OK
   GET /setup-log       → full log as plain text
@@ -58,10 +62,6 @@ SERVE_PORT  = int(os.environ.get("PORT", "8000"))
 # Local Redis for migrate (avoids dependency on external Redis during setup)
 LOCAL_REDIS_PORT = 6380
 LOCAL_REDIS_URL  = f"redis://127.0.0.1:{LOCAL_REDIS_PORT}"
-
-FRAMEWORK_SQL = os.path.join(
-    BENCH_DIR, "apps", "frappe", "frappe", "database", "mariadb", "framework_mariadb.sql"
-)
 
 LOG_LINES     = []
 SETUP_DONE    = threading.Event()
@@ -132,11 +132,9 @@ def wait_for_tcp(host, port, label=None, timeout=300):
 
 # ── Local Redis ───────────────────────────────────────────────────────────────
 def start_local_redis():
-    """Start a local Redis server for use during migrate."""
     global _local_redis_proc
     log(f"Starting local Redis on port {LOCAL_REDIS_PORT}...")
 
-    # Find redis-server binary
     redis_bin = None
     for path in ["/usr/bin/redis-server", "/usr/local/bin/redis-server"]:
         if os.path.exists(path):
@@ -144,7 +142,6 @@ def start_local_redis():
             break
 
     if not redis_bin:
-        # Try to install it
         log("redis-server not found, installing...")
         r = subprocess.run(
             ["apt-get", "install", "-y", "--no-install-recommends", "redis-server"],
@@ -160,12 +157,11 @@ def start_local_redis():
         _local_redis_proc = subprocess.Popen(
             [redis_bin, "--port", str(LOCAL_REDIS_PORT),
              "--bind", "127.0.0.1",
-             "--save", "",          # disable persistence
+             "--save", "",
              "--loglevel", "warning"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
-        # Wait for it to be ready
         for _ in range(20):
             try:
                 s = socket.create_connection(("127.0.0.1", LOCAL_REDIS_PORT), timeout=1)
@@ -239,23 +235,34 @@ def run_mysql(sql, user="root", password=None, db=None, timeout=60):
         log(f"  mysql exception: {e}")
         return -1
 
-def import_sql_file(sql_path, db_name, timeout=120):
-    log(f"Importing {os.path.basename(sql_path)} into {db_name}...")
-    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}",
-           f"-u{DB_NAME}", f"-p{DB_PASS}",
-           "--connect-timeout=10", db_name]
+def db_exists():
+    """Check if the crm_db database already exists in MariaDB."""
+    sql = f"SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='{DB_NAME}';"
+    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-uroot", f"-p{DB_ROOT}",
+           "--connect-timeout=10", "-N", "-s", "-e", sql]
     try:
-        with open(sql_path, "rb") as f:
-            r = subprocess.run(cmd, stdin=f, capture_output=True, text=True,
-                               timeout=timeout, env=get_env())
-        if r.returncode != 0:
-            log(f"  import error: {r.stderr.strip()[:400]}")
-        else:
-            log(f"  import OK")
-        return r.returncode
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=get_env())
+        result = r.stdout.strip()
+        log(f"DB check: '{result}' (rc={r.returncode})")
+        return result == DB_NAME
     except Exception as e:
-        log(f"  import exception: {e}")
-        return -1
+        log(f"DB check exception: {e}")
+        return False
+
+def count_doctypes():
+    """Count rows in tabDocType to see how far bench new-site got."""
+    sql = f"SELECT COUNT(*) FROM `{DB_NAME}`.tabDocType;"
+    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-uroot", f"-p{DB_ROOT}",
+           "--connect-timeout=10", "-N", "-s", "-e", sql]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=get_env())
+        result = r.stdout.strip()
+        count = int(result) if result.isdigit() else 0
+        log(f"tabDocType rows: {count}")
+        return count
+    except Exception as e:
+        log(f"DocType count exception: {e}")
+        return 0
 
 # ── Site config helpers ───────────────────────────────────────────────────────
 def write_common_site_config(redis_cache_url, redis_queue_url):
@@ -308,11 +315,11 @@ def _setup_site_inner():
     log(f"DB_ROOT={'set' if DB_ROOT else 'MISSING'}  ADMIN_PW={'set' if ADMIN_PW else 'MISSING'}")
     log(f"REDIS_CACHE={REDIS_CACHE}  REDIS_QUEUE={REDIS_QUEUE}")
 
-    # 1. Start local Redis (used for migrate — avoids external Redis dependency)
+    # 1. Start local Redis
     if not start_local_redis():
         log("WARNING: Local Redis failed to start — migrate may fail")
 
-    # 2. Point common_site_config at local Redis for migrate
+    # 2. Point common_site_config at local Redis
     write_common_site_config(LOCAL_REDIS_URL, LOCAL_REDIS_URL)
 
     # 3. Wait for MariaDB
@@ -321,14 +328,14 @@ def _setup_site_inner():
         return
     time.sleep(3)
 
-    # 4. Check if site already exists on the persistent disk
+    # 4. Determine boot mode
     site_config_path = os.path.join(BENCH_DIR, "sites", SITE, "site_config.json")
     site_exists = os.path.exists(site_config_path)
     log(f"Site config exists on disk: {site_exists}")
 
     if site_exists:
         # ── FAST PATH: subsequent boots ──────────────────────────────────────
-        log("Site exists — running migrate (fast schema diff, ~30s)...")
+        log("=== SUBSEQUENT BOOT: bench migrate (~30s) ===")
         rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=600)
         if rc == 0:
             log("Migrate succeeded!")
@@ -339,14 +346,48 @@ def _setup_site_inner():
         log(f"=== Ready {time.strftime('%H:%M:%S')} ===")
         return
 
-    # ── SLOW PATH: first boot only ────────────────────────────────────────────
+    # site_config.json does NOT exist — check if DB exists (crash resume)
+    db_already_exists = db_exists()
+    log(f"DB exists in MariaDB: {db_already_exists}")
+
+    if db_already_exists:
+        # ── RESUME PATH: bench new-site crashed mid-run ───────────────────────
+        # The DB exists but site_config.json was never written.
+        # Count DocTypes to see how far we got.
+        dt_count = count_doctypes()
+        log(f"=== RESUME BOOT: DB exists with {dt_count} DocTypes ===")
+
+        if dt_count >= 100:
+            # Enough DocTypes installed — write site_config and run migrate
+            log(f"Sufficient DocTypes ({dt_count}) — writing site_config and running migrate")
+            write_site_config()
+            rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=3600)
+            if rc == 0:
+                log("Resume migrate succeeded!")
+                # Install CRM app
+                log("Installing CRM app...")
+                rc2 = run_bench(["--site", SITE, "install-app", "crm"], timeout=3600)
+                if rc2 == 0:
+                    log("CRM installed!")
+                else:
+                    log(f"CRM install returned rc={rc2} — continuing")
+                run_bench(["use", SITE])
+                SETUP_SUCCESS = True
+                log(f"=== Resume complete {time.strftime('%H:%M:%S')} ===")
+                return
+            else:
+                log(f"Resume migrate FAILED (rc={rc}) — dropping DB and retrying bench new-site")
+                # Drop the DB so bench new-site can recreate it cleanly
+                run_mysql(f"DROP DATABASE IF EXISTS `{DB_NAME}`;")
+        else:
+            log(f"Too few DocTypes ({dt_count}) — dropping DB and retrying bench new-site")
+            run_mysql(f"DROP DATABASE IF EXISTS `{DB_NAME}`;")
+
+    # ── FIRST BOOT (or retry after drop): bench new-site ─────────────────────
     log("=== FIRST BOOT: running bench new-site (one-time, ~90 min) ===")
     log("This runs ONCE. The result persists on the Render disk.")
     log("Every subsequent boot skips this and starts in ~30 seconds.")
 
-    # bench new-site handles everything: DB creation, schema import, DocType install
-    # We use local Redis (started above) so no external Redis dependency.
-    # NO TIMEOUT — let it run as long as it needs. The health server stays alive.
     args = [
         "new-site", SITE,
         "--db-name",        DB_NAME,
