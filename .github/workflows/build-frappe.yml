@@ -1,4 +1,4 @@
-name: Build and Push Frappe Image
+name: Bake Frappe DB and Commit
 
 on:
   push:
@@ -14,15 +14,13 @@ on:
       - '.github/workflows/build-frappe.yml'
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/crm-frappe
-
 jobs:
-  # ── Step 1: Bake the Frappe DB in CI (7GB RAM, no OOM) ───────────────────
+  # ── Bake the Frappe DB in CI (7GB RAM, no OOM) and commit to repo ─────────
   bake-db:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: write   # needed to push the baked DB back to the repo
 
     services:
       mariadb:
@@ -43,6 +41,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Wait for MariaDB
         run: |
@@ -65,10 +65,7 @@ jobs:
 
       - name: Start Redis on CI runner host
         run: |
-          # Install and start Redis on the CI runner host
-          # The Docker container will connect to it via --network host
           sudo apt-get install -y redis-server
-          # Start Redis on port 6380 (avoid conflict with any default Redis)
           redis-server --port 6380 --bind 0.0.0.0 --save "" --daemonize yes --loglevel warning
           sleep 2
           redis-cli -p 6380 ping
@@ -76,11 +73,6 @@ jobs:
 
       - name: Run bench new-site in Docker (as frappe user)
         run: |
-          # frappe/erpnext:v16 runs as 'frappe' user by default.
-          # bench refuses to run as root (exits with code 1).
-          # We use --network host so the container can reach:
-          #   - MariaDB at 127.0.0.1:3306
-          #   - Redis at 127.0.0.1:6380
           docker run --rm \
             --network host \
             frappe/erpnext:v16 \
@@ -122,7 +114,7 @@ jobs:
                 -e 'SELECT COUNT(*) FROM crm_db.tabDocType;'
             "
 
-      - name: Dump the baked DB to SQL
+      - name: Dump and compress the baked DB
         run: |
           echo "Dumping crm_db..."
           mysqldump \
@@ -134,70 +126,26 @@ jobs:
             crm_db > /tmp/frappe_baked.sql
           echo "Lines: $(wc -l < /tmp/frappe_baked.sql)"
           echo "Size: $(du -sh /tmp/frappe_baked.sql | cut -f1)"
-
-      - name: Compress the dump
-        run: |
           gzip -9 /tmp/frappe_baked.sql
           echo "Compressed size: $(du -sh /tmp/frappe_baked.sql.gz | cut -f1)"
+          echo "DocType count in dump:"
+          zcat /tmp/frappe_baked.sql.gz | grep -c "INSERT INTO \`tabDocType\`" || true
 
-      - name: Upload baked DB as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frappe-baked-db
-          path: /tmp/frappe_baked.sql.gz
-          retention-days: 7
-
-  # ── Step 2: Build Docker image with baked DB ──────────────────────────────
-  build-and-push:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: bake-db
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download baked DB artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frappe-baked-db
-          path: ./baked-db/
-
-      - name: Verify baked DB
+      - name: Copy baked DB into repo
         run: |
+          cp /tmp/frappe_baked.sql.gz ./baked-db/frappe_baked.sql.gz
           ls -lh ./baked-db/
-          echo "Baked DB ready for Docker build"
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.frappe
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Commit and push baked DB
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add baked-db/frappe_baked.sql.gz
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to baked DB — skipping commit"
+          else
+            git commit -m "chore: update baked Frappe DB [skip ci]"
+            git push
+            echo "Baked DB committed and pushed"
+          fi
