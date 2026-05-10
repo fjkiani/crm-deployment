@@ -78,7 +78,7 @@ services:
       name: frappe-sites
       mountPath: /home/frappe/frappe-bench/sites
       sizeGB: 10
-    healthCheckPath: /api/method/ping
+    healthCheckPath: /health
     envVars:
       - key: FRAPPE_SITE_NAME
         value: crm-frappe-web.onrender.com

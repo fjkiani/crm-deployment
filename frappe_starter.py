@@ -340,70 +340,48 @@ def _setup_site_inner():
         return
 
     # ── SLOW PATH: first boot only ────────────────────────────────────────────
-    log("=== FIRST BOOT: setting up site (runs once, result persists on disk) ===")
+    log("=== FIRST BOOT: running bench new-site (one-time, ~90 min) ===")
+    log("This runs ONCE. The result persists on the Render disk.")
+    log("Every subsequent boot skips this and starts in ~30 seconds.")
 
-    # 5. Create DB and user on remote MariaDB
-    log(f"Creating database '{DB_NAME}' and user...")
-    setup_sql = f"""
-CREATE DATABASE IF NOT EXISTS `{DB_NAME}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '{DB_NAME}'@'%' IDENTIFIED BY '{DB_PASS}';
-GRANT ALL PRIVILEGES ON `{DB_NAME}`.* TO '{DB_NAME}'@'%';
-FLUSH PRIVILEGES;
-"""
-    rc = run_mysql(setup_sql)
+    # bench new-site handles everything: DB creation, schema import, DocType install
+    # We use local Redis (started above) so no external Redis dependency.
+    # NO TIMEOUT — let it run as long as it needs. The health server stays alive.
+    args = [
+        "new-site", SITE,
+        "--db-name",        DB_NAME,
+        "--db-password",    DB_PASS,
+        "--admin-password", ADMIN_PW,
+        "--db-host",        DB_HOST,
+        "--db-port",        str(DB_PORT),
+        "--mariadb-user-host-login-scope", "%",
+        "--verbose",
+        "--force",
+    ]
+    if DB_ROOT:
+        args += ["--db-root-password", DB_ROOT]
+
+    log("bench new-site started. Check /setup-log for progress.")
+    rc = run_bench(args, timeout=18000)  # 5 hours — effectively no timeout
+
     if rc != 0:
-        log("ERROR: Could not create database/user — check DB_ROOT_PASSWORD")
+        log(f"bench new-site FAILED (rc={rc})")
         return
 
-    # 6. Import the base Frappe schema (fast SQL import — milliseconds)
-    #    This is REQUIRED before bench migrate. The framework_mariadb.sql
-    #    creates tabDocType and other core tables that Meta needs to function.
-    #    With frappe/erpnext:v16 (stable), this SQL matches the Python code.
-    if os.path.exists(FRAMEWORK_SQL):
-        log(f"Importing base Frappe schema (fast SQL import)...")
-        rc = import_sql_file(FRAMEWORK_SQL, DB_NAME)
-        if rc != 0:
-            log("ERROR: Failed to import framework SQL")
-            return
-        log("Base schema imported!")
-    else:
-        log(f"ERROR: {FRAMEWORK_SQL} not found in image")
-        return
+    log("bench new-site succeeded!")
 
-    # 7. Write site_config.json so bench knows about this site
-    write_site_config()
-
-    # 8. Register site
-    run_bench(["use", SITE])
-
-    # 9. bench migrate — applies all DocType schemas
-    #    Uses local Redis (started in step 1) so no external Redis dependency.
-    #    Much faster than bench new-site because base schema is already imported.
-    #    Expected time: 5-15 minutes.
-    log("Running bench migrate (5-15 min on first boot)...")
-    rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=1800)
-    if rc != 0:
-        log(f"bench migrate failed (rc={rc})")
-        return
-
-    log("Migrate succeeded!")
-
-    # 10. Install CRM app
+    # Install CRM app
     log("Installing CRM app...")
-    rc2 = run_bench(["--site", SITE, "install-app", "crm"], timeout=600)
+    rc2 = run_bench(["--site", SITE, "install-app", "crm"], timeout=3600)
     if rc2 == 0:
         log("CRM installed!")
     else:
-        log(f"CRM install returned rc={rc2} — may already be installed, continuing")
-
-    # 11. Set admin password
-    log("Setting admin password...")
-    run_bench(["--site", SITE, "set-admin-password", ADMIN_PW], timeout=60)
+        log(f"CRM install returned rc={rc2} — continuing")
 
     run_bench(["use", SITE])
     SETUP_SUCCESS = True
     log(f"=== First boot complete {time.strftime('%H:%M:%S')} ===")
-    log("Subsequent boots will skip setup and go straight to gunicorn.")
+    log("Subsequent boots will skip setup and start in ~30 seconds.")
 
 # ── Gunicorn ──────────────────────────────────────────────────────────────────
 GUNICORN_CMD = [
