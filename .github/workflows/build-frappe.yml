@@ -5,16 +5,18 @@ on:
     branches: [main]
     paths:
       - 'Dockerfile.frappe'
-      - 'build_site.sh'
       - 'init-site.sh'
       - 'frappe_starter.py'
-      - 'setup_frappe_site.py'
       - 'crm/**'
       - 'setup.py'
       - 'pyproject.toml'
       - 'requirements.txt'
       - 'MANIFEST.in'
   workflow_dispatch:
+
+# This workflow is kept for optional GHCR publishing.
+# Render deploys directly from the Dockerfile — no GHCR pull needed.
+# The workflow is effectively a no-op unless you want to pre-build the image.
 
 env:
   REGISTRY: ghcr.io
@@ -23,8 +25,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # bench new-site takes ~90 min; allow 3 hours total for the full build
-    timeout-minutes: 180
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -61,9 +62,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Cache everything EXCEPT the build_site.sh RUN step
-          # (the DB dump must be rebuilt when CRM app changes)
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1

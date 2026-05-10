@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 """
-Frappe starter — restore-from-dump strategy.
+Frappe starter — idempotent, fast startup.
 
-At build time, bench new-site ran against a local MariaDB and the result was
-dumped to sites/db_seed.sql.gz. At runtime we:
+Boot logic:
+  FIRST BOOT  (site_config.json absent on persistent disk):
+    1. Create DB + user on MariaDB
+    2. Import framework_mariadb.sql  (base Frappe schema — milliseconds)
+    3. Write site_config.json
+    4. bench migrate --skip-search-index  (applies CRM DocTypes — ~5 min)
+    5. bench install-app crm
+    6. Set admin password
+    → gunicorn
 
-  1. Wait for the real MariaDB to be ready
-  2. Create the target database + user
-  3. Restore the dump (seconds, not hours)
-  4. Patch site_config.json with real credentials
-  5. Run bench migrate (fast — schema is already current)
-  6. exec gunicorn
+  SUBSEQUENT BOOTS (site_config.json present on persistent disk):
+    1. bench migrate --skip-search-index  (fast schema diff — ~30s)
+    → gunicorn
 
-On subsequent restarts (site already exists):
-  - Skip restore, just run bench migrate + gunicorn
-
-Health check endpoints (always available):
+Health endpoints (always available during setup):
   GET /health          → 200 OK
   GET /api/method/ping → 200 OK
-  GET /setup-log       → full setup log as plain text
+  GET /setup-log       → full log as plain text
 """
 import os
 import sys
@@ -33,7 +34,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 BENCH_DIR   = "/home/frappe/frappe-bench"
 SITE        = os.environ.get("FRAPPE_SITE_NAME", "crm.localhost")
 DB_HOST     = os.environ.get("DB_HOST", "mariadb")
-DB_PORT     = int(os.environ.get("DB_PORT", "3306"))
+DB_PORT     = int(os.environ.get("DB_PORT", "10000"))
 DB_NAME     = os.environ.get("DB_NAME", "crm_db")
 DB_PASS     = os.environ.get("DB_PASSWORD", "changeme")
 DB_ROOT     = os.environ.get("DB_ROOT_PASSWORD", "")
@@ -43,8 +44,10 @@ REDIS_CACHE = os.environ.get("REDIS_CACHE_URL", "redis://crm-redis-cache:10000")
 REDIS_QUEUE = os.environ.get("REDIS_QUEUE_URL", "redis://crm-redis-queue:10000")
 SERVE_PORT  = int(os.environ.get("PORT", "8000"))
 
-DUMP_PATH   = os.path.join(BENCH_DIR, "sites", "db_seed.sql.gz")
-META_PATH   = os.path.join(BENCH_DIR, "sites", "db_seed_meta.json")
+# The base Frappe schema SQL — already in the image, imports in seconds
+FRAMEWORK_SQL = os.path.join(
+    BENCH_DIR, "apps", "frappe", "frappe", "database", "mariadb", "framework_mariadb.sql"
+)
 
 LOG_LINES     = []
 SETUP_DONE    = threading.Event()
@@ -151,23 +154,44 @@ def run_bench(args, timeout=600):
         log(f"ERROR running bench: {e}")
         return -1
 
-def run_mysql(sql, user="root", password=None, db=None, timeout=60):
-    """Run a SQL statement against the remote MariaDB."""
+def run_mysql(sql, user=None, password=None, db=None, timeout=60):
+    """Run SQL against the remote MariaDB."""
+    user = user or "root"
     password = password or DB_ROOT
-    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-u{user}", f"-p{password}"]
+    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-u{user}", f"-p{password}",
+           "--connect-timeout=10"]
     if db:
         cmd.append(db)
-    log(f"mysql: {sql[:80]}...")
     try:
         r = subprocess.run(
             cmd, input=sql, capture_output=True, text=True,
             timeout=timeout, env=get_env()
         )
         if r.returncode != 0:
-            log(f"  mysql error: {r.stderr.strip()[:300]}")
+            log(f"  mysql error: {r.stderr.strip()[:400]}")
         return r.returncode
     except Exception as e:
         log(f"  mysql exception: {e}")
+        return -1
+
+def import_sql_file(sql_path, db_name, user=None, password=None, timeout=120):
+    """Import a SQL file into a database."""
+    user = user or DB_NAME
+    password = password or DB_PASS
+    log(f"Importing {sql_path} into {db_name}...")
+    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-u{user}", f"-p{password}",
+           "--connect-timeout=10", db_name]
+    try:
+        with open(sql_path, "rb") as f:
+            r = subprocess.run(cmd, stdin=f, capture_output=True, text=True,
+                               timeout=timeout, env=get_env())
+        if r.returncode != 0:
+            log(f"  import error: {r.stderr.strip()[:400]}")
+        else:
+            log(f"  import OK")
+        return r.returncode
+    except Exception as e:
+        log(f"  import exception: {e}")
         return -1
 
 # ── Site config helpers ───────────────────────────────────────────────────────
@@ -183,7 +207,7 @@ def write_common_site_config():
     cfg["redis_socketio"] = REDIS_QUEUE
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
-    log(f"common_site_config.json updated")
+    log(f"common_site_config.json: redis_cache={REDIS_CACHE}")
 
 def write_site_config():
     site_dir = os.path.join(BENCH_DIR, "sites", SITE)
@@ -199,70 +223,7 @@ def write_site_config():
     path = os.path.join(site_dir, "site_config.json")
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
-    log(f"site_config.json written for {SITE}")
-
-# ── DB restore from dump ──────────────────────────────────────────────────────
-def restore_from_dump():
-    """
-    Create the target DB + user on the remote MariaDB, then restore the
-    baked-in dump. Returns True on success.
-    """
-    log(f"Dump found: {DUMP_PATH}")
-    try:
-        with open(META_PATH) as f:
-            meta = json.load(f)
-        log(f"Dump built at {meta.get('built_at','?')} with apps {meta.get('apps','?')}")
-    except Exception:
-        log("No dump metadata found — proceeding anyway")
-
-    # Create DB and user on remote MariaDB
-    log(f"Creating database '{DB_NAME}' and user '{DB_NAME}' on {DB_HOST}:{DB_PORT}...")
-    setup_sql = f"""
-CREATE DATABASE IF NOT EXISTS `{DB_NAME}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '{DB_NAME}'@'%' IDENTIFIED BY '{DB_PASS}';
-GRANT ALL PRIVILEGES ON `{DB_NAME}`.* TO '{DB_NAME}'@'%';
-FLUSH PRIVILEGES;
-"""
-    rc = run_mysql(setup_sql)
-    if rc != 0:
-        log("ERROR: Could not create database/user")
-        return False
-
-    # Restore dump
-    log(f"Restoring dump to '{DB_NAME}' (this takes ~30 seconds)...")
-    try:
-        # zcat | mysql pipeline
-        zcat = subprocess.Popen(
-            ["zcat", DUMP_PATH],
-            stdout=subprocess.PIPE
-        )
-        mysql_cmd = [
-            "mysql",
-            f"-h{DB_HOST}", f"-P{DB_PORT}",
-            f"-u{DB_NAME}", f"-p{DB_PASS}",
-            DB_NAME
-        ]
-        mysql_proc = subprocess.Popen(
-            mysql_cmd,
-            stdin=zcat.stdout,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=get_env()
-        )
-        zcat.stdout.close()
-        stdout, stderr = mysql_proc.communicate(timeout=300)
-        if mysql_proc.returncode != 0:
-            log(f"ERROR: mysql restore failed: {stderr.strip()[:500]}")
-            return False
-        log("Dump restored successfully!")
-        return True
-    except subprocess.TimeoutExpired:
-        log("ERROR: DB restore timed out after 300s")
-        return False
-    except Exception as e:
-        log(f"ERROR: DB restore exception: {e}")
-        return False
+    log(f"site_config.json written")
 
 # ── Setup logic ───────────────────────────────────────────────────────────────
 def setup_site():
@@ -283,18 +244,17 @@ def _setup_site_inner():
     log(f"SITE={SITE}  DB={DB_HOST}:{DB_PORT}/{DB_NAME}  PORT={SERVE_PORT}")
     log(f"DB_ROOT={'set' if DB_ROOT else 'MISSING'}  ADMIN_PW={'set' if ADMIN_PW else 'MISSING'}")
     log(f"REDIS_CACHE={REDIS_CACHE}  REDIS_QUEUE={REDIS_QUEUE}")
-    log(f"Dump exists: {os.path.exists(DUMP_PATH)}")
 
     # 1. Write common_site_config.json
     write_common_site_config()
 
-    # 2. Wait for MariaDB (required)
+    # 2. Wait for MariaDB
     if not wait_for_tcp(DB_HOST, DB_PORT, "MariaDB", timeout=300):
         log("ERROR: MariaDB unreachable after 5 min — aborting")
         return
     time.sleep(3)
 
-    # 3. Wait for Redis (best-effort)
+    # 3. Wait for Redis (best-effort — needed for migrate/gunicorn, not for DB setup)
     rh, rp = parse_redis_url(REDIS_CACHE)
     if rh:
         wait_for_tcp(rh, rp, "redis-cache", timeout=60)
@@ -302,82 +262,87 @@ def _setup_site_inner():
     if rh2:
         wait_for_tcp(rh2, rp2, "redis-queue", timeout=30)
 
-    # 4. Check if site already exists (idempotent restart)
+    # 4. Check if site already exists on the persistent disk
     site_config_path = os.path.join(BENCH_DIR, "sites", SITE, "site_config.json")
     site_exists = os.path.exists(site_config_path)
-    log(f"Site config exists: {site_exists}")
+    log(f"Site config exists on disk: {site_exists}")
 
     if site_exists:
-        log("Site already exists — running migrate to catch up on any schema changes...")
-        rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=600)
-        if rc == 0:
-            log("Migrate succeeded!")
-        else:
-            log(f"Migrate returned rc={rc} — continuing anyway (may be Redis-related)")
-        run_bench(["use", SITE])
-        SETUP_SUCCESS = True
-        return
-
-    # 5. First boot: restore from baked-in dump
-    dump_exists = os.path.exists(DUMP_PATH)
-    if dump_exists:
-        log("=== FIRST BOOT: Restoring from baked-in DB dump ===")
-        if not restore_from_dump():
-            log("ERROR: DB restore failed — cannot start")
-            return
-
-        # Write site_config.json with real credentials
-        write_site_config()
-
-        # Run migrate to apply any pending schema changes
-        log("Running bench migrate (fast — schema already current)...")
+        # ── FAST PATH: subsequent boots ──────────────────────────────────────
+        log("Site exists — running migrate (fast schema diff)...")
         rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=600)
         if rc == 0:
             log("Migrate succeeded!")
         else:
             log(f"Migrate returned rc={rc} — continuing (may be Redis warning)")
-
         run_bench(["use", SITE])
         SETUP_SUCCESS = True
-        log(f"=== Setup complete {time.strftime('%H:%M:%S')} ===")
+        log(f"=== Ready {time.strftime('%H:%M:%S')} ===")
+        return
 
-    else:
-        # Fallback: no dump in image — run bench new-site the slow way
-        log("WARNING: No DB dump found in image. Running bench new-site (slow path ~90 min)...")
-        log("This should not happen in production. Rebuild the Docker image.")
-        args = [
-            "new-site", SITE,
-            "--db-name",        DB_NAME,
-            "--db-password",    DB_PASS,
-            "--admin-password", ADMIN_PW,
-            "--db-host",        DB_HOST,
-            "--db-port",        str(DB_PORT),
-            "--mariadb-user-host-login-scope", "%",
-            "--verbose",
-            "--force",
-        ]
-        if DB_ROOT:
-            args += ["--db-root-password", DB_ROOT]
-        rc = run_bench(args, timeout=18000)  # 5 hours — last resort
+    # ── SLOW PATH: first boot only ────────────────────────────────────────────
+    log("=== FIRST BOOT: setting up site (runs once, result persists on disk) ===")
+
+    # 5. Create DB and user on remote MariaDB
+    log(f"Creating database '{DB_NAME}' and user...")
+    setup_sql = f"""
+CREATE DATABASE IF NOT EXISTS `{DB_NAME}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '{DB_NAME}'@'%' IDENTIFIED BY '{DB_PASS}';
+GRANT ALL PRIVILEGES ON `{DB_NAME}`.* TO '{DB_NAME}'@'%';
+FLUSH PRIVILEGES;
+"""
+    rc = run_mysql(setup_sql)
+    if rc != 0:
+        log("ERROR: Could not create database/user — check DB_ROOT_PASSWORD")
+        return
+
+    # 6. Import the base Frappe schema (milliseconds — it's a SQL file in the image)
+    if os.path.exists(FRAMEWORK_SQL):
+        log(f"Importing base Frappe schema from {FRAMEWORK_SQL}...")
+        rc = import_sql_file(FRAMEWORK_SQL, DB_NAME)
         if rc != 0:
-            log(f"bench new-site FAILED (rc={rc})")
+            log("ERROR: Failed to import framework SQL")
             return
-        if ENC_KEY:
-            import shutil
-            site_cfg = os.path.join(BENCH_DIR, "sites", SITE, "site_config.json")
-            try:
-                with open(site_cfg) as f:
-                    cfg = json.load(f)
-                cfg["encryption_key"] = ENC_KEY
-                with open(site_cfg, "w") as f:
-                    json.dump(cfg, f, indent=2)
-            except Exception as e:
-                log(f"Could not patch encryption_key: {e}")
-        rc2 = run_bench(["--site", SITE, "install-app", "crm"], timeout=3600)
-        log(f"install-app crm: rc={rc2}")
-        run_bench(["use", SITE])
-        SETUP_SUCCESS = True
-        log(f"=== Setup complete (slow path) {time.strftime('%H:%M:%S')} ===")
+        log("Base schema imported!")
+    else:
+        log(f"WARNING: {FRAMEWORK_SQL} not found — will rely on bench migrate")
+
+    # 7. Write site_config.json so bench knows about this site
+    write_site_config()
+
+    # 8. Register site in apps.txt / currentsite.txt
+    run_bench(["use", SITE])
+
+    # 9. bench migrate — applies all DocType schemas (CRM + ERPNext + Frappe)
+    #    This is MUCH faster than bench new-site because:
+    #    - The base schema is already imported (step 6)
+    #    - migrate only applies Python-level patches and missing tables
+    #    Expected time: 5-15 minutes (vs 4+ hours for bench new-site)
+    log("Running bench migrate (applies all DocType schemas)...")
+    log("Expected time: 5-15 minutes")
+    rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=1800)
+    if rc != 0:
+        log(f"bench migrate failed (rc={rc}) — check logs above")
+        return
+
+    log("Migrate succeeded!")
+
+    # 10. Install CRM app
+    log("Installing CRM app...")
+    rc2 = run_bench(["--site", SITE, "install-app", "crm"], timeout=600)
+    if rc2 == 0:
+        log("CRM installed!")
+    else:
+        log(f"CRM install returned rc={rc2} — may already be installed, continuing")
+
+    # 11. Set admin password
+    log("Setting admin password...")
+    run_bench(["--site", SITE, "set-admin-password", ADMIN_PW], timeout=60)
+
+    run_bench(["use", SITE])
+    SETUP_SUCCESS = True
+    log(f"=== First boot complete {time.strftime('%H:%M:%S')} ===")
+    log("Subsequent boots will skip setup and go straight to gunicorn.")
 
 # ── Gunicorn ──────────────────────────────────────────────────────────────────
 GUNICORN_CMD = [
@@ -406,7 +371,6 @@ def exec_gunicorn():
             return
         gunicorn_bin = found[0]
 
-    # Ensure currentsite.txt
     cs = os.path.join(BENCH_DIR, "sites", "currentsite.txt")
     if not os.path.exists(cs):
         with open(cs, "w") as f:
@@ -415,14 +379,13 @@ def exec_gunicorn():
     else:
         log(f"currentsite.txt = {open(cs).read().strip()}")
 
-    # Quick import test
     r = subprocess.run(
         ["/home/frappe/frappe-bench/env/bin/python", "-c",
          "import frappe.app; print('frappe.app OK')"],
         cwd=os.path.join(BENCH_DIR, "sites"),
         capture_output=True, text=True, env=env, timeout=30
     )
-    log(f"frappe.app import: rc={r.returncode} {r.stdout.strip()} {r.stderr.strip()[:300]}")
+    log(f"frappe.app import: rc={r.returncode} {r.stdout.strip()} {r.stderr.strip()[:200]}")
 
     log(f"exec gunicorn on port {SERVE_PORT}")
     os.execve(gunicorn_bin, GUNICORN_CMD, env)
@@ -443,8 +406,8 @@ if SETUP_SUCCESS:
     server.shutdown()
     exec_gunicorn()
 else:
-    log("Setup FAILED -> keeping health server alive. Check /setup-log for details.")
-    log("Will NOT retry automatically — fix the error and redeploy.")
+    log("Setup FAILED -> keeping health server alive. Check /setup-log.")
+    log("Fix the error and trigger a manual redeploy in Render dashboard.")
     while True:
         time.sleep(300)
         log("Still alive (setup failed). Check /setup-log.")

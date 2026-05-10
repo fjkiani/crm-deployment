@@ -1,41 +1,36 @@
 # =============================================================================
-# Dockerfile.frappe  —  Build-time DB bake strategy
+# Dockerfile.frappe
 #
-# Problem: bench new-site runs ~400 DocType migrations against a remote MariaDB
-# over the network. On Render standard plan this takes 4+ hours and always
-# times out before completing.
+# Uses frappe/erpnext:develop as base (pre-built with bench + frappe + erpnext).
+# We add our CRM app on top. No bench init needed — fast build (~2-3 min).
 #
-# Solution: Run bench new-site at BUILD TIME against a local MariaDB inside
-# the Docker build. Dump the resulting database to a .sql.gz file baked into
-# the image. At runtime, restore the dump in seconds, patch credentials, start
-# gunicorn. First boot goes from 4 hours → ~30 seconds.
+# Runtime strategy:
+#   - First boot: bench new-site (one-time, ~90 min, result persists on disk)
+#   - Every subsequent boot: bench migrate (fast, ~30s) + gunicorn
+#   - The Render disk at /home/frappe/frappe-bench/sites persists across deploys
+#   - Once the site is created, it NEVER runs bench new-site again
 #
-# Build stages:
-#   1. builder  — installs CRM app, runs bench new-site against local MariaDB,
-#                 dumps DB to /home/frappe/frappe-bench/sites/db_seed.sql.gz
-#   2. runtime  — copies bench + sites (including dump) from builder, adds
-#                 frappe_starter.py which restores dump at first boot
-#
-# One image, three roles (CMD override in Render / docker-compose):
+# One image, three roles (CMD override in Render):
 #   frappe-web       → python /home/frappe/frappe_starter.py  (default)
 #   frappe-worker    → bench worker --queue long,default,short
 #   frappe-scheduler → bench schedule
 # =============================================================================
 
-# ── Stage 1: builder ──────────────────────────────────────────────────────────
-FROM frappe/erpnext:develop AS builder
+FROM frappe/erpnext:develop
 
 USER root
 
-# Install MariaDB server + client for build-time site creation
+# Install mariadb-client (for mysql CLI used in restore/health checks)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    mariadb-server \
     mariadb-client \
     build-essential \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Fix apps.txt: base image has stale 'erpnextcrm' entry
-RUN printf 'frappe\nerpnext\ncrm\n' > /home/frappe/frappe-bench/sites/apps.txt
+USER frappe
+
+# Fix apps.txt: base image has stale 'erpnextcrm' entry which crashes bench
+RUN printf 'frappe\nerpnext\ncrm\n' > /home/frappe/frappe-bench/sites/apps.txt && \
+    echo "=== apps.txt ===" && cat /home/frappe/frappe-bench/sites/apps.txt
 
 # Copy CRM app source
 COPY --chown=frappe:frappe crm/             /home/frappe/frappe-bench/apps/crm/crm/
@@ -48,32 +43,7 @@ COPY --chown=frappe:frappe MANIFEST.in      /home/frappe/frappe-bench/apps/crm/M
 RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
     -e /home/frappe/frappe-bench/apps/crm
 
-# Copy the build-time site creation script
-COPY build_site.sh /build_site.sh
-RUN chmod +x /build_site.sh
-
-# Run bench new-site against local MariaDB, then dump the DB
-# This is the slow step (~90 min) but it runs ONCE at build time in CI,
-# not on every container start.
-RUN /build_site.sh
-
-# ── Stage 2: runtime ──────────────────────────────────────────────────────────
-FROM frappe/erpnext:develop AS runtime
-
 USER root
-
-# Install only mariadb-client (needed for mysqldump/mysql restore at runtime)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    mariadb-client \
-    build-essential \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Copy the fully-built bench from builder (includes installed CRM app + DB dump)
-COPY --from=builder --chown=frappe:frappe \
-    /home/frappe/frappe-bench/ \
-    /home/frappe/frappe-bench/
-
-# Copy startup script
 COPY frappe_starter.py /home/frappe/frappe_starter.py
 COPY init-site.sh      /home/frappe/init-site.sh
 RUN chmod +x /home/frappe/frappe_starter.py /home/frappe/init-site.sh && \
