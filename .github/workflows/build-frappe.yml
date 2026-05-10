@@ -63,31 +63,38 @@ jobs:
             FLUSH PRIVILEGES;
           "
 
-      - name: Write bench new-site script
+      - name: Install redis-server on CI runner
         run: |
-          # Write the script to a file to avoid heredoc/quoting issues in docker run
-          cat > /tmp/run_bench_newsite.sh << 'SCRIPT'
-          #!/bin/bash
-          set -e
-          cd /home/frappe/frappe-bench
-
-          echo "=== Fixing apps.txt ==="
-          printf 'frappe\nerpnext\ncrm\n' > sites/apps.txt
-          cat sites/apps.txt
-
-          echo "=== Installing redis-server if needed ==="
-          if ! command -v redis-server &>/dev/null; then
-            apt-get update -qq && apt-get install -y -qq redis-server
-          fi
-          redis-server --version
-
-          echo "=== Starting local Redis ==="
+          # Install redis-server on the CI runner host
+          sudo apt-get install -y redis-server
+          # Start Redis on port 6380 (so it doesn't conflict with any existing Redis)
           redis-server --port 6380 --bind 127.0.0.1 --save "" --daemonize yes --loglevel warning
           sleep 2
           redis-cli -p 6380 ping
+          echo "Redis ready on port 6380"
 
-          echo "=== Writing common_site_config.json ==="
-          python3 -c "
+      - name: Run bench new-site directly on CI runner
+        run: |
+          # Pull the frappe/erpnext:v16 image and extract bench + Python env
+          # Then run bench new-site directly using the frappe user's Python
+          docker pull frappe/erpnext:v16
+
+          # Get the bench binary and Python from the image
+          # Run bench new-site with --network host so it can reach MariaDB and Redis
+          docker run --rm \
+            --network host \
+            --user root \
+            -e HOME=/home/frappe \
+            frappe/erpnext:v16 \
+            bash -c "
+              set -e
+              cd /home/frappe/frappe-bench
+
+              echo '=== Fixing apps.txt ==='
+              printf 'frappe\nerpnext\ncrm\n' > sites/apps.txt
+
+              echo '=== Writing common_site_config.json ==='
+              python3 -c \"
           import json
           cfg = {
               'redis_cache': 'redis://127.0.0.1:6380',
@@ -97,42 +104,25 @@ jobs:
           with open('sites/common_site_config.json', 'w') as f:
               json.dump(cfg, f, indent=2)
           print('common_site_config.json written')
-          "
+          \"
 
-          echo "=== Running bench new-site ==="
-          bench new-site ci.localhost \
-            --db-name crm_db \
-            --db-password crmpass \
-            --admin-password "Admin@CRM2026!" \
-            --db-host HOST_IP_PLACEHOLDER \
-            --db-port 3306 \
-            --mariadb-user-host-login-scope "%" \
-            --db-root-password rootpass \
-            --verbose \
-            --force
+              echo '=== Running bench new-site ==='
+              /usr/local/bin/bench new-site ci.localhost \
+                --db-name crm_db \
+                --db-password crmpass \
+                --admin-password 'Admin@CRM2026!' \
+                --db-host 127.0.0.1 \
+                --db-port 3306 \
+                --mariadb-user-host-login-scope '%' \
+                --db-root-password rootpass \
+                --verbose \
+                --force
 
-          echo "=== bench new-site complete ==="
-          echo "DocType count:"
-          mysql -hHOST_IP_PLACEHOLDER -P3306 -uroot -prootpass -N -s \
-            -e "SELECT COUNT(*) FROM crm_db.tabDocType;"
-          SCRIPT
-          chmod +x /tmp/run_bench_newsite.sh
-
-      - name: Run bench new-site in Docker
-        run: |
-          HOST_IP=$(ip route | grep default | awk '{print $3}')
-          echo "Host IP: $HOST_IP"
-
-          # Substitute the host IP into the script
-          sed -i "s/HOST_IP_PLACEHOLDER/${HOST_IP}/g" /tmp/run_bench_newsite.sh
-
-          # Run the script inside frappe/erpnext:v16
-          docker run --rm \
-            --network host \
-            -v /tmp/run_bench_newsite.sh:/tmp/run_bench_newsite.sh:ro \
-            -e HOME=/home/frappe \
-            frappe/erpnext:v16 \
-            bash /tmp/run_bench_newsite.sh
+              echo '=== bench new-site complete ==='
+              echo 'DocType count:'
+              mysql -h127.0.0.1 -P3306 -uroot -prootpass -N -s \
+                -e 'SELECT COUNT(*) FROM crm_db.tabDocType;'
+            "
 
       - name: Dump the baked DB to SQL
         run: |
