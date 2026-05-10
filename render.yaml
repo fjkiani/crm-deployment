@@ -197,7 +197,7 @@ services:
     dockerfilePath: ./Dockerfile.eaia
     dockerContext: .
     plan: starter
-    healthCheckPath: /api/method/ping
+    healthCheckPath: /health
     envVars:
       - key: FRAPPE_SITE_URL
         fromService:
