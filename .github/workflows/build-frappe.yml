@@ -63,28 +63,26 @@ jobs:
             FLUSH PRIVILEGES;
           "
 
-      - name: Install redis-server on CI runner
+      - name: Start Redis on CI runner host
         run: |
-          # Install redis-server on the CI runner host
+          # Install and start Redis on the CI runner host
+          # The Docker container will connect to it via --network host
           sudo apt-get install -y redis-server
-          # Start Redis on port 6380 (so it doesn't conflict with any existing Redis)
-          redis-server --port 6380 --bind 127.0.0.1 --save "" --daemonize yes --loglevel warning
+          # Start Redis on port 6380 (avoid conflict with any default Redis)
+          redis-server --port 6380 --bind 0.0.0.0 --save "" --daemonize yes --loglevel warning
           sleep 2
           redis-cli -p 6380 ping
           echo "Redis ready on port 6380"
 
-      - name: Run bench new-site directly on CI runner
+      - name: Run bench new-site in Docker (as frappe user)
         run: |
-          # Pull the frappe/erpnext:v16 image and extract bench + Python env
-          # Then run bench new-site directly using the frappe user's Python
-          docker pull frappe/erpnext:v16
-
-          # Get the bench binary and Python from the image
-          # Run bench new-site with --network host so it can reach MariaDB and Redis
+          # frappe/erpnext:v16 runs as 'frappe' user by default.
+          # bench refuses to run as root (exits with code 1).
+          # We use --network host so the container can reach:
+          #   - MariaDB at 127.0.0.1:3306
+          #   - Redis at 127.0.0.1:6380
           docker run --rm \
             --network host \
-            --user root \
-            -e HOME=/home/frappe \
             frappe/erpnext:v16 \
             bash -c "
               set -e
@@ -107,7 +105,7 @@ jobs:
           \"
 
               echo '=== Running bench new-site ==='
-              /usr/local/bin/bench new-site ci.localhost \
+              bench new-site ci.localhost \
                 --db-name crm_db \
                 --db-password crmpass \
                 --admin-password 'Admin@CRM2026!' \
