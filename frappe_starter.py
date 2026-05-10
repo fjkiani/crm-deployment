@@ -2,21 +2,32 @@
 """
 Frappe starter — idempotent, fast startup.
 
+Key insight: bench migrate checks redis_cache connectivity before running.
+We start a local Redis inside the container just for the migrate step,
+then switch common_site_config.json to the real Redis before gunicorn.
+
 Boot logic:
   FIRST BOOT  (site_config.json absent on persistent disk):
-    1. Create DB + user on MariaDB
-    2. Import framework_mariadb.sql  (base Frappe schema — milliseconds)
-    3. Write site_config.json
-    4. bench migrate --skip-search-index  (applies CRM DocTypes — ~5 min)
-    5. bench install-app crm
-    6. Set admin password
-    → gunicorn
+    1. Start local Redis on 127.0.0.1:6380
+    2. Write common_site_config.json pointing at local Redis
+    3. Wait for MariaDB
+    4. Create DB + user, import framework_mariadb.sql (seconds)
+    5. Write site_config.json
+    6. bench migrate --skip-search-index  (~5-15 min, uses local Redis)
+    7. bench install-app crm
+    8. Set admin password
+    9. Switch common_site_config.json to real Redis
+    10. exec gunicorn
 
   SUBSEQUENT BOOTS (site_config.json present on persistent disk):
-    1. bench migrate --skip-search-index  (fast schema diff — ~30s)
-    → gunicorn
+    1. Start local Redis on 127.0.0.1:6380
+    2. Write common_site_config.json pointing at local Redis
+    3. Wait for MariaDB
+    4. bench migrate --skip-search-index  (~30s)
+    5. Switch common_site_config.json to real Redis
+    6. exec gunicorn
 
-Health endpoints (always available during setup):
+Health endpoints (always available):
   GET /health          → 200 OK
   GET /api/method/ping → 200 OK
   GET /setup-log       → full log as plain text
@@ -44,7 +55,10 @@ REDIS_CACHE = os.environ.get("REDIS_CACHE_URL", "redis://crm-redis-cache:10000")
 REDIS_QUEUE = os.environ.get("REDIS_QUEUE_URL", "redis://crm-redis-queue:10000")
 SERVE_PORT  = int(os.environ.get("PORT", "8000"))
 
-# The base Frappe schema SQL — already in the image, imports in seconds
+# Local Redis for migrate (avoids dependency on external Redis during setup)
+LOCAL_REDIS_PORT = 6380
+LOCAL_REDIS_URL  = f"redis://127.0.0.1:{LOCAL_REDIS_PORT}"
+
 FRAMEWORK_SQL = os.path.join(
     BENCH_DIR, "apps", "frappe", "frappe", "database", "mariadb", "framework_mariadb.sql"
 )
@@ -52,6 +66,7 @@ FRAMEWORK_SQL = os.path.join(
 LOG_LINES     = []
 SETUP_DONE    = threading.Event()
 SETUP_SUCCESS = False
+_local_redis_proc = None
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 def log(msg):
@@ -115,12 +130,66 @@ def wait_for_tcp(host, port, label=None, timeout=300):
     log(f"ERROR: {label} timeout after {timeout}s")
     return False
 
-def parse_redis_url(url):
+# ── Local Redis ───────────────────────────────────────────────────────────────
+def start_local_redis():
+    """Start a local Redis server for use during migrate."""
+    global _local_redis_proc
+    log(f"Starting local Redis on port {LOCAL_REDIS_PORT}...")
+
+    # Find redis-server binary
+    redis_bin = None
+    for path in ["/usr/bin/redis-server", "/usr/local/bin/redis-server"]:
+        if os.path.exists(path):
+            redis_bin = path
+            break
+
+    if not redis_bin:
+        # Try to install it
+        log("redis-server not found, installing...")
+        r = subprocess.run(
+            ["apt-get", "install", "-y", "--no-install-recommends", "redis-server"],
+            capture_output=True, text=True
+        )
+        if r.returncode == 0:
+            redis_bin = "/usr/bin/redis-server"
+        else:
+            log(f"Could not install redis-server: {r.stderr[:200]}")
+            return False
+
     try:
-        parts = url.replace("redis://", "").split(":")
-        return parts[0], int(parts[1])
-    except Exception:
-        return None, None
+        _local_redis_proc = subprocess.Popen(
+            [redis_bin, "--port", str(LOCAL_REDIS_PORT),
+             "--bind", "127.0.0.1",
+             "--save", "",          # disable persistence
+             "--loglevel", "warning"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        # Wait for it to be ready
+        for _ in range(20):
+            try:
+                s = socket.create_connection(("127.0.0.1", LOCAL_REDIS_PORT), timeout=1)
+                s.close()
+                log(f"Local Redis ready on port {LOCAL_REDIS_PORT}")
+                return True
+            except Exception:
+                time.sleep(0.5)
+        log("ERROR: Local Redis did not start in time")
+        return False
+    except Exception as e:
+        log(f"ERROR starting local Redis: {e}")
+        return False
+
+def stop_local_redis():
+    global _local_redis_proc
+    if _local_redis_proc:
+        try:
+            _local_redis_proc.terminate()
+            _local_redis_proc.wait(timeout=5)
+            log("Local Redis stopped")
+        except Exception:
+            pass
+        _local_redis_proc = None
 
 # ── bench runner ──────────────────────────────────────────────────────────────
 def get_env():
@@ -154,19 +223,15 @@ def run_bench(args, timeout=600):
         log(f"ERROR running bench: {e}")
         return -1
 
-def run_mysql(sql, user=None, password=None, db=None, timeout=60):
-    """Run SQL against the remote MariaDB."""
-    user = user or "root"
+def run_mysql(sql, user="root", password=None, db=None, timeout=60):
     password = password or DB_ROOT
     cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-u{user}", f"-p{password}",
            "--connect-timeout=10"]
     if db:
         cmd.append(db)
     try:
-        r = subprocess.run(
-            cmd, input=sql, capture_output=True, text=True,
-            timeout=timeout, env=get_env()
-        )
+        r = subprocess.run(cmd, input=sql, capture_output=True, text=True,
+                           timeout=timeout, env=get_env())
         if r.returncode != 0:
             log(f"  mysql error: {r.stderr.strip()[:400]}")
         return r.returncode
@@ -174,12 +239,10 @@ def run_mysql(sql, user=None, password=None, db=None, timeout=60):
         log(f"  mysql exception: {e}")
         return -1
 
-def import_sql_file(sql_path, db_name, user=None, password=None, timeout=120):
-    """Import a SQL file into a database."""
-    user = user or DB_NAME
-    password = password or DB_PASS
-    log(f"Importing {sql_path} into {db_name}...")
-    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-u{user}", f"-p{password}",
+def import_sql_file(sql_path, db_name, timeout=120):
+    log(f"Importing {os.path.basename(sql_path)} into {db_name}...")
+    cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}",
+           f"-u{DB_NAME}", f"-p{DB_PASS}",
            "--connect-timeout=10", db_name]
     try:
         with open(sql_path, "rb") as f:
@@ -195,19 +258,19 @@ def import_sql_file(sql_path, db_name, user=None, password=None, timeout=120):
         return -1
 
 # ── Site config helpers ───────────────────────────────────────────────────────
-def write_common_site_config():
+def write_common_site_config(redis_cache_url, redis_queue_url):
     path = os.path.join(BENCH_DIR, "sites", "common_site_config.json")
     try:
         with open(path) as f:
             cfg = json.load(f)
     except Exception:
         cfg = {}
-    cfg["redis_cache"]    = REDIS_CACHE
-    cfg["redis_queue"]    = REDIS_QUEUE
-    cfg["redis_socketio"] = REDIS_QUEUE
+    cfg["redis_cache"]    = redis_cache_url
+    cfg["redis_queue"]    = redis_queue_url
+    cfg["redis_socketio"] = redis_queue_url
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
-    log(f"common_site_config.json: redis_cache={REDIS_CACHE}")
+    log(f"common_site_config.json: redis_cache={redis_cache_url}")
 
 def write_site_config():
     site_dir = os.path.join(BENCH_DIR, "sites", SITE)
@@ -223,7 +286,7 @@ def write_site_config():
     path = os.path.join(site_dir, "site_config.json")
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
-    log(f"site_config.json written")
+    log(f"site_config.json written for {SITE}")
 
 # ── Setup logic ───────────────────────────────────────────────────────────────
 def setup_site():
@@ -245,22 +308,18 @@ def _setup_site_inner():
     log(f"DB_ROOT={'set' if DB_ROOT else 'MISSING'}  ADMIN_PW={'set' if ADMIN_PW else 'MISSING'}")
     log(f"REDIS_CACHE={REDIS_CACHE}  REDIS_QUEUE={REDIS_QUEUE}")
 
-    # 1. Write common_site_config.json
-    write_common_site_config()
+    # 1. Start local Redis (used for migrate — avoids external Redis dependency)
+    if not start_local_redis():
+        log("WARNING: Local Redis failed to start — migrate may fail")
 
-    # 2. Wait for MariaDB
+    # 2. Point common_site_config at local Redis for migrate
+    write_common_site_config(LOCAL_REDIS_URL, LOCAL_REDIS_URL)
+
+    # 3. Wait for MariaDB
     if not wait_for_tcp(DB_HOST, DB_PORT, "MariaDB", timeout=300):
         log("ERROR: MariaDB unreachable after 5 min — aborting")
         return
     time.sleep(3)
-
-    # 3. Wait for Redis (best-effort — needed for migrate/gunicorn, not for DB setup)
-    rh, rp = parse_redis_url(REDIS_CACHE)
-    if rh:
-        wait_for_tcp(rh, rp, "redis-cache", timeout=60)
-    rh2, rp2 = parse_redis_url(REDIS_QUEUE)
-    if rh2:
-        wait_for_tcp(rh2, rp2, "redis-queue", timeout=30)
 
     # 4. Check if site already exists on the persistent disk
     site_config_path = os.path.join(BENCH_DIR, "sites", SITE, "site_config.json")
@@ -269,12 +328,12 @@ def _setup_site_inner():
 
     if site_exists:
         # ── FAST PATH: subsequent boots ──────────────────────────────────────
-        log("Site exists — running migrate (fast schema diff)...")
+        log("Site exists — running migrate (fast schema diff, ~30s)...")
         rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=600)
         if rc == 0:
             log("Migrate succeeded!")
         else:
-            log(f"Migrate returned rc={rc} — continuing (may be Redis warning)")
+            log(f"Migrate returned rc={rc} — continuing anyway")
         run_bench(["use", SITE])
         SETUP_SUCCESS = True
         log(f"=== Ready {time.strftime('%H:%M:%S')} ===")
@@ -296,33 +355,31 @@ FLUSH PRIVILEGES;
         log("ERROR: Could not create database/user — check DB_ROOT_PASSWORD")
         return
 
-    # 6. Import the base Frappe schema (milliseconds — it's a SQL file in the image)
+    # 6. Import the base Frappe schema (milliseconds — SQL file already in image)
     if os.path.exists(FRAMEWORK_SQL):
-        log(f"Importing base Frappe schema from {FRAMEWORK_SQL}...")
+        log(f"Importing base Frappe schema (fast SQL import)...")
         rc = import_sql_file(FRAMEWORK_SQL, DB_NAME)
         if rc != 0:
             log("ERROR: Failed to import framework SQL")
             return
         log("Base schema imported!")
     else:
-        log(f"WARNING: {FRAMEWORK_SQL} not found — will rely on bench migrate")
+        log(f"WARNING: {FRAMEWORK_SQL} not found — migrate will create tables from scratch")
 
     # 7. Write site_config.json so bench knows about this site
     write_site_config()
 
-    # 8. Register site in apps.txt / currentsite.txt
+    # 8. Register site
     run_bench(["use", SITE])
 
-    # 9. bench migrate — applies all DocType schemas (CRM + ERPNext + Frappe)
-    #    This is MUCH faster than bench new-site because:
-    #    - The base schema is already imported (step 6)
-    #    - migrate only applies Python-level patches and missing tables
-    #    Expected time: 5-15 minutes (vs 4+ hours for bench new-site)
-    log("Running bench migrate (applies all DocType schemas)...")
-    log("Expected time: 5-15 minutes")
+    # 9. bench migrate — applies all DocType schemas
+    #    Uses local Redis (started in step 1) so no external Redis dependency.
+    #    Much faster than bench new-site because base schema is already imported.
+    #    Expected time: 5-15 minutes.
+    log("Running bench migrate (5-15 min on first boot)...")
     rc = run_bench(["--site", SITE, "migrate", "--skip-search-index"], timeout=1800)
     if rc != 0:
-        log(f"bench migrate failed (rc={rc}) — check logs above")
+        log(f"bench migrate failed (rc={rc})")
         return
 
     log("Migrate succeeded!")
@@ -361,6 +418,14 @@ GUNICORN_CMD = [
 
 def exec_gunicorn():
     env = get_env()
+
+    # Switch common_site_config to real Redis before gunicorn starts
+    log("Switching to real Redis for gunicorn...")
+    write_common_site_config(REDIS_CACHE, REDIS_QUEUE)
+
+    # Stop local Redis (gunicorn will use real Redis)
+    stop_local_redis()
+
     gunicorn_bin = GUNICORN_CMD[0]
     if not os.path.exists(gunicorn_bin):
         import glob

@@ -5,10 +5,11 @@
 # We add our CRM app on top. No bench init needed — fast build (~2-3 min).
 #
 # Runtime strategy:
-#   - First boot: bench new-site (one-time, ~90 min, result persists on disk)
-#   - Every subsequent boot: bench migrate (fast, ~30s) + gunicorn
+#   - First boot: import SQL schema + bench migrate (~5-15 min, runs once)
+#   - Every subsequent boot: bench migrate (~30s) + gunicorn
 #   - The Render disk at /home/frappe/frappe-bench/sites persists across deploys
-#   - Once the site is created, it NEVER runs bench new-site again
+#   - A local redis-server starts inside the container just for migrate,
+#     so there is zero dependency on external Redis during setup.
 #
 # One image, three roles (CMD override in Render):
 #   frappe-web       → python /home/frappe/frappe_starter.py  (default)
@@ -20,9 +21,11 @@ FROM frappe/erpnext:develop
 
 USER root
 
-# Install mariadb-client (for mysql CLI used in restore/health checks)
+# Install mariadb-client (mysql CLI for DB setup) + redis-server (local Redis
+# for migrate — avoids external Redis dependency during first boot)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     mariadb-client \
+    redis-server \
     build-essential \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
