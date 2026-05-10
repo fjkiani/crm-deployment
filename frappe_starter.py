@@ -355,10 +355,20 @@ FLUSH PRIVILEGES;
         log("ERROR: Could not create database/user — check DB_ROOT_PASSWORD")
         return
 
-    # 6. bench migrate creates all tables from scratch — do NOT pre-import
-    #    framework_mariadb.sql as it causes schema version mismatches with
-    #    the develop branch code.
-    log("Skipping SQL pre-import — bench migrate will create all tables")
+    # 6. Import the base Frappe schema (fast SQL import — milliseconds)
+    #    This is REQUIRED before bench migrate. The framework_mariadb.sql
+    #    creates tabDocType and other core tables that Meta needs to function.
+    #    With frappe/erpnext:v16 (stable), this SQL matches the Python code.
+    if os.path.exists(FRAMEWORK_SQL):
+        log(f"Importing base Frappe schema (fast SQL import)...")
+        rc = import_sql_file(FRAMEWORK_SQL, DB_NAME)
+        if rc != 0:
+            log("ERROR: Failed to import framework SQL")
+            return
+        log("Base schema imported!")
+    else:
+        log(f"ERROR: {FRAMEWORK_SQL} not found in image")
+        return
 
     # 7. Write site_config.json so bench knows about this site
     write_site_config()

@@ -1,7 +1,7 @@
 # =============================================================================
 # Dockerfile.frappe
 #
-# Uses frappe/erpnext:develop as base (pre-built with bench + frappe + erpnext).
+# Uses frappe/erpnext:v16 as base (pre-built with bench + frappe + erpnext).
 # We add our CRM app on top. No bench init needed — fast build (~2-3 min).
 #
 # Runtime strategy:
@@ -17,7 +17,7 @@
 #   frappe-scheduler → bench schedule
 # =============================================================================
 
-FROM frappe/erpnext:develop
+FROM frappe/erpnext:v16
 
 USER root
 
