@@ -42,3 +42,5 @@ mysql-data/
 # Local dev
 scripts/farfalle-main/venv*/
 crm-backend-deploy/
+baked-db/frappe_baked.sql.gz
+!baked-db/.gitkeep

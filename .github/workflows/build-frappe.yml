@@ -5,34 +5,163 @@ on:
     branches: [main]
     paths:
       - 'Dockerfile.frappe'
-      - 'init-site.sh'
       - 'frappe_starter.py'
       - 'crm/**'
       - 'setup.py'
       - 'pyproject.toml'
       - 'requirements.txt'
       - 'MANIFEST.in'
+      - '.github/workflows/build-frappe.yml'
   workflow_dispatch:
-
-# This workflow is kept for optional GHCR publishing.
-# Render deploys directly from the Dockerfile — no GHCR pull needed.
-# The workflow is effectively a no-op unless you want to pre-build the image.
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/crm-frappe
 
 jobs:
+  # ── Step 1: Bake the Frappe DB in CI (7GB RAM, no OOM) ───────────────────
+  bake-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: crm_db
+          MYSQL_USER: crm_db
+          MYSQL_PASSWORD: crmpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -prootpass"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for MariaDB
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -u root -prootpass --silent 2>/dev/null; then
+              echo "MariaDB ready after ${i} attempts"
+              break
+            fi
+            echo "Waiting for MariaDB... ($i/30)"
+            sleep 3
+          done
+
+      - name: Grant privileges to crm_db user
+        run: |
+          mysql -h 127.0.0.1 -u root -prootpass -e "
+            GRANT ALL PRIVILEGES ON \`crm_db\`.* TO 'crm_db'@'%' IDENTIFIED BY 'crmpass';
+            GRANT ALL PRIVILEGES ON \`crm_db\`.* TO 'crm_db'@'localhost' IDENTIFIED BY 'crmpass';
+            FLUSH PRIVILEGES;
+          "
+
+      - name: Run bench new-site in Docker (connects to host MariaDB)
+        run: |
+          # Run bench new-site inside the frappe/erpnext:v16 container
+          # connecting to the MariaDB service running on the host (172.17.0.1)
+          # GitHub Actions uses 172.17.0.1 as the host IP from inside Docker
+          HOST_IP=$(ip route | grep default | awk '{print $3}')
+          echo "Host IP: $HOST_IP"
+
+          docker run --rm \
+            --add-host=host.docker.internal:${HOST_IP} \
+            -e HOME=/home/frappe \
+            frappe/erpnext:v16 \
+            bash -c "
+              set -e
+              cd /home/frappe/frappe-bench
+
+              # Fix apps.txt
+              printf 'frappe\nerpnext\ncrm\n' > sites/apps.txt
+
+              # Install redis-server if not present
+              if ! command -v redis-server &>/dev/null; then
+                apt-get update -qq && apt-get install -y -qq redis-server
+              fi
+
+              # Start local Redis for bench new-site
+              redis-server --port 6380 --bind 127.0.0.1 --save '' --daemonize yes --loglevel warning
+              sleep 2
+              redis-cli -p 6380 ping
+
+              # Write common_site_config.json
+              cat > sites/common_site_config.json << 'EOFCFG'
+          {\"redis_cache\": \"redis://127.0.0.1:6380\", \"redis_queue\": \"redis://127.0.0.1:6380\", \"redis_socketio\": \"redis://127.0.0.1:6380\"}
+          EOFCFG
+
+              echo '=== Running bench new-site ==='
+              bench new-site ci.localhost \
+                --db-name crm_db \
+                --db-password crmpass \
+                --admin-password Admin@CRM2026! \
+                --db-host host.docker.internal \
+                --db-port 3306 \
+                --mariadb-user-host-login-scope '%' \
+                --db-root-password rootpass \
+                --verbose \
+                --force
+
+              echo '=== bench new-site complete ==='
+              echo 'DocType count:'
+              mysql -hhost.docker.internal -P3306 -uroot -prootpass -N -s -e 'SELECT COUNT(*) FROM crm_db.tabDocType;'
+            "
+
+      - name: Dump the baked DB to SQL
+        run: |
+          echo "Dumping crm_db..."
+          mysqldump \
+            -h 127.0.0.1 -u root -prootpass \
+            --single-transaction \
+            --routines \
+            --triggers \
+            --add-drop-table \
+            crm_db > /tmp/frappe_baked.sql
+          echo "Lines: $(wc -l < /tmp/frappe_baked.sql)"
+          echo "Size: $(du -sh /tmp/frappe_baked.sql | cut -f1)"
+
+      - name: Compress the dump
+        run: |
+          gzip -9 /tmp/frappe_baked.sql
+          echo "Compressed size: $(du -sh /tmp/frappe_baked.sql.gz | cut -f1)"
+
+      - name: Upload baked DB as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frappe-baked-db
+          path: /tmp/frappe_baked.sql.gz
+          retention-days: 7
+
+  # ── Step 2: Build Docker image with baked DB ──────────────────────────────
   build-and-push:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: bake-db
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download baked DB artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frappe-baked-db
+          path: ./baked-db/
+
+      - name: Verify baked DB
+        run: |
+          ls -lh ./baked-db/
+          echo "Baked DB ready for Docker build"
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
