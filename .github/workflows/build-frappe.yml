@@ -63,56 +63,76 @@ jobs:
             FLUSH PRIVILEGES;
           "
 
-      - name: Run bench new-site in Docker (connects to host MariaDB)
+      - name: Write bench new-site script
         run: |
-          # Run bench new-site inside the frappe/erpnext:v16 container
-          # connecting to the MariaDB service running on the host (172.17.0.1)
-          # GitHub Actions uses 172.17.0.1 as the host IP from inside Docker
+          # Write the script to a file to avoid heredoc/quoting issues in docker run
+          cat > /tmp/run_bench_newsite.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          cd /home/frappe/frappe-bench
+
+          echo "=== Fixing apps.txt ==="
+          printf 'frappe\nerpnext\ncrm\n' > sites/apps.txt
+          cat sites/apps.txt
+
+          echo "=== Installing redis-server if needed ==="
+          if ! command -v redis-server &>/dev/null; then
+            apt-get update -qq && apt-get install -y -qq redis-server
+          fi
+          redis-server --version
+
+          echo "=== Starting local Redis ==="
+          redis-server --port 6380 --bind 127.0.0.1 --save "" --daemonize yes --loglevel warning
+          sleep 2
+          redis-cli -p 6380 ping
+
+          echo "=== Writing common_site_config.json ==="
+          python3 -c "
+          import json
+          cfg = {
+              'redis_cache': 'redis://127.0.0.1:6380',
+              'redis_queue': 'redis://127.0.0.1:6380',
+              'redis_socketio': 'redis://127.0.0.1:6380'
+          }
+          with open('sites/common_site_config.json', 'w') as f:
+              json.dump(cfg, f, indent=2)
+          print('common_site_config.json written')
+          "
+
+          echo "=== Running bench new-site ==="
+          bench new-site ci.localhost \
+            --db-name crm_db \
+            --db-password crmpass \
+            --admin-password "Admin@CRM2026!" \
+            --db-host HOST_IP_PLACEHOLDER \
+            --db-port 3306 \
+            --mariadb-user-host-login-scope "%" \
+            --db-root-password rootpass \
+            --verbose \
+            --force
+
+          echo "=== bench new-site complete ==="
+          echo "DocType count:"
+          mysql -hHOST_IP_PLACEHOLDER -P3306 -uroot -prootpass -N -s \
+            -e "SELECT COUNT(*) FROM crm_db.tabDocType;"
+          SCRIPT
+          chmod +x /tmp/run_bench_newsite.sh
+
+      - name: Run bench new-site in Docker
+        run: |
           HOST_IP=$(ip route | grep default | awk '{print $3}')
           echo "Host IP: $HOST_IP"
 
+          # Substitute the host IP into the script
+          sed -i "s/HOST_IP_PLACEHOLDER/${HOST_IP}/g" /tmp/run_bench_newsite.sh
+
+          # Run the script inside frappe/erpnext:v16
           docker run --rm \
-            --add-host=host.docker.internal:${HOST_IP} \
+            --network host \
+            -v /tmp/run_bench_newsite.sh:/tmp/run_bench_newsite.sh:ro \
             -e HOME=/home/frappe \
             frappe/erpnext:v16 \
-            bash -c "
-              set -e
-              cd /home/frappe/frappe-bench
-
-              # Fix apps.txt
-              printf 'frappe\nerpnext\ncrm\n' > sites/apps.txt
-
-              # Install redis-server if not present
-              if ! command -v redis-server &>/dev/null; then
-                apt-get update -qq && apt-get install -y -qq redis-server
-              fi
-
-              # Start local Redis for bench new-site
-              redis-server --port 6380 --bind 127.0.0.1 --save '' --daemonize yes --loglevel warning
-              sleep 2
-              redis-cli -p 6380 ping
-
-              # Write common_site_config.json
-              cat > sites/common_site_config.json << 'EOFCFG'
-          {\"redis_cache\": \"redis://127.0.0.1:6380\", \"redis_queue\": \"redis://127.0.0.1:6380\", \"redis_socketio\": \"redis://127.0.0.1:6380\"}
-          EOFCFG
-
-              echo '=== Running bench new-site ==='
-              bench new-site ci.localhost \
-                --db-name crm_db \
-                --db-password crmpass \
-                --admin-password Admin@CRM2026! \
-                --db-host host.docker.internal \
-                --db-port 3306 \
-                --mariadb-user-host-login-scope '%' \
-                --db-root-password rootpass \
-                --verbose \
-                --force
-
-              echo '=== bench new-site complete ==='
-              echo 'DocType count:'
-              mysql -hhost.docker.internal -P3306 -uroot -prootpass -N -s -e 'SELECT COUNT(*) FROM crm_db.tabDocType;'
-            "
+            bash /tmp/run_bench_newsite.sh
 
       - name: Dump the baked DB to SQL
         run: |
