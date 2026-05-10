@@ -89,7 +89,7 @@ jobs:
               cd /home/frappe/frappe-bench
 
               echo '=== Fixing apps.txt ==='
-              printf 'frappe\nerpnext\ncrm\n' > sites/apps.txt
+              printf 'frappe\nerpnext\n' > sites/apps.txt
 
               echo '=== Writing common_site_config.json ==='
               python3 -c \"
