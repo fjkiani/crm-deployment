@@ -121,8 +121,7 @@ services:
     dockerfilePath: ./Dockerfile.frappe
     dockerContext: .
     plan: starter
-    dockerCommand: >-
-      bash -c "cd /home/frappe/frappe-bench && bench use crm-frappe-web.onrender.com && bench worker --queue long,default,short"
+    dockerCommand: /home/frappe/frappe_worker.sh
     envVars:
       - key: FRAPPE_SITE_NAME
         value: crm-frappe-web.onrender.com
@@ -159,8 +158,7 @@ services:
     dockerfilePath: ./Dockerfile.frappe
     dockerContext: .
     plan: starter
-    dockerCommand: >-
-      bash -c "cd /home/frappe/frappe-bench && bench use crm-frappe-web.onrender.com && bench schedule"
+    dockerCommand: /home/frappe/frappe_scheduler.sh
     envVars:
       - key: FRAPPE_SITE_NAME
         value: crm-frappe-web.onrender.com

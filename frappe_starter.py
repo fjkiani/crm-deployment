@@ -537,8 +537,35 @@ GUNICORN_CMD = [
     "frappe.app:application",
 ]
 
+def ensure_assets():
+    """
+    Rebuild static assets if the assets/ symlink/directory is missing.
+
+    The Render disk is mounted at /home/frappe/frappe-bench/sites, which
+    replaces the directory that was in the Docker image layer.  The assets/
+    symlink that points back into the app source trees is therefore gone on
+    every fresh mount.  Running `bench build` recreates it (~60-90 s).
+    """
+    assets_path = os.path.join(BENCH_DIR, "sites", "assets")
+    frappe_desk_js = os.path.join(assets_path, "frappe", "dist", "js")
+
+    if os.path.isdir(frappe_desk_js):
+        log("Assets directory present — skipping bench build")
+        return
+
+    log("Assets directory missing (disk mount wiped symlink) — running bench build...")
+    rc = run_bench(["build", "--apps", "frappe,erpnext,crm"], timeout=600)
+    if rc == 0:
+        log("bench build succeeded — assets ready")
+    else:
+        log(f"bench build returned rc={rc} — gunicorn will start anyway (some assets may 404)")
+
+
 def exec_gunicorn():
     env = get_env()
+
+    # Rebuild assets if the disk mount wiped the symlink
+    ensure_assets()
 
     # Switch common_site_config to real Redis before gunicorn starts
     log("Switching to real Redis for gunicorn...")
