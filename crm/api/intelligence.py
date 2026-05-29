@@ -1,46 +1,51 @@
+import os
 
 import frappe
 import requests
-import json
+
 
 @frappe.whitelist()
 def ask_nyx(message):
-    """
-    Proxies a chat message to the local EAIA Agent Service.
-    Securely handles the communication without exposing the backend port to the frontend.
-    """
-    # Security: Ensure user is logged in
-    if frappe.session.user == "Guest":
-        frappe.throw("You must be logged in to access Intelligence.", frappe.PermissionError)
+	"""
+	Proxies a chat message to the EAIA Agent Service.
+	Set EAIA_URL environment variable to point at the deployed agent.
+	"""
+	if frappe.session.user == "Guest":
+		frappe.throw("You must be logged in to access Intelligence.", frappe.PermissionError)
 
-    # Configuration (Could be moved to site_config or settings)
-    AGENT_URL = "https://ninety-mugs-wear.loca.lt/chat"
-    
-    # Context: Provide basic user context
-    user_context = {
-        "user_id": frappe.session.user,
-        "full_name": frappe.utils.get_fullname(frappe.session.user)
-    }
-    
-    # Payload
-    payload = {
-        "message": message,
-        "history": [], # TODO: Fetch conversation history from DB if we want persistence
-        "user_context": user_context
-    }
-    
-    try:
-        # Call the Agent Service
-        response = requests.post(AGENT_URL, json=payload, timeout=60)
-        response.raise_for_status()
-        
-        data = response.json()
-        return data.get("response", "Error: No response from Agent.")
-        
-    except requests.exceptions.ConnectionError:
-        frappe.log_error("EAIA Service Unreachable")
-        return "⚠️ **System Error**: The Intelligence Core (Nyx) is currently offline. Please contact your administrator."
-        
-    except Exception as e:
-        frappe.log_error(f"EAIA Error: {str(e)}")
-        return f"⚠️ **Agent Error**: {str(e)}"
+	# Read URL from environment — no hardcoded tunnel URLs
+	AGENT_URL = os.environ.get("EAIA_URL", "").rstrip("/") + "/chat"
+
+	if not os.environ.get("EAIA_URL"):
+		return (
+			"⚠️ **Intelligence Core not configured.** "
+			"Set the `EAIA_URL` environment variable to enable Nyx."
+		)
+
+	user_context = {
+		"user_id": frappe.session.user,
+		"full_name": frappe.utils.get_fullname(frappe.session.user),
+	}
+
+	payload = {
+		"message": message,
+		"history": [],
+		"user_context": user_context,
+	}
+
+	try:
+		response = requests.post(AGENT_URL, json=payload, timeout=30)
+		response.raise_for_status()
+		data = response.json()
+		return data.get("response", "Error: No response from Agent.")
+
+	except requests.exceptions.ConnectionError:
+		frappe.log_error("EAIA Service Unreachable")
+		return "⚠️ **Intelligence Core offline.** Check that the EAIA service is running."
+
+	except requests.exceptions.Timeout:
+		return "⚠️ **Intelligence Core timed out.** The agent took too long to respond."
+
+	except Exception as e:
+		frappe.log_error(f"EAIA Error: {str(e)}")
+		return f"⚠️ **Agent Error**: {str(e)}"

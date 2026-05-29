@@ -1,10 +1,7 @@
 # Copyright (c) 2022, Frappe Technologies Pvt. Ltd. and Contributors
 # GNU GPLv3 License. See license.txt
-import os
-import subprocess
 
 import frappe
-from frappe import safe_decode
 try:
     from frappe.integrations.frappe_providers.frappecloud_billing import is_fc_site
 except Exception:  # pragma: no cover
@@ -17,7 +14,9 @@ no_cache = 1
 
 
 def get_context():
-	frappe.db.commit()
+	# NOTE: frappe.db.commit() removed — it was triggering an unnecessary write
+	# transaction on every GET request, causing 60-120s hangs on under-resourced DBs.
+	# Frappe commits automatically at the end of each request.
 	context = frappe._dict()
 	context.boot = get_boot()
 	if frappe.session.user != "Guest":
@@ -55,15 +54,3 @@ def get_boot():
 
 def get_default_route():
 	return "/crm"
-
-
-def run_git_command(command):
-	try:
-		with open(os.devnull, "wb") as null_stream:
-			result = subprocess.check_output(command, shell=True, stdin=null_stream, stderr=null_stream)
-		return safe_decode(result).strip()
-	except Exception:
-		frappe.log_error(
-			title="Git Command Error",
-		)
-		return ""

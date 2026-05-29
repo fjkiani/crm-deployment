@@ -532,7 +532,10 @@ GUNICORN_CMD = [
     "--worker-class=gthread",
     "--worker-tmp-dir=/dev/shm",
     "--timeout=120",
-    "--preload",
+    # NOTE: --preload removed — it causes DB connection sharing across forked
+    # workers (PyMySQL bug), leading to silent request hangs. Each worker now
+    # loads frappe.app independently, which is slightly slower to start but
+    # far more reliable under load.
     "--log-level=info",
     "frappe.app:application",
 ]
