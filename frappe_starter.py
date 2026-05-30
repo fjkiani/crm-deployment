@@ -234,6 +234,51 @@ def run_bench(args, timeout=600):
         log(f"ERROR running bench: {e}")
         return -1
 
+def run_site_python(body, timeout=120):
+    """Run a Python snippet inside a fully-initialised Frappe site context.
+
+    We deliberately do NOT use `bench console` (IPython + prompt_toolkit chokes on
+    piped, non-terminal stdin — see jupyter_console#213) nor `bench execute` (takes
+    a dotted method path, not a multi-line snippet). Instead we replicate exactly
+    what `bench execute` does internally: run the bench venv Python with an explicit
+    `frappe.init(SITE) + frappe.connect()`, from the `sites/` cwd, with our env (so
+    it uses the *real* Redis the gunicorn workers will read). This is the same
+    proven pattern already used for the `frappe.app` import probe below.
+
+    `body` is the snippet to run after init/connect. All of its output is surfaced
+    through our logger. Returns the subprocess return code (0 on success).
+    """
+    prog = (
+        "import frappe\n"
+        f"frappe.init(site={SITE!r})\n"
+        "frappe.connect()\n"
+        "try:\n"
+        + "".join("    " + ln + "\n" for ln in body.strip("\n").splitlines())
+        + "finally:\n"
+        "    frappe.destroy()\n"
+    )
+    cmd = ["/home/frappe/frappe-bench/env/bin/python", "-c", prog]
+    log(f"$ site-python snippet ({len(body)} bytes)")
+    try:
+        proc = subprocess.Popen(
+            cmd, cwd=os.path.join(BENCH_DIR, "sites"), env=get_env(),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        out, _ = proc.communicate(timeout=timeout)
+        for line in (out or "").splitlines():
+            line = line.rstrip()
+            if line:
+                log(f"  > {line}")
+        log(f"  exit: {proc.returncode}")
+        return proc.returncode
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        log(f"ERROR: site-python snippet timed out after {timeout}s")
+        return -1
+    except Exception as e:
+        log(f"ERROR running site-python snippet: {e}")
+        return -1
+
 def run_mysql(sql, user="root", password=None, db=None, timeout=60):
     password = password or DB_ROOT
     cmd = ["mysql", f"-h{DB_HOST}", f"-P{DB_PORT}", f"-u{user}", f"-p{password}",
@@ -729,29 +774,66 @@ def exec_nginx(env):
     os.execve("/bin/bash", ["/bin/bash", NGINX_ENTRYPOINT], env)
 
 
+# Snippet executed in the site context to force-evict the stale asset manifest.
+# `frappe.read_file("assets/assets.json")` is resolved relative to sites_path, i.e.
+# the FRESH on-disk manifest our `bench build --force` just wrote. We delete the
+# stale Redis copy directly, then prove the cache now agrees with disk.
+# NOTE: run via run_site_python(), which wraps this body in `try:`/`finally: destroy()`
+# and indents every line by 4 spaces. Keep it as FLAT statements (no top-level
+# multi-line blocks) so the auto-indent stays valid; `frappe` is already init+connected.
+_CLEAR_ASSET_SNIPPET = (
+    "from frappe.utils import get_assets_json\n"
+    "import frappe.cache_manager as _cm\n"
+    "_keys = ['login.bundle.css','website.bundle.css','desk.bundle.css','frappe-web.bundle.js','desk.bundle.js']\n"
+    "_disk = frappe.parse_json(frappe.read_file('assets/assets.json')) or {}\n"
+    "print('ASSET disk   :', {k: _disk.get(k) for k in _keys})\n"
+    "_before = frappe.cache().get_value('assets_json', shared=True) or {}\n"
+    "print('ASSET cache0 :', {k: _before.get(k) for k in _keys})\n"
+    "# --- the decisive eviction: shared=True is the key bench clear-cache misses ---\n"
+    "frappe.cache().delete_value('assets_json', shared=True)\n"
+    "# belt-and-suspenders: also clears website page cache + metadata_version\n"
+    "_cm.clear_global_cache()\n"
+    "_cm.reset_metadata_version()\n"
+    "# regenerate the manifest cache from disk right now, and verify it matches\n"
+    "_after = get_assets_json() or {}\n"
+    "print('ASSET cache1 :', {k: _after.get(k) for k in _keys})\n"
+    "print('ASSET match  :', all(_after.get(k) == _disk.get(k) for k in _keys))\n"
+    "frappe.db.commit()\n"
+)
+
 def clear_asset_cache(env):
-    """Clear the cached asset manifest so HTML emits the freshly-built bundle hashes.
+    """Evict the stale asset manifest so HTML emits the freshly-built bundle hashes.
 
-    Why this is required (root cause of the CSS 404s):
+    Root cause of the CSS 404s (confirmed against frappe/frappe@version-16 source
+    and the live deployment):
       Frappe resolves bundle names (e.g. `login.bundle.css`) to content-hashed
-      files via a manifest it caches in Redis under the shared `assets_json` key
-      (and the rendered website pages are cached too).  Our runtime
-      `bench build --force` regenerates the bundles with NEW hashes and rewrites
-      sites/assets/assets.json on disk — but the website renderer keeps emitting
-      the OLD hashes from the Redis cache.  Result: every freshly-built .css 404s
-      because the HTML references a hash that no longer exists on disk, while the
-      .js happens to match only when its source (and therefore hash) is unchanged.
-      See frappe/frappe#33342, #29877.  `bench clear-cache` evicts `assets_json`
-      (fixed for v15/v16 in frappe/frappe#36479) plus the website page cache, so
-      the next render reads the fresh manifest.
+      files via `get_assets_json()`, which caches the manifest in Redis under the
+      **shared** key `assets_json` (`frappe.client_cache.get_value("assets_json",
+      shared=True, ...)`). Our runtime `bench build --force` regenerates the
+      bundles with NEW hashes and rewrites sites/assets/assets.json on disk — but
+      the renderer keeps emitting the OLD hashes from that Redis key.
 
-    Runs AFTER switching to real Redis (so it clears the cache gunicorn will use)
-    and BEFORE gunicorn starts serving.
+      CRITICAL: plain `bench clear-cache` does NOT evict it. Its no-arg path only
+      deletes site-prefixed keys (`frappe.cache.get_keys("")`); the shared
+      `assets_json` key (no site prefix) survives. Only `clear_global_cache()` —
+      via `frappe.cache.delete_value(("assets_json",), shared=True)` — removes it.
+      That is why the previous `bench clear-cache` attempts had zero effect and the
+      live HTML kept emitting stale CSS hashes (DJARD6T2/EUK3FKJL/Y5T22FPH) that no
+      longer exist on disk, so every freshly-built .css 404'd. (.js only matched by
+      luck when its source — and therefore hash — was unchanged.)
+      See frappe/frappe cache_manager.py (clear_cache vs clear_global_cache).
+
+    Fix: run inside the site context (so we touch the *real* Redis the gunicorn
+    workers will read) and delete the shared `assets_json` key directly, then
+    regenerate + verify it matches disk. Runs AFTER the real-Redis switch and
+    BEFORE gunicorn starts serving.
     """
-    # Global clear (evicts shared assets_json) + explicit website cache clear.
-    rc1 = run_bench(["clear-cache"], timeout=120)
+    rc = run_site_python(_CLEAR_ASSET_SNIPPET, timeout=120)
+    log(f"Asset manifest cache evicted via site-python (rc={rc}); "
+        f"look for 'ASSET match  : True' above to confirm cache==disk.")
+    # Best-effort website page cache clear too (cheap, and covers cached HTML).
     rc2 = run_bench(["--site", SITE, "clear-website-cache"], timeout=120)
-    log(f"Asset/website cache cleared (clear-cache rc={rc1}, clear-website-cache rc={rc2})")
+    log(f"Website page cache cleared (clear-website-cache rc={rc2}).")
 
 
 def serve():
