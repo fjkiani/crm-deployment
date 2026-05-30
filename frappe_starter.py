@@ -64,6 +64,13 @@ REDIS_CACHE = os.environ.get("REDIS_CACHE_URL", "redis://crm-redis-cache:10000")
 REDIS_QUEUE = os.environ.get("REDIS_QUEUE_URL", "redis://crm-redis-queue:10000")
 SERVE_PORT  = int(os.environ.get("PORT", "8000"))
 
+# nginx (the image's built-in static layer) owns the external Railway $PORT and
+# serves /assets and /files from disk, proxying dynamic routes to gunicorn.
+# gunicorn therefore moves to an INTERNAL-only port; socketio (optional) on 9000.
+NGINX_PORT    = SERVE_PORT          # external port nginx binds (Railway $PORT, 8080)
+GUNICORN_PORT = 8000                # internal: nginx upstream "backend-server"
+SOCKETIO_PORT = 9000                # internal: nginx upstream "socketio-server" (optional)
+
 # Local Redis for migrate (avoids dependency on external Redis during setup)
 LOCAL_REDIS_PORT = 6380
 LOCAL_REDIS_URL  = f"redis://127.0.0.1:{LOCAL_REDIS_PORT}"
@@ -526,7 +533,8 @@ def _setup_site_inner():
 GUNICORN_CMD = [
     "/home/frappe/frappe-bench/env/bin/gunicorn",
     "--chdir=/home/frappe/frappe-bench/sites",
-    f"--bind=0.0.0.0:{SERVE_PORT}",
+    # Bind to internal port only — nginx (on $PORT) proxies to this.
+    f"--bind=127.0.0.1:{GUNICORN_PORT}",
     "--threads=4",
     "--workers=2",
     "--worker-class=gthread",
@@ -540,34 +548,193 @@ GUNICORN_CMD = [
     "frappe.app:application",
 ]
 
+def _resolves_to_real_dir(path):
+    """True if path (possibly a symlink) resolves to an existing directory with content."""
+    try:
+        real = os.path.realpath(path)
+        return os.path.isdir(real) and bool(os.listdir(real))
+    except Exception:
+        return False
+
+
+def _asset_status(sites_assets):
+    """Return (have_frappe, have_crm) — whether each app's bundles resolve to real files.
+
+    Frappe lays out sites/assets/<app> as a symlink -> apps/<app>/<app>/public,
+    with bundled JS/CSS at sites/assets/<app>/dist/... and the CRM Vue SPA at
+    sites/assets/crm/frontend/assets/.  nginx serves these via
+    `location /assets { try_files $uri =404; }` rooted at sites/.
+    """
+    frappe_desk_js = os.path.join(sites_assets, "frappe", "dist", "js")
+    crm_frontend   = os.path.join(sites_assets, "crm", "frontend", "assets")
+    return _resolves_to_real_dir(frappe_desk_js), _resolves_to_real_dir(crm_frontend)
+
+
 def ensure_assets():
     """
-    Rebuild static assets if the assets/ symlink/directory is missing.
+    Guarantee nginx can serve /assets for ALL apps (frappe, erpnext, crm).
 
-    The Render disk is mounted at /home/frappe/frappe-bench/sites, which
-    replaces the directory that was in the Docker image layer.  The assets/
-    symlink that points back into the app source trees is therefore gone on
-    every fresh mount.  Running `bench build` recreates it (~60-90 s).
+    Why this is non-trivial here:
+      * The frappe/erpnext:v16 image bakes assets at /home/frappe/frappe-bench/assets
+        (built when only frappe+erpnext existed) and its entrypoint links the WHOLE
+        tree: sites/assets -> bench/assets.  That covers frappe/erpnext only.
+      * This deployment adds the CRM app AFTER the base image (pip install -e) and
+        never runs `bench build` in the Dockerfile, so sites/assets/crm (the Vue SPA
+        bundles) is NOT present in the baked tree.  With the whole-tree symlink alone,
+        /assets/crm/frontend/assets/*.js => 404 even though /assets/frappe/* works.
+
+    Correct mechanism (Frappe's intended production step):
+      `bench build --apps frappe,erpnext,crm` rebuilds sites/assets as a real dir
+      with proper per-app symlinks (crm -> apps/crm/crm/public) and compiled bundles.
+
+    Logic:
+      1. Check current state. If BOTH frappe and crm bundles already resolve, done.
+      2. Otherwise run `bench build` (the canonical fix that handles crm too).
+      3. If build still leaves frappe missing but the image's baked tree exists,
+         fall back to the whole-tree symlink so at least desk/login assets work.
     """
-    assets_path = os.path.join(BENCH_DIR, "sites", "assets")
-    frappe_desk_js = os.path.join(assets_path, "frappe", "dist", "js")
+    sites_assets = os.path.join(BENCH_DIR, "sites", "assets")
+    image_assets = os.path.join(BENCH_DIR, "assets")  # image-layer baked store
 
-    if os.path.isdir(frappe_desk_js):
-        log("Assets directory present — skipping bench build")
+    have_frappe, have_crm = _asset_status(sites_assets)
+    log(f"Asset check (pre): frappe={'OK' if have_frappe else 'MISSING'}  "
+        f"crm={'OK' if have_crm else 'MISSING'}")
+    if have_frappe and have_crm:
+        log("All app assets present and resolve to real files — skipping bench build")
         return
 
-    log("Assets directory missing (disk mount wiped symlink) — running bench build...")
-    rc = run_bench(["build", "--apps", "frappe,erpnext,crm"], timeout=600)
-    if rc == 0:
-        log("bench build succeeded — assets ready")
+    # Canonical fix: build assets for all apps. --force compiles instead of trying
+    # to download pre-built assets (which do not exist for the custom crm app build).
+    log("Assets incomplete — running `bench build --apps frappe,erpnext,crm --force`...")
+    rc = run_bench(["build", "--apps", "frappe,erpnext,crm", "--force"], timeout=1200)
+    have_frappe, have_crm = _asset_status(sites_assets)
+    log(f"Asset check (post-build rc={rc}): frappe={'OK' if have_frappe else 'MISSING'}  "
+        f"crm={'OK' if have_crm else 'MISSING'}")
+
+    # Fallback: if desk/login (frappe) assets are still missing but the image baked
+    # tree exists, link the whole tree so login at least renders. (Does not add crm.)
+    if not have_frappe and _resolves_to_real_dir(image_assets):
+        try:
+            if os.path.islink(sites_assets) or os.path.exists(sites_assets):
+                if os.path.islink(sites_assets) or not os.listdir(sites_assets):
+                    try:
+                        os.remove(sites_assets)
+                    except IsADirectoryError:
+                        os.rmdir(sites_assets)
+            if not os.path.exists(sites_assets):
+                os.symlink(image_assets, sites_assets)
+                log(f"Fallback: linked sites/assets -> {image_assets} (frappe/erpnext only)")
+        except Exception as e:
+            log(f"WARN: fallback symlink failed: {e}")
+        have_frappe, have_crm = _asset_status(sites_assets)
+
+    if have_frappe and have_crm:
+        log("Assets ready (frappe + crm resolve).")
     else:
-        log(f"bench build returned rc={rc} — gunicorn will start anyway (some assets may 404)")
+        log(f"WARN: assets still incomplete (frappe={have_frappe}, crm={have_crm}) — "
+            f"nginx will start; some bundles may 404. Check build log above.")
 
 
-def exec_gunicorn():
+# ── nginx (the image's built-in static layer) ─────────────────────────────────
+# The image ships nginx-entrypoint.sh which renders the template into the conf
+# via envsubst, THEN runs `nginx -g 'daemon off;'`:
+#     envsubst '...' < /templates/nginx/frappe.conf.template > /etc/nginx/conf.d/frappe.conf
+#     nginx -g 'daemon off;'
+# So to change the listen port we must edit the TEMPLATE (read at entrypoint time),
+# not the rendered file (which does not exist until the entrypoint runs).
+NGINX_ENTRYPOINT = "/usr/local/bin/nginx-entrypoint.sh"
+NGINX_TEMPLATE   = "/templates/nginx/frappe.conf.template"
+
+
+def _gunicorn_bin():
+    gb = GUNICORN_CMD[0]
+    if os.path.exists(gb):
+        return gb
+    import glob
+    found = glob.glob("/home/frappe/frappe-bench/env/bin/gunicorn*")
+    log(f"gunicorn not at expected path, found: {found}")
+    return found[0] if found else None
+
+
+def start_gunicorn_background(env):
+    """Launch gunicorn bound to 127.0.0.1:GUNICORN_PORT as a child process.
+
+    Returns the Popen handle. nginx (foreground, on $PORT) proxies to it.
+    Not exec'd, so this process can stay alive to run nginx in the foreground
+    and watchdog gunicorn.
+    """
+    gb = _gunicorn_bin()
+    if not gb:
+        log("FATAL: gunicorn not found")
+        return None
+    cmd = [gb] + GUNICORN_CMD[1:]
+    log(f"Starting gunicorn (background) on 127.0.0.1:{GUNICORN_PORT}: {' '.join(cmd)}")
+    # gunicorn logs to stdout/stderr inherited from this process -> Railway logs.
+    proc = subprocess.Popen(cmd, cwd=os.path.join(BENCH_DIR, "sites"), env=env)
+    return proc
+
+
+def _watchdog_gunicorn(proc):
+    """If gunicorn dies, exit the whole container so Railway restarts it.
+
+    nginx alone (without a live backend) would only 502; better to fail fast.
+    """
+    proc.wait()
+    log(f"FATAL: gunicorn exited with code {proc.returncode} — terminating container "
+        f"so the platform restarts it.")
+    os._exit(1)
+
+
+def exec_nginx(env):
+    """Set upstreams + listen port, then exec the image's nginx-entrypoint.sh.
+
+    The entrypoint renders /templates/nginx/frappe.conf.template via envsubst into
+    /etc/nginx/conf.d/frappe.conf and then runs `nginx -g 'daemon off;'`. We:
+      * point BACKEND -> internal gunicorn, SOCKETIO -> internal socketio
+      * ensure the template's `listen` matches Railway's external $PORT (the
+        template ships with `listen 8080;`; we rewrite the TEMPLATE — not the
+        not-yet-rendered conf — only if our external port differs from 8080).
+    """
+    env = dict(env)
+    env["BACKEND"]  = f"127.0.0.1:{GUNICORN_PORT}"
+    env["SOCKETIO"] = f"127.0.0.1:{SOCKETIO_PORT}"
+    env.setdefault("FRAPPE_SITE_NAME_HEADER", "$host")
+    env.setdefault("UPSTREAM_REAL_IP_ADDRESS", "127.0.0.1")
+    env.setdefault("PROXY_READ_TIMEOUT", "120")
+    env.setdefault("CLIENT_MAX_BODY_SIZE", "50m")
+
+    # Ensure nginx listens on Railway's external port. Patch the TEMPLATE, because
+    # the rendered conf does not exist until the entrypoint runs envsubst.
+    if os.path.exists(NGINX_TEMPLATE):
+        try:
+            with open(NGINX_TEMPLATE) as f:
+                tpl = f.read()
+            if NGINX_PORT != 8080 and "listen 8080;" in tpl:
+                tpl = tpl.replace("listen 8080;", f"listen {NGINX_PORT};")
+                with open(NGINX_TEMPLATE, "w") as f:
+                    f.write(tpl)
+                log(f"Patched nginx template listen port -> {NGINX_PORT}")
+            else:
+                log(f"nginx template listen port already matches external port {NGINX_PORT}")
+        except Exception as e:
+            log(f"WARN: could not patch nginx template listen port: {e}")
+    else:
+        log(f"WARN: nginx template {NGINX_TEMPLATE} not found — entrypoint may still create conf")
+
+    if not os.path.exists(NGINX_ENTRYPOINT):
+        log(f"FATAL: {NGINX_ENTRYPOINT} not found in image — cannot start nginx")
+        os._exit(1)
+
+    log(f"exec nginx-entrypoint.sh (nginx on :{NGINX_PORT} -> gunicorn :{GUNICORN_PORT})")
+    os.execve("/bin/bash", ["/bin/bash", NGINX_ENTRYPOINT], env)
+
+
+def serve():
+    """Start gunicorn (internal) + nginx (external $PORT) and block on nginx."""
     env = get_env()
 
-    # Rebuild assets if the disk mount wiped the symlink
+    # Ensure /assets resolve on disk for ALL apps (frappe, erpnext, crm) before
+    # nginx (which serves them statically) comes up.
     ensure_assets()
 
     # Switch common_site_config to real Redis before gunicorn starts
@@ -576,16 +743,6 @@ def exec_gunicorn():
 
     # Stop local Redis (gunicorn will use real Redis)
     stop_local_redis()
-
-    gunicorn_bin = GUNICORN_CMD[0]
-    if not os.path.exists(gunicorn_bin):
-        import glob
-        found = glob.glob("/home/frappe/frappe-bench/env/bin/gunicorn*")
-        log(f"gunicorn not at expected path, found: {found}")
-        if not found:
-            log("FATAL: gunicorn not found")
-            return
-        gunicorn_bin = found[0]
 
     cs = os.path.join(BENCH_DIR, "sites", "currentsite.txt")
     if not os.path.exists(cs):
@@ -603,27 +760,50 @@ def exec_gunicorn():
     )
     log(f"frappe.app import: rc={r.returncode} {r.stdout.strip()} {r.stderr.strip()[:200]}")
 
-    log(f"exec gunicorn on port {SERVE_PORT}")
-    os.execve(gunicorn_bin, GUNICORN_CMD, env)
+    # 1) gunicorn in the background on the internal port
+    gproc = start_gunicorn_background(env)
+    if gproc is None:
+        os._exit(1)
+
+    # 2) wait until gunicorn accepts connections (so nginx never 502s on boot)
+    if not wait_for_tcp("127.0.0.1", GUNICORN_PORT, "gunicorn", timeout=180):
+        log("FATAL: gunicorn did not become ready — terminating.")
+        try:
+            gproc.terminate()
+        except Exception:
+            pass
+        os._exit(1)
+    log("gunicorn is accepting connections.")
+
+    # 3) watchdog: if gunicorn dies later, take the container down for a restart
+    threading.Thread(target=_watchdog_gunicorn, args=(gproc,), daemon=True).start()
+
+    # 4) nginx in the foreground, owning the external $PORT (this replaces the process)
+    exec_nginx(env)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+# During setup, a temporary health server answers on $PORT so the platform's
+# healthcheck passes while the site builds. Once setup is done it is fully shut
+# down (socket released) BEFORE nginx binds the same $PORT.
 log(f"Starting health server on port {SERVE_PORT}...")
 server = HTTPServer(("0.0.0.0", SERVE_PORT), HealthHandler)
 server.allow_reuse_address = True
 threading.Thread(target=server.serve_forever, daemon=True).start()
-log(f"Health server up -> https://crm-frappe-web.onrender.com/setup-log")
+log(f"Health server up on :{SERVE_PORT} (serves /setup-log during boot)")
 
 threading.Thread(target=setup_site, daemon=True).start()
 log("Waiting for setup...")
 SETUP_DONE.wait()
 
 if SETUP_SUCCESS:
-    log("Setup succeeded -> starting gunicorn")
-    server.shutdown()
-    exec_gunicorn()
+    log("Setup succeeded -> releasing health-server port for nginx")
+    server.shutdown()       # stop serve_forever loop
+    server.server_close()   # release the listening socket so nginx can bind $PORT
+    time.sleep(1)           # small grace period for the port to free up
+    serve()                 # gunicorn (internal) + nginx (external $PORT), execs nginx
 else:
     log("Setup FAILED -> keeping health server alive. Check /setup-log.")
-    log("Fix the error and trigger a manual redeploy in Render dashboard.")
+    log("Fix the error and trigger a manual redeploy in the Railway dashboard.")
     while True:
         time.sleep(300)
         log("Still alive (setup failed). Check /setup-log.")
