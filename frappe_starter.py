@@ -729,6 +729,31 @@ def exec_nginx(env):
     os.execve("/bin/bash", ["/bin/bash", NGINX_ENTRYPOINT], env)
 
 
+def clear_asset_cache(env):
+    """Clear the cached asset manifest so HTML emits the freshly-built bundle hashes.
+
+    Why this is required (root cause of the CSS 404s):
+      Frappe resolves bundle names (e.g. `login.bundle.css`) to content-hashed
+      files via a manifest it caches in Redis under the shared `assets_json` key
+      (and the rendered website pages are cached too).  Our runtime
+      `bench build --force` regenerates the bundles with NEW hashes and rewrites
+      sites/assets/assets.json on disk — but the website renderer keeps emitting
+      the OLD hashes from the Redis cache.  Result: every freshly-built .css 404s
+      because the HTML references a hash that no longer exists on disk, while the
+      .js happens to match only when its source (and therefore hash) is unchanged.
+      See frappe/frappe#33342, #29877.  `bench clear-cache` evicts `assets_json`
+      (fixed for v15/v16 in frappe/frappe#36479) plus the website page cache, so
+      the next render reads the fresh manifest.
+
+    Runs AFTER switching to real Redis (so it clears the cache gunicorn will use)
+    and BEFORE gunicorn starts serving.
+    """
+    # Global clear (evicts shared assets_json) + explicit website cache clear.
+    rc1 = run_bench(["clear-cache"], timeout=120)
+    rc2 = run_bench(["--site", SITE, "clear-website-cache"], timeout=120)
+    log(f"Asset/website cache cleared (clear-cache rc={rc1}, clear-website-cache rc={rc2})")
+
+
 def serve():
     """Start gunicorn (internal) + nginx (external $PORT) and block on nginx."""
     env = get_env()
@@ -743,6 +768,11 @@ def serve():
 
     # Stop local Redis (gunicorn will use real Redis)
     stop_local_redis()
+
+    # Evict the stale asset manifest from (real) Redis so the website renderer
+    # emits the freshly-built CSS/JS hashes (otherwise CSS bundles 404). Must run
+    # AFTER the real-Redis switch above so we clear the cache gunicorn will read.
+    clear_asset_cache(env)
 
     cs = os.path.join(BENCH_DIR, "sites", "currentsite.txt")
     if not os.path.exists(cs):
