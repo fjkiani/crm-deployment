@@ -41,6 +41,7 @@ from langchain_core.runnables.config import RunnableConfig
 from eaia.pipeline.state import OutreachState
 from eaia.pipeline.llm import llm_json
 from eaia.config import NyxConfig
+from eaia.tenant import get_active_pack
 from eaia.skills.challenger_email_writer import _two_pass_generate, _generate_ab_subjects
 
 logger = logging.getLogger(__name__)
@@ -127,6 +128,10 @@ async def write_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
     name    = state["prospect_name"]
     company = state["company_name"]
 
+    # Resolve the active tenant pack (per-request tenant_id supported via config).
+    tenant_id = config.get("configurable", {}).get("tenant_id")
+    pack = get_active_pack(tenant_id)
+
     # Build the 10-field dossier
     prospect_info = _build_dossier(state)
 
@@ -135,7 +140,7 @@ async def write_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
         signals = {**signals, "_review_feedback": state["review_feedback"]}
 
     try:
-        result = _two_pass_generate(fw, signals, prospect_info, name, company, cohere_key)
+        result = _two_pass_generate(fw, signals, prospect_info, name, company, cohere_key, pack=pack)
         state["email_draft"] = result
         # Persist the recipient email for /send-email
         state["email_draft"]["prospect_email"] = (

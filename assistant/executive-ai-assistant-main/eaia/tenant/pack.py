@@ -83,14 +83,24 @@ class TenantPack:
     industry: str
     sender_signature: str = "—"   # how emails sign off (e.g. "— Nyx")
     data_gap_label: str = "data gap"
+    # Label for the prospect's primary money/qualification signal as shown in
+    # prompts. Default "AUM Signal" (finance/CrisPRO). A logistics tenant might
+    # set "Annual Freight Spend"; a SaaS tenant "ARR". Keeps the scoring engine
+    # domain-blind — the *label* is tenant data, not hardcoded in the scaffold.
+    primary_signal_label: str = "AUM Signal"
 
     # ── ICP / scoring ─────────────────────────────────────────────────────
     icp_criteria: List[str] = field(default_factory=list)
     scoring_rubric: str = ""      # free-text HOT/WARM/COLD rules
     default_angle: str = ""       # fallback sales angle when LLM unavailable
-    score_hot: int = 70
-    score_warm: int = 40
+    score_hot: int = 70           # >= this -> HOT tier (framework selection)
+    score_warm: int = 40          # >= this -> WARM tier (framework selection)
     signal_gate_min: int = 2
+    # Team-routing thresholds (DISTINCT from score_hot/score_warm above).
+    # These drive the sales-team routing label, not framework choice. Defaults
+    # preserve the prior hardcoded ROUTING_THRESHOLDS (80/60) in lead_scoring_tool.
+    routing_enterprise: int = 80
+    routing_mid_market: int = 60
 
     # ── Messaging assets ──────────────────────────────────────────────────
     proof_points: List[ProofPoint] = field(default_factory=list)
@@ -198,12 +208,15 @@ class TenantPack:
             industry=industry,
             sender_signature=sender_signature,
             data_gap_label=data_gap_label,
+            primary_signal_label=data.get("primary_signal_label", "AUM Signal"),
             icp_criteria=data.get("icp_criteria", []),
             scoring_rubric=data.get("scoring_rubric", ""),
             default_angle=data.get("default_angle", f"Pitch {company_name} as a fit for their needs."),
             score_hot=int(data.get("score_hot", NyxConfig.SCORE_HOT)),
             score_warm=int(data.get("score_warm", NyxConfig.SCORE_WARM)),
             signal_gate_min=int(data.get("signal_gate_min", NyxConfig.SIGNAL_GATE_MIN)),
+            routing_enterprise=int(data.get("routing_enterprise", 80)),
+            routing_mid_market=int(data.get("routing_mid_market", 60)),
             proof_points=proof_points,
             frameworks=frameworks,
             default_framework=data.get("default_framework", NyxConfig.DEFAULT_FRAMEWORK),

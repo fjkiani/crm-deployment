@@ -17,6 +17,7 @@ what_we_sell: >-
 industry: "logistics"
 sender_signature: "— Sam"
 data_gap_label: "shipment visibility gap"
+primary_signal_label: "Annual Freight Spend"
 
 icp_criteria:
   - "Mid-market manufacturers or 3PLs"

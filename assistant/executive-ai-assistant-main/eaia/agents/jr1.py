@@ -1,10 +1,12 @@
 """
 Agent JR1: "The Scout"
-Mission: Find and seed relevant trials from ClinicalTrials.gov.
+Mission: Find and seed relevant leads from the tenant's configured source.
+Default source/query comes from the active TenantPack (no hardcoded domain).
 """
 import logging
 import json
 from eaia.agents.state import AgentState
+from eaia.tenant import get_active_pack
 # from eaia.skills.clinical_mcp import search_clinical_trials
 
 logger = logging.getLogger(__name__)
@@ -12,11 +14,21 @@ logger = logging.getLogger(__name__)
 def jr1_scout_agent(state: AgentState) -> AgentState:
     """
     JR1 Node Logic:
-    1. Search for trials based on target_condition.
+    1. Search for trials/leads based on target_condition (falls back to the
+       tenant pack's default source query, NOT a hardcoded domain).
     2. Store raw results.
     """
     try:
-        query = state.get("target_condition", "Ovarian Cancer")
+        # Resolution: explicit state -> tenant pack default -> safe empty.
+        pack = get_active_pack()
+        query = state.get("target_condition") or pack.default_source_query() or ""
+        if not query:
+            logger.warning("JR1: no target_condition and no tenant default source query; skipping.")
+            return {
+                "trial_seeds": [],
+                "mission_status": "NO_QUERY",
+                "messages": [{"role": "assistant", "content": "JR1: no source query configured."}],
+            }
         logger.info(f"🕵️‍♂️ JR1 Scouting for: {query}")
         
         # Search using harvested skill (limit for demo/safety)
