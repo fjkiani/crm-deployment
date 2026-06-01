@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TENANT PACK: Acme Logistics (DUMMY tenant for leakage testing)
+#
+# A deliberately different domain (B2B logistics SaaS) used to prove the outreach
+# engine is tenant-agnostic: rendering with this pack must produce Acme's identity
+# with ZERO leakage of CrisPRO/Zeta/genomic/PARP/KELIM strings.
+# ─────────────────────────────────────────────────────────────────────────────
+
+tenant_id: acme
+
+company_name: "Acme Freight"
+company_description: "a real-time freight visibility platform"
+value_prop: "Live shipment tracking and ETA prediction across ocean, air, and ground carriers"
+what_we_sell: >-
+  Real-time multimodal shipment tracking with predictive ETAs. Buyers are supply
+  chain and logistics leaders at mid-market manufacturers and 3PLs.
+industry: "logistics"
+sender_signature: "— Sam"
+data_gap_label: "shipment visibility gap"
+
+icp_criteria:
+  - "Mid-market manufacturers or 3PLs"
+  - "Annual freight spend > $10M"
+  - "Multi-carrier, multimodal shipping operations"
+  - "Decision-makers: VP Supply Chain, Head of Logistics, COO"
+scoring_rubric: |-
+  - 80-100 (HOT): Multimodal shipper + >$10M freight spend + logistics decision-maker
+  - 50-79 (WARM): Matches 2-3 ICP criteria but missing a key signal
+  - 0-49 (COLD): No multi-carrier ops, low freight spend
+default_angle: "Pitch Acme Freight real-time visibility as a way to cut detention and dwell costs."
+score_hot: 70
+score_warm: 40
+signal_gate_min: 2
+
+proof_points:
+  - key: detention
+    label: "Detention Cost Reduction"
+    claim: "Cut detention-and-demurrage fees 22% by flagging at-risk containers 48h early."
+  - key: eta
+    label: "Predictive ETA Accuracy"
+    claim: "92% on-time ETA prediction across 40+ ocean carriers, beating carrier-reported ETAs by 1.8 days."
+  - key: exceptions
+    label: "Exception Automation"
+    claim: "Auto-routes shipment exceptions to the right owner, cutting manual track-and-trace 60%."
+
+default_framework: challenger
+frameworks:
+  - key: challenger
+    name: "Challenger (Teach → Tailor → Take Control)"
+    when: "HOT leads (score ≥ 70)."
+    max_words: 65
+    cta: 'Open to seeing the numbers?'
+  - key: pas
+    name: "PAS (Problem → Agitate → Solution)"
+    when: "WARM leads (score 40-69)."
+    max_words: 70
+    cta: 'Quick question — who owns carrier visibility on your team?'
+  - key: aida
+    name: "AIDA (Attention → Interest → Desire → Action)"
+    when: "COLD leads (score < 40)."
+    max_words: 85
+    cta: 'Wrote up how [peer firm type] cut dwell time — want the link?'
+
+voice_guide: >-
+  Direct, operational, numbers-first. First name only. Name the cost of poor
+  visibility, quantify it, then show the fix. Subject under 40 chars, no colons.
+
+lead_sources:
+  - kind: apollo
+    default_query: "VP Supply Chain mid-market manufacturer"
+
+send_domains: []
