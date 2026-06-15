@@ -96,5 +96,13 @@ class ArmyState(TypedDict):
     mission_status: str
     errors: List[str]
 
+    # Dataset Ingest (Zi) — all optional; absent for non-ingest missions
+    ingest_file_url: Optional[str]        # File URL of dataset to ingest (JSON/CSV)
+    ingest_records_json: Optional[str]    # inline JSON array (alternative to file_url)
+    ingest_target_doctype: Optional[str]  # defaults to "Lead Prospect" in the node
+    ingest_dry_run: Optional[int]         # defaults to 1 (validate before writing)
+    ingest_profile_name: Optional[str]    # explicit CRM Import Column Map name
+    ingest_result: Optional[Dict[str, Any]]  # kernel result echoed back
+
 # Backward Compatibility
 AgentState = ArmyState

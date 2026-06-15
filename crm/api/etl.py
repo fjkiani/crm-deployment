@@ -474,6 +474,7 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
     lead_entries = build_entries("crm lead") + build_entries("lead")
     contact_entries = build_entries("contact")
     org_entries = build_entries("crm organization") + build_entries("organization")
+    prospect_entries = build_entries("lead prospect")
 
     processed = 0
     failures: list[tuple[int, str]] = []
@@ -524,6 +525,19 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
                 # Capture unmapped columns into additional_data for audit
                 _capture_additional_data(lead_data, headers, r, mapping)
                 _upsert_lead(lead_data, dry_run=dry_run)
+
+            # Lead Prospect staging (scientific/clinical datasets, e.g. AACR).
+            # Mirrors the lead path but targets the staging doctype and preserves
+            # the full source record in `raw` for provenance.
+            if prospect_entries:
+                prospect_data: dict = {"doctype": "Lead Prospect"}
+                for e in prospect_entries:
+                    col_idx = e["col_idx"]
+                    if col_idx < len(r):
+                        raw_val = r[col_idx]
+                        prospect_data[e["field"]] = _transform_value(e.get("transform"), raw_val)
+                _capture_raw_record(prospect_data, headers, r, mapping)
+                _upsert_lead_prospect(prospect_data, dry_run=dry_run)
 
             if contact_entries:
                 contact_data: dict = {"doctype": "Contact"}
@@ -634,6 +648,122 @@ def _upsert_contact(contact_data: dict, dry_run: bool = False) -> str | None:
     if org_name:
         _ensure_contact_link(doc.name, "CRM Organization", org_name)
     return doc.name
+
+
+def _valid_select_options(doctype: str, fieldname: str) -> list[str]:
+    """Return the allowed options for a Select field, or [] if not a Select."""
+    try:
+        meta = frappe.get_meta(doctype)
+        df = meta.get_field(fieldname)
+        if df and df.fieldtype == "Select" and df.options:
+            return [o.strip() for o in df.options.split("\n") if o.strip()]
+    except Exception:
+        pass
+    return []
+
+
+def _sanitize_select_fields(doctype: str, data: dict, defaults: dict | None = None):
+    """Coerce Select-field values to a valid option.
+
+    Frappe rejects out-of-list Select values on insert. For an arbitrary source
+    dataset (e.g. AACR `source` has no matching option), drop or default invalid
+    values so the row still imports. `defaults` supplies a fallback per field.
+    """
+    defaults = defaults or {}
+    for field, val in list(data.items()):
+        if field in ("doctype",):
+            continue
+        opts = _valid_select_options(doctype, field)
+        if not opts:
+            continue
+        sval = (str(val).strip() if val is not None else "")
+        if sval in opts:
+            continue
+        # case-insensitive rescue
+        match = next((o for o in opts if o.lower() == sval.lower()), None)
+        if match:
+            data[field] = match
+            continue
+        # fall back to a configured default, else drop the field entirely
+        if field in defaults and defaults[field] in opts:
+            data[field] = defaults[field]
+        else:
+            data.pop(field, None)
+
+
+def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | None:
+    """Idempotent upsert into the Lead Prospect staging doctype.
+
+    Dedup key: `source_ref_id` (e.g. AACR talk_id), falling back to (pi_name +
+    institution) when no ref id is present. JSON fields (`raw`, `enriched_data`)
+    are serialized. Select fields are sanitized against the doctype meta so an
+    arbitrary source value never blocks the insert.
+    """
+    # Serialize JSON fields.
+    for jf in ("raw", "enriched_data"):
+        if isinstance(prospect_data.get(jf), (dict, list)):
+            prospect_data[jf] = json.dumps(prospect_data[jf], ensure_ascii=False)
+
+    # Sanitize Selects; default `source` to "Manual Entry" for unknown sources.
+    _sanitize_select_fields(
+        "Lead Prospect",
+        prospect_data,
+        defaults={"source": "Manual Entry"},
+    )
+
+    ref_id = (str(prospect_data.get("source_ref_id") or "")).strip()
+    pi_name = (str(prospect_data.get("pi_name") or "")).strip()
+    institution = (str(prospect_data.get("institution") or "")).strip()
+
+    existing_name = None
+    if ref_id:
+        existing_name = frappe.db.get_value("Lead Prospect", {"source_ref_id": ref_id}, "name")
+    if not existing_name and pi_name and institution:
+        existing_name = frappe.db.get_value(
+            "Lead Prospect", {"pi_name": pi_name, "institution": institution}, "name"
+        )
+
+    if dry_run:
+        return existing_name
+
+    if existing_name:
+        updates = {k: v for k, v in prospect_data.items() if k not in ("doctype",) and v}
+        if updates:
+            frappe.db.set_value("Lead Prospect", existing_name, updates)
+        return existing_name
+
+    doc = frappe.get_doc(prospect_data)
+    doc.insert()
+    return doc.name
+
+
+def _capture_raw_record(prospect_data: dict, headers: list[str], row: list[str], mapping: list[dict]):
+    """Preserve the full source record for a Lead Prospect.
+
+    - `raw`: the COMPLETE flattened source row (all columns) for provenance.
+    - `enriched_data`: only the columns NOT mapped to a Lead Prospect field
+      (everything the structured fields didn't capture), available for later use.
+    """
+    try:
+        full: dict[str, str] = {}
+        for idx, h in enumerate(headers):
+            if idx < len(row):
+                v = row[idx]
+                if v not in (None, ""):
+                    full[h] = v
+        prospect_data["raw"] = full
+
+        mapped_headers = set()
+        for m in mapping:
+            if (m.get("target_doctype") or "").strip().lower() == "lead prospect":
+                src = (m.get("source_header") or "").strip()
+                if src:
+                    mapped_headers.add(_normalize_header(src))
+        leftover = {h: v for h, v in full.items() if _normalize_header(h) not in mapped_headers}
+        if leftover:
+            prospect_data["enriched_data"] = leftover
+    except Exception:
+        frappe.log_error(message=frappe.get_traceback(), title="ETL Capture raw record failed")
 
 
 def _ensure_contact_link(contact_name: str, link_doctype: str, link_name: str):
