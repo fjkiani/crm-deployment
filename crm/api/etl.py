@@ -684,11 +684,23 @@ def _sanitize_select_fields(doctype: str, data: dict, defaults: dict | None = No
         if match:
             data[field] = match
             continue
-        # fall back to a configured default, else drop the field entirely
+        # fall back to a configured default, else clear the field.
+        # Use "" rather than omitting the key: Frappe v14 assigns the first Select
+        # option when a Select key is missing on insert.
         if field in defaults and defaults[field] in opts:
             data[field] = defaults[field]
         else:
-            data.pop(field, None)
+            data[field] = ""
+
+    # Inject configured defaults for missing/blank Select fields (e.g. source).
+    for field, default in defaults.items():
+        if field in ("doctype",):
+            continue
+        if (str(data.get(field) or "")).strip():
+            continue
+        opts = _valid_select_options(doctype, field)
+        if opts and default in opts:
+            data[field] = default
 
 
 def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | None:
