@@ -52,7 +52,7 @@
    "fieldname": "job_type",
    "fieldtype": "Select",
    "label": "Job Type",
-   "options": "clinicaltrials\nnih\nasco\nconsolidate\nenrich\noutreach",
+   "options": "clinicaltrials\nnih\nasco\nconsolidate\nenrich\noutreach\ndataset_ingest",
    "reqd": 1,
    "search_index": 1
   },
@@ -233,5 +233,3 @@
  "title_field": "job_name",
  "track_changes": 1
 }
-
-

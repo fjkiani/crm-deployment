@@ -6,15 +6,15 @@
  "naming_rule": "By fieldname",
  "title_field": "title",
  "engine": "InnoDB",
- "field_order": ["title", "columns"],
+ "field_order": ["title", "target_doctype", "status", "source_signature", "columns"],
  "fields": [
   {"fieldname": "title", "label": "Title", "fieldtype": "Data", "reqd": 1, "unique": 1},
+  {"fieldname": "target_doctype", "label": "Target DocType", "fieldtype": "Link", "options": "DocType"},
+  {"fieldname": "status", "label": "Status", "fieldtype": "Select", "options": "Draft\nNeeds Review\nApproved", "default": "Draft", "description": "Approved profiles are auto-reused for matching source schemas; Needs Review profiles pause for human approval (propose-and-pause)."},
+  {"fieldname": "source_signature", "label": "Source Signature", "fieldtype": "Data", "read_only": 1, "description": "Stable hash of source field names; used to auto-match a previously approved profile to an incoming dataset."},
   {"fieldname": "columns", "label": "Columns", "fieldtype": "Table", "options": "CRM Import Column Map Item"}
  ],
  "permissions": [
   {"role": "System Manager", "create": 1, "read": 1, "write": 1, "delete": 1}
  ]
 }
-
-
-

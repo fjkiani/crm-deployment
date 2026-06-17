@@ -331,3 +331,138 @@ def unsubscribe(prospect_name: str):
     except Exception as e:
         frappe.log_error(f"Error processing unsubscribe for prospect {prospect_name}: {str(e)}")
         return {"status": "error", "message": "An error occurred while processing your unsubscribe request."}
+
+
+# ---------------------------------------------------------------------------
+# Agentic dataset ingest — the single entrypoint the agent layer calls to take an
+# ARBITRARY structured dataset (e.g. AACR-862 JSON) and stage it into a target
+# doctype (default: Lead Prospect), using Frappe-native Data Import primitives.
+#
+# Chains:  B1 records_to_csv_file (JSON flatten)  ->  B2 propose_mapping_agentic
+#          (Tier-1 deterministic + Tier-2 LLM, propose-and-pause + auto-reuse)
+#          ->  etl.import_rows (existing CSV pipeline, dry-run first).
+#
+# Propose-and-pause gate (locked decision): if the proposed mapping is not an
+# Approved profile, this stops AFTER mapping and returns the profile for review.
+# It only imports when the profile is Approved (auto-reused, or approved on a
+# subsequent call). Tier-1-only deterministic mappings can be auto-approved via
+# auto_approve_deterministic=1 when there were no LLM guesses and no required gaps.
+# ---------------------------------------------------------------------------
+@frappe.whitelist()
+def run_dataset_ingest(
+    target_doctype: str = "Lead Prospect",
+    records_json: str = None,
+    file_url: str = None,
+    profile_name: str = None,
+    array_policy: str = "join",
+    dry_run: int = 1,
+    auto_approve_deterministic: int = 0,
+    use_llm: int = 0,
+    _llm_complete=None,
+) -> Dict[str, Any]:
+    """Agentic ingest of an arbitrary dataset → target_doctype via Frappe Data Import.
+
+    use_llm: when truthy, lets the mapping proposer build its own server-side
+    Gemini callable for the Tier-2 pass (so a REST/agent trigger can enable the
+    LLM tier without passing a Python callable across the process boundary).
+    _llm_complete: in-process callable injected by a same-process caller; takes
+    precedence over use_llm.
+    """
+    from crm.api import etl, etl_json
+
+    if not frappe.has_permission("LeadGen Job", "create"):
+        frappe.throw(_("Insufficient permissions to create jobs"))
+    if not records_json and not file_url:
+        frappe.throw(_("Provide records_json or file_url"))
+
+    profile_name = profile_name or f"ingest::{target_doctype}::{now()}"
+
+    # --- Step 1: agentic mapping proposal (auto-reuses an Approved profile) ---
+    proposal = etl_json.propose_mapping_agentic(
+        target_doctype=target_doctype,
+        records_json=records_json,
+        file_url=file_url,
+        array_policy=array_policy,
+        profile_name=profile_name,
+        save=1,
+        use_llm=use_llm,
+        _llm_complete=_llm_complete,
+    )
+
+    reused = proposal.get("reused_profile")
+    active_profile = reused or proposal.get("saved_profile")
+    status = "Approved" if reused else proposal.get("status")
+
+    # Optionally auto-approve a clean deterministic-only mapping (no LLM, no gaps).
+    if (not reused and int(auto_approve_deterministic)
+            and proposal.get("tier2_llm_count", 0) == 0
+            and not proposal.get("unmapped_required")):
+        frappe.db.set_value("CRM Import Column Map", active_profile, "status", "Approved")
+        status = "Approved"
+
+    # --- Propose-and-pause: stop here unless the mapping is Approved ---
+    if status != "Approved":
+        return {
+            "stage": "mapping_review",
+            "status": status,
+            "profile": active_profile,
+            "target_doctype": target_doctype,
+            "tier1_count": proposal.get("tier1_count"),
+            "tier2_llm_count": proposal.get("tier2_llm_count"),
+            "unmapped_source": proposal.get("unmapped_source"),
+            "unmapped_required": proposal.get("unmapped_required"),
+            "message": (
+                "Mapping proposed and saved for review (propose-and-pause). "
+                "Approve the CRM Import Column Map, then re-run to import."
+            ),
+        }
+
+    # --- Step 2: materialize flattened JSON as a CSV File (reuse CSV pipeline) ---
+    csv_info = etl_json.records_to_csv_file(
+        records_json=records_json, file_url=file_url,
+        array_policy=array_policy, title=(profile_name or "dataset_ingest"),
+    )
+
+    # --- LeadGen Job record for status/observability ---
+    job = frappe.get_doc({
+        "doctype": "LeadGen Job",
+        "job_name": f"Dataset Ingest → {target_doctype} - {now()}",
+        "job_type": "dataset_ingest",
+        "params": frappe.as_json({
+            "target_doctype": target_doctype, "profile": active_profile,
+            "row_count": csv_info.get("row_count"), "dry_run": bool(int(dry_run)),
+            "file_url": csv_info.get("file_url"),
+        }),
+        "status": "Dry Run" if int(dry_run) else "Queued",
+        "owner": frappe.session.user,
+    })
+    job.insert()
+
+    # --- Step 3: drive the EXISTING etl import pipeline with the approved profile ---
+    import_res = etl.import_rows(frappe.as_json({
+        "source_type": "CSV",
+        "file_url": csv_info.get("file_url"),
+        "mapping_profile": active_profile,
+        "title": f"Dataset Ingest {target_doctype}",
+        "dedupe": True,
+        "dry_run": bool(int(dry_run)),
+        "sync": True,  # small datasets: run inline for immediate result
+    }))
+
+    etl_job_id = import_res.get("job_id")
+    etl_status = etl.job_status(etl_job_id) if etl_job_id else {}
+
+    return {
+        "stage": "imported",
+        "status": etl_status.get("status"),
+        "dry_run": bool(int(dry_run)),
+        "target_doctype": target_doctype,
+        "profile": active_profile,
+        "leadgen_job": job.name,
+        "etl_job": etl_job_id,
+        "total_rows": etl_status.get("total_rows"),
+        "processed_rows": etl_status.get("processed_rows"),
+        "error_file": etl_status.get("error_file"),
+        "csv_file": csv_info.get("file_url"),
+        "row_count": csv_info.get("row_count"),
+    }
