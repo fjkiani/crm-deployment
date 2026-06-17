@@ -23,7 +23,11 @@ except Exception:  # pragma: no cover - compatibility for newer/older Frappe ver
 				except Exception:
 					pass
 				return modules
-from frappe.utils.telemetry import POSTHOG_HOST_FIELD, POSTHOG_PROJECT_FIELD
+try:
+	from frappe.utils.telemetry import POSTHOG_HOST_FIELD, POSTHOG_PROJECT_FIELD
+except ImportError:  # pragma: no cover - Frappe 16 restructured telemetry into a package; these constants were removed
+	POSTHOG_PROJECT_FIELD = "posthog_project_id"
+	POSTHOG_HOST_FIELD = "posthog_host"
 from . import email as email_api
 
 
