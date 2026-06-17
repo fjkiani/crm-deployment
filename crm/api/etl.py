@@ -662,6 +662,54 @@ def _valid_select_options(doctype: str, fieldname: str) -> list[str]:
     return []
 
 
+def _clause_aware_truncate(text: str, limit: int) -> str:
+    """Truncate `text` to <= `limit` chars on the last clause/word boundary.
+
+    Preference: last ';' or ',' clause separator within the budget -> last word
+    boundary -> hard cut. A boundary is only used if it retains >= 50% of the
+    budget, so we never collapse to a tiny fragment. Always returns <= limit.
+    """
+    if text is None:
+        return text
+    s = str(text)
+    if len(s) <= limit:
+        return s
+    head = s[:limit]
+    floor = int(limit * 0.5)
+    clause = max(head.rfind(";"), head.rfind(","))
+    if clause >= floor:
+        return head[:clause].rstrip(" ,;")
+    space = head.rfind(" ")
+    if space >= floor:
+        return head[:space].rstrip(" ,;")
+    return head.rstrip(" ,;")
+
+
+def _truncate_text_fields(doctype: str, data: dict):
+    """Trim Data/Small Text fields that exceed the field's max length.
+
+    Frappe raises CharacterLengthExceededError on insert when a value is longer
+    than the column (Data defaults to 140 when meta length is 0). Source affiliation
+    strings can exceed this, so truncate on a clause boundary so the row still
+    imports rather than failing the whole batch. Truncation runs before the dedup
+    lookup so re-runs match on the same stored value.
+    """
+    try:
+        meta = frappe.get_meta(doctype)
+    except Exception:
+        return
+    for field, val in list(data.items()):
+        if field in ("doctype",) or val in (None, ""):
+            continue
+        df = meta.get_field(field)
+        if not df or df.fieldtype not in ("Data", "Small Text"):
+            continue
+        # Data columns default to VARCHAR(140) when meta length is 0/unset.
+        limit = int(df.length) if getattr(df, "length", 0) else (140 if df.fieldtype == "Data" else 0)
+        if limit and len(str(val)) > limit:
+            data[field] = _clause_aware_truncate(val, limit)
+
+
 def _sanitize_select_fields(doctype: str, data: dict, defaults: dict | None = None):
     """Coerce Select-field values to a valid option.
 
@@ -722,6 +770,10 @@ def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | N
         prospect_data,
         defaults={"source": "Manual Entry"},
     )
+
+    # Trim over-length Data fields (e.g. long affiliations) so the insert
+    # doesn't fail; runs before dedup so re-runs match the stored value.
+    _truncate_text_fields("Lead Prospect", prospect_data)
 
     ref_id = (str(prospect_data.get("source_ref_id") or "")).strip()
     pi_name = (str(prospect_data.get("pi_name") or "")).strip()
