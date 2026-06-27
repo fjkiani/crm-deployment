@@ -551,10 +551,16 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
                     contact_data["_link_org_name"] = org_name
                 _upsert_contact(contact_data, dry_run=dry_run)
             processed += 1
-        except Exception:
-            # Collecting row-level errors can be added (write error_file)
+        except Exception as row_err:
+            # Row-level failure (e.g. a pre-validation skip for an empty required
+            # field). Record it in `failures` so it is surfaced in the job's
+            # error_file rather than silently dropped, and continue with the rest
+            # of the batch. Use the exception message directly: it is more useful
+            # than a traceback here, and avoids frappe.get_traceback(limit=...),
+            # whose `limit` kwarg is unsupported on this Frappe build and would
+            # turn a caught row error into an unhandled 500.
             frappe.log_error(message=frappe.get_traceback(), title="ETL Row Error")
-            failures.append((idx_row, str(frappe.get_traceback(limit=1))))
+            failures.append((idx_row, f"{type(row_err).__name__}: {row_err}"))
             continue
     return processed, failures
 
