@@ -751,6 +751,42 @@ def _sanitize_select_fields(doctype: str, data: dict, defaults: dict | None = No
             data[field] = default
 
 
+def _missing_required_fields(doctype: str, data: dict) -> list[str]:
+    """Return required (reqd=1) fields that are still empty after sanitize/truncate.
+
+    Frappe raises MandatoryError on insert when a reqd field is blank. A failed
+    `doc.insert()` poisons the request-level DB transaction, so the per-row
+    try/except in the loop cannot recover it and the final commit rolls back the
+    WHOLE batch. Detecting empties BEFORE insert lets us skip+log the offending
+    row without ever poisoning the transaction. Rule is meta-driven (no hardcoded
+    field list) so it tracks the doctype definition.
+    """
+    try:
+        meta = frappe.get_meta(doctype)
+    except Exception:
+        return []
+    # Framework-managed standard fields (owner, name, creation, ...) are auto-set
+    # by Frappe on insert and never appear in the ETL payload; never flag them.
+    try:
+        from frappe.model import default_fields as _std_fields
+        std = set(_std_fields)
+    except Exception:
+        std = {"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "parent", "parentfield", "parenttype"}
+    missing: list[str] = []
+    for df in meta.fields:
+        if not getattr(df, "reqd", 0):
+            continue
+        if df.fieldname in std:
+            continue
+        # Skip fields with a meta/server default; Frappe will populate them.
+        if getattr(df, "default", None):
+            continue
+        val = data.get(df.fieldname)
+        if val is None or (isinstance(val, str) and not val.strip()):
+            missing.append(df.fieldname)
+    return missing
+
+
 def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | None:
     """Idempotent upsert into the Lead Prospect staging doctype.
 
@@ -795,6 +831,18 @@ def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | N
         if updates:
             frappe.db.set_value("Lead Prospect", existing_name, updates)
         return existing_name
+
+    # Pre-validate required fields BEFORE insert. A blank reqd field would raise
+    # MandatoryError inside doc.insert(), poisoning the request transaction and
+    # rolling back the entire batch. Raising here (no insert attempted) keeps the
+    # transaction clean; the loop's per-row handler logs it to the error_file so
+    # the skipped row is surfaced, never silently dropped.
+    missing = _missing_required_fields("Lead Prospect", prospect_data)
+    if missing:
+        raise frappe.ValidationError(
+            "Skipped Lead Prospect row: empty required field(s) "
+            f"{missing} (source_ref_id={ref_id or '<none>'})"
+        )
 
     doc = frappe.get_doc(prospect_data)
     doc.insert()
