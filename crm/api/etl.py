@@ -319,6 +319,31 @@ def import_rows(payload: str) -> dict:
     return {"accepted": True, "job_id": job.name}
 
 
+def _detect_delimiter(sample: str) -> str:
+    """Pick the CSV delimiter robustly for internally-generated ingest CSVs.
+
+    csv.Sniffer().sniff() is content-driven and can mis-detect the delimiter: the
+    AACR source uses '::' inside talk_id and ';'-joined multi-value fields, so on
+    some batches the sniffer guessed ':' and collapsed the 43-column header into a
+    single column, silently zeroing out every field mapping (rows "processed" but
+    nothing inserted). The ingest CSV is always produced internally as standard
+    comma-delimited RFC-4180, so restrict candidates to real CSV delimiters
+    (never ':'), prefer the one whose header row yields the most columns, and
+    default to ','.
+    """
+    first_line = (sample.splitlines() or [""])[0]
+    best, best_cols = ",", first_line.count(",") + 1
+    for cand in ("\t", ";", "|", ","):
+        try:
+            cols = len(next(csv.reader(io.StringIO(first_line), delimiter=cand)))
+        except Exception:
+            cols = 1
+        if cols > best_cols:
+            best, best_cols = cand, cols
+    # A single-column result means the delimiter is wrong; fall back to comma.
+    return best if best_cols > 1 else ","
+
+
 @frappe.whitelist(allow_guest=False)
 def process_job(job_name: str, options: dict | None = None):
     """Background worker entrypoint.
@@ -360,13 +385,9 @@ def process_job(job_name: str, options: dict | None = None):
                 text_content = r.text
 
             buf = io.StringIO(text_content or "")
-            sniff = None
-            try:
-                sniff = csv.Sniffer().sniff(buf.read(2048))
-                buf.seek(0)
-            except Exception:
-                buf.seek(0)
-            reader = csv.reader(buf, delimiter=(sniff.delimiter if sniff else ","))
+            delimiter = _detect_delimiter(buf.read(4096))
+            buf.seek(0)
+            reader = csv.reader(buf, delimiter=delimiter)
             for i, row in enumerate(reader):
                 if i == 0:
                     headers = [str(c) for c in row]
