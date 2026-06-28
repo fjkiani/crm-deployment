@@ -37,7 +37,22 @@
   "assigned_to",
   "column_break_4",
   "created_by_job",
-  "promoted_to_lead"
+  "promoted_to_lead",
+  "gtm_section",
+  "title",
+  "location",
+  "linkedin",
+  "phone",
+  "priority_rank",
+  "gtm_col_break",
+  "aacr_topic",
+  "current_focus",
+  "mailing_address",
+  "next_action",
+  "gtm_section2",
+  "pain_points",
+  "crispro_fit",
+  "fit_rationale"
  ],
  "fields": [
   {
@@ -121,7 +136,7 @@
    "fieldname": "source",
    "fieldtype": "Select",
    "label": "Source",
-   "options": "ClinicalTrials.gov\nNIH RePORTER\nASCO Abstracts\nManual Entry",
+   "options": "ClinicalTrials.gov\nNIH RePORTER\nASCO Abstracts\nManual Entry\nAACR Tracker",
    "reqd": 1,
    "search_index": 1
   },
@@ -220,6 +235,80 @@
    "fieldname": "details",
    "fieldtype": "Tab Break",
    "label": "Details"
+  },
+  {
+   "fieldname": "gtm_section",
+   "fieldtype": "Section Break",
+   "label": "Tracker / GTM"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Data",
+   "label": "Location"
+  },
+  {
+   "fieldname": "linkedin",
+   "fieldtype": "Data",
+   "label": "LinkedIn"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone"
+  },
+  {
+   "fieldname": "priority_rank",
+   "fieldtype": "Int",
+   "label": "Priority Rank"
+  },
+  {
+   "fieldname": "gtm_col_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "aacr_topic",
+   "fieldtype": "Small Text",
+   "label": "AACR 2026 Topic"
+  },
+  {
+   "fieldname": "current_focus",
+   "fieldtype": "Small Text",
+   "label": "Current Focus"
+  },
+  {
+   "fieldname": "mailing_address",
+   "fieldtype": "Small Text",
+   "label": "Mailing Address"
+  },
+  {
+   "fieldname": "next_action",
+   "fieldtype": "Small Text",
+   "label": "Next Action"
+  },
+  {
+   "fieldname": "gtm_section2",
+   "fieldtype": "Section Break",
+   "label": "CrisPRO Fit Analysis"
+  },
+  {
+   "fieldname": "pain_points",
+   "fieldtype": "Small Text",
+   "label": "Pain Points"
+  },
+  {
+   "fieldname": "crispro_fit",
+   "fieldtype": "Small Text",
+   "label": "CrisPRO Fit"
+  },
+  {
+   "fieldname": "fit_rationale",
+   "fieldtype": "Text",
+   "label": "Fit Rationale"
   }
  ],
  "grid_page_length": 50,
@@ -307,5 +396,3 @@
  "title_field": "pi_name",
  "track_changes": 1
 }
-
-
