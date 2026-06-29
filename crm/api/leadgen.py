@@ -144,7 +144,15 @@ def promote_prospects(prospect_names: List[str], lead_owner: str = None) -> Dict
                 "lead_owner": lead_owner or frappe.session.user,
                 "tier": prospect.tier,
                 "lead_score": prospect.lead_score,
-                "prospect_ref": prospect.name
+                "prospect_ref": prospect.name,
+                # GTM / tracker intel — carry research context onto the CRM Lead
+                "priority_rank": prospect.priority_rank,
+                "source_ref_id": prospect.source_ref_id,
+                "aacr_topic": prospect.aacr_topic,
+                "current_focus": prospect.current_focus,
+                "pain_points": prospect.pain_points,
+                "crispro_fit": prospect.crispro_fit,
+                "fit_rationale": prospect.fit_rationale,
             })
             lead.insert()
             

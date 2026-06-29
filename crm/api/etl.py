@@ -319,6 +319,31 @@ def import_rows(payload: str) -> dict:
     return {"accepted": True, "job_id": job.name}
 
 
+def _detect_delimiter(sample: str) -> str:
+    """Pick the CSV delimiter robustly for internally-generated ingest CSVs.
+
+    csv.Sniffer().sniff() is content-driven and can mis-detect the delimiter: the
+    AACR source uses '::' inside talk_id and ';'-joined multi-value fields, so on
+    some batches the sniffer guessed ':' and collapsed the 43-column header into a
+    single column, silently zeroing out every field mapping (rows "processed" but
+    nothing inserted). The ingest CSV is always produced internally as standard
+    comma-delimited RFC-4180, so restrict candidates to real CSV delimiters
+    (never ':'), prefer the one whose header row yields the most columns, and
+    default to ','.
+    """
+    first_line = (sample.splitlines() or [""])[0]
+    best, best_cols = ",", first_line.count(",") + 1
+    for cand in ("\t", ";", "|", ","):
+        try:
+            cols = len(next(csv.reader(io.StringIO(first_line), delimiter=cand)))
+        except Exception:
+            cols = 1
+        if cols > best_cols:
+            best, best_cols = cand, cols
+    # A single-column result means the delimiter is wrong; fall back to comma.
+    return best if best_cols > 1 else ","
+
+
 @frappe.whitelist(allow_guest=False)
 def process_job(job_name: str, options: dict | None = None):
     """Background worker entrypoint.
@@ -360,13 +385,9 @@ def process_job(job_name: str, options: dict | None = None):
                 text_content = r.text
 
             buf = io.StringIO(text_content or "")
-            sniff = None
-            try:
-                sniff = csv.Sniffer().sniff(buf.read(2048))
-                buf.seek(0)
-            except Exception:
-                buf.seek(0)
-            reader = csv.reader(buf, delimiter=(sniff.delimiter if sniff else ","))
+            delimiter = _detect_delimiter(buf.read(4096))
+            buf.seek(0)
+            reader = csv.reader(buf, delimiter=delimiter)
             for i, row in enumerate(reader):
                 if i == 0:
                     headers = [str(c) for c in row]
@@ -551,10 +572,16 @@ def _apply_mapping_and_upsert(job, headers: list[str], rows: list[list[str]], dr
                     contact_data["_link_org_name"] = org_name
                 _upsert_contact(contact_data, dry_run=dry_run)
             processed += 1
-        except Exception:
-            # Collecting row-level errors can be added (write error_file)
+        except Exception as row_err:
+            # Row-level failure (e.g. a pre-validation skip for an empty required
+            # field). Record it in `failures` so it is surfaced in the job's
+            # error_file rather than silently dropped, and continue with the rest
+            # of the batch. Use the exception message directly: it is more useful
+            # than a traceback here, and avoids frappe.get_traceback(limit=...),
+            # whose `limit` kwarg is unsupported on this Frappe build and would
+            # turn a caught row error into an unhandled 500.
             frappe.log_error(message=frappe.get_traceback(), title="ETL Row Error")
-            failures.append((idx_row, str(frappe.get_traceback(limit=1))))
+            failures.append((idx_row, f"{type(row_err).__name__}: {row_err}"))
             continue
     return processed, failures
 
@@ -662,6 +689,54 @@ def _valid_select_options(doctype: str, fieldname: str) -> list[str]:
     return []
 
 
+def _clause_aware_truncate(text: str, limit: int) -> str:
+    """Truncate `text` to <= `limit` chars on the last clause/word boundary.
+
+    Preference: last ';' or ',' clause separator within the budget -> last word
+    boundary -> hard cut. A boundary is only used if it retains >= 50% of the
+    budget, so we never collapse to a tiny fragment. Always returns <= limit.
+    """
+    if text is None:
+        return text
+    s = str(text)
+    if len(s) <= limit:
+        return s
+    head = s[:limit]
+    floor = int(limit * 0.5)
+    clause = max(head.rfind(";"), head.rfind(","))
+    if clause >= floor:
+        return head[:clause].rstrip(" ,;")
+    space = head.rfind(" ")
+    if space >= floor:
+        return head[:space].rstrip(" ,;")
+    return head.rstrip(" ,;")
+
+
+def _truncate_text_fields(doctype: str, data: dict):
+    """Trim Data/Small Text fields that exceed the field's max length.
+
+    Frappe raises CharacterLengthExceededError on insert when a value is longer
+    than the column (Data defaults to 140 when meta length is 0). Source affiliation
+    strings can exceed this, so truncate on a clause boundary so the row still
+    imports rather than failing the whole batch. Truncation runs before the dedup
+    lookup so re-runs match on the same stored value.
+    """
+    try:
+        meta = frappe.get_meta(doctype)
+    except Exception:
+        return
+    for field, val in list(data.items()):
+        if field in ("doctype",) or val in (None, ""):
+            continue
+        df = meta.get_field(field)
+        if not df or df.fieldtype not in ("Data", "Small Text"):
+            continue
+        # Data columns default to VARCHAR(140) when meta length is 0/unset.
+        limit = int(df.length) if getattr(df, "length", 0) else (140 if df.fieldtype == "Data" else 0)
+        if limit and len(str(val)) > limit:
+            data[field] = _clause_aware_truncate(val, limit)
+
+
 def _sanitize_select_fields(doctype: str, data: dict, defaults: dict | None = None):
     """Coerce Select-field values to a valid option.
 
@@ -684,11 +759,59 @@ def _sanitize_select_fields(doctype: str, data: dict, defaults: dict | None = No
         if match:
             data[field] = match
             continue
-        # fall back to a configured default, else drop the field entirely
+        # fall back to a configured default, else clear the field.
+        # Use "" rather than omitting the key: Frappe v14 assigns the first Select
+        # option when a Select key is missing on insert.
         if field in defaults and defaults[field] in opts:
             data[field] = defaults[field]
         else:
-            data.pop(field, None)
+            data[field] = ""
+
+    # Inject configured defaults for missing/blank Select fields (e.g. source).
+    for field, default in defaults.items():
+        if field in ("doctype",):
+            continue
+        if (str(data.get(field) or "")).strip():
+            continue
+        opts = _valid_select_options(doctype, field)
+        if opts and default in opts:
+            data[field] = default
+
+
+def _missing_required_fields(doctype: str, data: dict) -> list[str]:
+    """Return required (reqd=1) fields that are still empty after sanitize/truncate.
+
+    Frappe raises MandatoryError on insert when a reqd field is blank. A failed
+    `doc.insert()` poisons the request-level DB transaction, so the per-row
+    try/except in the loop cannot recover it and the final commit rolls back the
+    WHOLE batch. Detecting empties BEFORE insert lets us skip+log the offending
+    row without ever poisoning the transaction. Rule is meta-driven (no hardcoded
+    field list) so it tracks the doctype definition.
+    """
+    try:
+        meta = frappe.get_meta(doctype)
+    except Exception:
+        return []
+    # Framework-managed standard fields (owner, name, creation, ...) are auto-set
+    # by Frappe on insert and never appear in the ETL payload; never flag them.
+    try:
+        from frappe.model import default_fields as _std_fields
+        std = set(_std_fields)
+    except Exception:
+        std = {"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "parent", "parentfield", "parenttype"}
+    missing: list[str] = []
+    for df in meta.fields:
+        if not getattr(df, "reqd", 0):
+            continue
+        if df.fieldname in std:
+            continue
+        # Skip fields with a meta/server default; Frappe will populate them.
+        if getattr(df, "default", None):
+            continue
+        val = data.get(df.fieldname)
+        if val is None or (isinstance(val, str) and not val.strip()):
+            missing.append(df.fieldname)
+    return missing
 
 
 def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | None:
@@ -711,6 +834,10 @@ def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | N
         defaults={"source": "Manual Entry"},
     )
 
+    # Trim over-length Data fields (e.g. long affiliations) so the insert
+    # doesn't fail; runs before dedup so re-runs match the stored value.
+    _truncate_text_fields("Lead Prospect", prospect_data)
+
     ref_id = (str(prospect_data.get("source_ref_id") or "")).strip()
     pi_name = (str(prospect_data.get("pi_name") or "")).strip()
     institution = (str(prospect_data.get("institution") or "")).strip()
@@ -731,6 +858,18 @@ def _upsert_lead_prospect(prospect_data: dict, dry_run: bool = False) -> str | N
         if updates:
             frappe.db.set_value("Lead Prospect", existing_name, updates)
         return existing_name
+
+    # Pre-validate required fields BEFORE insert. A blank reqd field would raise
+    # MandatoryError inside doc.insert(), poisoning the request transaction and
+    # rolling back the entire batch. Raising here (no insert attempted) keeps the
+    # transaction clean; the loop's per-row handler logs it to the error_file so
+    # the skipped row is surfaced, never silently dropped.
+    missing = _missing_required_fields("Lead Prospect", prospect_data)
+    if missing:
+        raise frappe.ValidationError(
+            "Skipped Lead Prospect row: empty required field(s) "
+            f"{missing} (source_ref_id={ref_id or '<none>'})"
+        )
 
     doc = frappe.get_doc(prospect_data)
     doc.insert()

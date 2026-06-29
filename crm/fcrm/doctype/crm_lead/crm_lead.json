@@ -59,7 +59,14 @@
   "leadgen_tab",
   "tier",
   "lead_score",
-  "prospect_ref"
+  "prospect_ref",
+  "priority_rank",
+  "source_ref_id",
+  "aacr_topic",
+  "current_focus",
+  "pain_points",
+  "crispro_fit",
+  "fit_rationale"
  ],
  "fields": [
   {
@@ -357,6 +364,41 @@
    "fieldtype": "Link",
    "label": "Prospect Reference",
    "options": "Lead Prospect"
+  },
+  {
+   "fieldname": "priority_rank",
+   "fieldtype": "Int",
+   "label": "Priority Rank"
+  },
+  {
+   "fieldname": "source_ref_id",
+   "fieldtype": "Data",
+   "label": "Source Reference ID"
+  },
+  {
+   "fieldname": "aacr_topic",
+   "fieldtype": "Small Text",
+   "label": "AACR 2026 Topic"
+  },
+  {
+   "fieldname": "current_focus",
+   "fieldtype": "Small Text",
+   "label": "Current Focus"
+  },
+  {
+   "fieldname": "pain_points",
+   "fieldtype": "Small Text",
+   "label": "Pain Points"
+  },
+  {
+   "fieldname": "crispro_fit",
+   "fieldtype": "Small Text",
+   "label": "CrisPRO Fit"
+  },
+  {
+   "fieldname": "fit_rationale",
+   "fieldtype": "Text",
+   "label": "Fit Rationale"
   }
  ],
  "grid_page_length": 50,
