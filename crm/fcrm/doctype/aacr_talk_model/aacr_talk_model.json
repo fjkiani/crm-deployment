@@ -1,0 +1,45 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "model_type",
+  "name1",
+  "genotype_or_key_features"
+ ],
+ "fields": [
+  {
+   "fieldname": "model_type",
+   "fieldtype": "Data",
+   "label": "Model Type",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "name1",
+   "fieldtype": "Data",
+   "label": "Name",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "genotype_or_key_features",
+   "fieldtype": "Small Text",
+   "label": "Genotype / Key Features",
+   "in_list_view": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Talk Model",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

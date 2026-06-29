@@ -1,0 +1,69 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "metric",
+  "value",
+  "confidence_interval",
+  "n",
+  "population",
+  "comparator",
+  "maturity"
+ ],
+ "fields": [
+  {
+   "fieldname": "metric",
+   "fieldtype": "Data",
+   "label": "Metric",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "value",
+   "fieldtype": "Data",
+   "label": "Value",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "confidence_interval",
+   "fieldtype": "Data",
+   "label": "95% CI"
+  },
+  {
+   "fieldname": "n",
+   "fieldtype": "Int",
+   "label": "n"
+  },
+  {
+   "fieldname": "population",
+   "fieldtype": "Small Text",
+   "label": "Population",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "comparator",
+   "fieldtype": "Data",
+   "label": "Comparator"
+  },
+  {
+   "fieldname": "maturity",
+   "fieldtype": "Data",
+   "label": "Maturity"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Talk Clinical",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

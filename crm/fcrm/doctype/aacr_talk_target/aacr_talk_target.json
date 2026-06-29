@@ -1,0 +1,81 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "gene_or_protein",
+  "modality",
+  "pathway",
+  "alteration",
+  "compound_name",
+  "compound_id",
+  "ligase_or_cofactor",
+  "dependency_context",
+  "target_novelty"
+ ],
+ "fields": [
+  {
+   "fieldname": "gene_or_protein",
+   "fieldtype": "Data",
+   "label": "Gene / Protein",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "modality",
+   "fieldtype": "Data",
+   "label": "Modality",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "pathway",
+   "fieldtype": "Data",
+   "label": "Pathway",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "alteration",
+   "fieldtype": "Data",
+   "label": "Alteration"
+  },
+  {
+   "fieldname": "compound_name",
+   "fieldtype": "Data",
+   "label": "Compound Name"
+  },
+  {
+   "fieldname": "compound_id",
+   "fieldtype": "Data",
+   "label": "Compound ID"
+  },
+  {
+   "fieldname": "ligase_or_cofactor",
+   "fieldtype": "Data",
+   "label": "Ligase / Cofactor"
+  },
+  {
+   "fieldname": "dependency_context",
+   "fieldtype": "Small Text",
+   "label": "Dependency Context"
+  },
+  {
+   "fieldname": "target_novelty",
+   "fieldtype": "Data",
+   "label": "Target Novelty"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Talk Target",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

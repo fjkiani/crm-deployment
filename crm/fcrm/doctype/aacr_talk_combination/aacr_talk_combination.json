@@ -1,0 +1,51 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "with_agent",
+  "phenotype",
+  "rationale",
+  "stage"
+ ],
+ "fields": [
+  {
+   "fieldname": "with_agent",
+   "fieldtype": "Data",
+   "label": "With Agent",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "phenotype",
+   "fieldtype": "Data",
+   "label": "Phenotype",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "rationale",
+   "fieldtype": "Small Text",
+   "label": "Rationale",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Data",
+   "label": "Stage"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Talk Combination",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

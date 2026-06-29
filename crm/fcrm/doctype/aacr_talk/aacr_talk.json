@@ -1,0 +1,265 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:talk_id",
+ "creation": "2026-06-29 12:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "talk_id",
+  "talk_title",
+  "session_title",
+  "column_break_hdr",
+  "clinical_stage",
+  "novelty_flag",
+  "speaker_section",
+  "speaker_name",
+  "speaker_affiliation",
+  "speaker_col",
+  "speaker_role",
+  "speaker_disclosures_noted",
+  "science_section",
+  "moa_summary",
+  "targets",
+  "biomarkers",
+  "models",
+  "tags_section",
+  "tags",
+  "clinical_section",
+  "clinical_data",
+  "combinations",
+  "refs_section",
+  "refs",
+  "link_section",
+  "crm_lead",
+  "lead_prospect",
+  "link_col",
+  "source_dataset"
+ ],
+ "fields": [
+  {
+   "fieldname": "talk_id",
+   "fieldtype": "Data",
+   "label": "Talk ID",
+   "unique": 1,
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "talk_title",
+   "fieldtype": "Data",
+   "label": "Talk Title",
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "session_title",
+   "fieldtype": "Data",
+   "label": "Session Title"
+  },
+  {
+   "fieldname": "column_break_hdr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "clinical_stage",
+   "fieldtype": "Select",
+   "label": "Clinical Stage",
+   "options": "\npreclinical\nIND_enabling\nearly-stage\nphase_1\nphase_1_2\nphase_2\nphase_2_3\nphase_3\nclinical_trial\napproved\nclinical_validation\nmixed\nunspecified",
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "novelty_flag",
+   "fieldtype": "Select",
+   "label": "Novelty Flag",
+   "options": "\nfirst_in_class\nbest_in_class\nplatform_technology\nclinical_validation_of_known\nemerging_target\nnegative_or_null_result\nunspecified",
+   "search_index": 1
+  },
+  {
+   "fieldname": "speaker_section",
+   "fieldtype": "Section Break",
+   "label": "Speaker"
+  },
+  {
+   "fieldname": "speaker_name",
+   "fieldtype": "Data",
+   "label": "Speaker Name",
+   "search_index": 1
+  },
+  {
+   "fieldname": "speaker_affiliation",
+   "fieldtype": "Data",
+   "label": "Affiliation"
+  },
+  {
+   "fieldname": "speaker_col",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "speaker_role",
+   "fieldtype": "Data",
+   "label": "Role"
+  },
+  {
+   "fieldname": "speaker_disclosures_noted",
+   "fieldtype": "Check",
+   "label": "Disclosures Noted"
+  },
+  {
+   "fieldname": "science_section",
+   "fieldtype": "Section Break",
+   "label": "Science"
+  },
+  {
+   "fieldname": "moa_summary",
+   "fieldtype": "Text",
+   "label": "MOA Summary"
+  },
+  {
+   "fieldname": "targets",
+   "fieldtype": "Table",
+   "label": "Targets",
+   "options": "AACR Talk Target"
+  },
+  {
+   "fieldname": "biomarkers",
+   "fieldtype": "Table",
+   "label": "Biomarkers",
+   "options": "AACR Talk Biomarker"
+  },
+  {
+   "fieldname": "models",
+   "fieldtype": "Table",
+   "label": "Models",
+   "options": "AACR Talk Model"
+  },
+  {
+   "fieldname": "tags_section",
+   "fieldtype": "Section Break",
+   "label": "Tags & Findings"
+  },
+  {
+   "fieldname": "tags",
+   "fieldtype": "Table",
+   "label": "Tags",
+   "options": "AACR Talk Tag"
+  },
+  {
+   "fieldname": "clinical_section",
+   "fieldtype": "Section Break",
+   "label": "Clinical"
+  },
+  {
+   "fieldname": "clinical_data",
+   "fieldtype": "Table",
+   "label": "Clinical Data",
+   "options": "AACR Talk Clinical"
+  },
+  {
+   "fieldname": "combinations",
+   "fieldtype": "Table",
+   "label": "Combination Strategies",
+   "options": "AACR Talk Combination"
+  },
+  {
+   "fieldname": "refs_section",
+   "fieldtype": "Section Break",
+   "label": "External Follow-up"
+  },
+  {
+   "fieldname": "refs",
+   "fieldtype": "Table",
+   "label": "References",
+   "options": "AACR Talk Reference"
+  },
+  {
+   "fieldname": "link_section",
+   "fieldtype": "Section Break",
+   "label": "Linkage"
+  },
+  {
+   "fieldname": "crm_lead",
+   "fieldtype": "Link",
+   "label": "CRM Lead",
+   "options": "CRM Lead"
+  },
+  {
+   "fieldname": "lead_prospect",
+   "fieldtype": "Link",
+   "label": "Lead Prospect",
+   "options": "Lead Prospect"
+  },
+  {
+   "fieldname": "link_col",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "source_dataset",
+   "fieldtype": "Data",
+   "label": "Source Dataset",
+   "default": "aacr2026_schema_a_master",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Talk",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "talk_title",
+ "track_changes": 1
+}
