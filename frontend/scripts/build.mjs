@@ -5,7 +5,7 @@
  * We ship prebuilt assets in crm/public/frontend — on Node < 20, reuse them and skip vite.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { copyFileSync, existsSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -13,8 +13,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const frontendRoot = join(__dirname, '..')
 const assetsDir = join(frontendRoot, '../crm/public/frontend/assets')
 const indexHtml = join(frontendRoot, '../crm/public/frontend/index.html')
+const crmHtml = join(frontendRoot, '../crm/www/crm.html')
 const viteBin = join(frontendRoot, 'node_modules', '.bin', 'vite')
-const yarnBin = join(frontendRoot, 'node_modules', '.bin', 'yarn')
 
 function run(cmd, args) {
   const result = spawnSync(cmd, args, {
@@ -24,6 +24,10 @@ function run(cmd, args) {
   if (result.status !== 0) {
     process.exit(result.status ?? 1)
   }
+}
+
+function copyHtmlEntry() {
+  copyFileSync(indexHtml, crmHtml)
 }
 
 function hasPrebuiltAssets() {
@@ -43,8 +47,8 @@ if (!forceBuild && nodeMajor < 20 && hasPrebuiltAssets()) {
   console.log(
     `[crm build] Node ${process.versions.node}: using committed assets (vite needs Node 20+)`,
   )
-  run(yarnBin, ['copy-html-entry'])
+  copyHtmlEntry()
 } else {
   run(viteBin, ['build', '--base=/assets/crm/frontend/'])
-  run(yarnBin, ['copy-html-entry'])
+  copyHtmlEntry()
 }
