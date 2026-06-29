@@ -27,3 +27,11 @@ zip-safe = false
 
 [tool.setuptools.package-data]
 crm = ["**/*.json", "**/*.js", "**/*.html", "**/*.css", "**/*.md", "**/*.txt", "**/*.po", "**/*.pot"]
+
+[tool.bench.frappe-dependencies]
+frappe = ">=16.0.0-dev,<=17.0.0-dev"
+
+[tool.bench.assets]
+build_dir = "./frontend"
+out_dir = "../crm/public/frontend"
+index_html_path = "../crm/www/crm.html"

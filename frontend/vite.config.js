@@ -76,7 +76,7 @@ export default defineConfig({
       buildConfig: {
         indexHtmlPath: '../crm/www/crm.html',
         emptyOutDir: true,
-        sourcemap: true,
+        sourcemap: false,
       },
     }),
     vue(),
