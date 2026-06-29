@@ -49,6 +49,11 @@
           :doc="doc"
           :leadId="leadId"
         />
+        <TrackerIntel
+          v-else-if="tabs[tabIndex]?.name === 'GTM'"
+          :doc="doc"
+          :leadId="leadId"
+        />
         <Activities
           v-else
           ref="activities"
@@ -247,6 +252,7 @@ import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import NyxTab from '@/components/NyxTab.vue'
 import NyxIcon from '@/components/Icons/NyxIcon.vue'
+import TrackerIntel from '@/components/TrackerIntel.vue'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
 import {
   openWebsite,
@@ -436,6 +442,11 @@ const tabs = computed(() => {
       name: 'Nyx',
       label: __('Nyx'),
       icon: NyxIcon,
+    },
+    {
+      name: 'GTM',
+      label: __('GTM Intel'),
+      icon: DetailsIcon,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))

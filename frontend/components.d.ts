@@ -247,6 +247,7 @@ declare module 'vue' {
     TelegramIcon: typeof import('./src/components/Icons/TelegramIcon.vue')['default']
     TelephonySettings: typeof import('./src/components/Settings/TelephonySettings.vue')['default']
     TerritoryIcon: typeof import('./src/components/Icons/TerritoryIcon.vue')['default']
+    TrackerIntel: typeof import('./src/components/TrackerIntel.vue')['default']
     TwilioCallUI: typeof import('./src/components/Telephony/TwilioCallUI.vue')['default']
     UnpinIcon: typeof import('./src/components/Icons/UnpinIcon.vue')['default']
     UserAvatar: typeof import('./src/components/UserAvatar.vue')['default']
