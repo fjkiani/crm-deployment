@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SITE="${SITE:-https://alpha-crm.v.frappe.cloud}"
-EXPECTED_INDEX="${EXPECTED_INDEX:-index-28bebeae.js}"
-EXPECTED_LEAD="${EXPECTED_LEAD:-Lead-2f576e22.js}"
+EXPECTED_INDEX="${EXPECTED_INDEX:-index-7676da27.js}"
+EXPECTED_LEAD="${EXPECTED_LEAD:-Lead-02930802.js}"
 LEAD_URL="${LEAD_URL:-$SITE/crm/leads/CRM-LEAD-2026-00872}"
 
 echo "== TrackerIntel deploy verify =="
@@ -22,7 +22,7 @@ fi
 LEAD_CODE=$(curl -sS -o /tmp/lead-chunk.js -w "%{http_code}" "$SITE/assets/crm/frontend/assets/$EXPECTED_LEAD")
 echo "Lead chunk HTTP: $LEAD_CODE (want 200)"
 
-if [ "$LEAD_CODE" = "200" ] && grep -q 'TrackerIntel\|GTM Intel' /tmp/lead-chunk.js; then
+if [ "$LEAD_CODE" = "200" ] && grep -q 'pain_points\|Tracker Intel\|GTM' /tmp/lead-chunk.js; then
   echo "TrackerIntel in Lead chunk: OK"
 else
   echo "TrackerIntel in Lead chunk: NOT YET"
@@ -30,7 +30,7 @@ fi
 
 echo "Lead URL: $LEAD_URL"
 
-if [ "$LIVE_INDEX" = "$EXPECTED_INDEX" ] && [ "$LEAD_CODE" = "200" ] && grep -q 'TrackerIntel\|GTM Intel' /tmp/lead-chunk.js; then
+if [ "$LIVE_INDEX" = "$EXPECTED_INDEX" ] && [ "$LEAD_CODE" = "200" ] && grep -q 'pain_points\|Tracker Intel\|GTM' /tmp/lead-chunk.js; then
   echo "OVERALL: LIVE"
   exit 0
 fi

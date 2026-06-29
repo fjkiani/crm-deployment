@@ -1,9 +1,13 @@
-import '../../../frappe/frappe/public/js/lib/posthog.js'
 import { createResource } from 'frappe-ui'
 
 declare global {
   interface Window {
-    posthog: any
+    posthog?: {
+      init?: (...args: unknown[]) => void
+      capture?: (...args: unknown[]) => void
+      identify?: (...args: unknown[]) => void
+      length?: number
+    }
   }
 }
 type PosthogSettings = {
@@ -19,7 +23,16 @@ interface CaptureOptions {
   }
 }
 
-let posthog: typeof window.posthog = window.posthog
+const noopPosthog = {
+  init: () => {},
+  capture: () => {},
+  identify: () => {},
+}
+
+let posthog =
+  typeof window !== 'undefined' && window.posthog?.init
+    ? window.posthog
+    : noopPosthog
 
 // Posthog Settings
 let posthogSettings = createResource({
@@ -42,7 +55,7 @@ let isTelemetryEnabled = () => {
 function initPosthog(ps: PosthogSettings) {
   if (!isTelemetryEnabled()) return
 
-  posthog.init(ps.posthog_project_id, {
+  posthog.init?.(ps.posthog_project_id, {
     api_host: ps.posthog_host,
     person_profiles: 'identified_only',
     autocapture: false,
@@ -53,7 +66,7 @@ function initPosthog(ps: PosthogSettings) {
     advanced_disable_decide: true,
     loaded: (ph: typeof posthog) => {
       window.posthog = ph
-      ph.identify(window.location.hostname)
+      ph.identify?.(window.location.hostname)
     },
   })
 }
@@ -64,7 +77,7 @@ function capture(
   options: CaptureOptions = { data: { user: '' } },
 ) {
   if (!isTelemetryEnabled()) return
-  window.posthog.capture(`crm_${event}`, options)
+  window.posthog?.capture?.(`crm_${event}`, options)
 }
 
 function startRecording() {
