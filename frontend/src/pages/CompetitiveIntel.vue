@@ -120,6 +120,7 @@
 <script>
 import IntelPanel from '@/components/intel/IntelPanel.vue'
 import { aacrIntelSchema } from '@/intel/schemas/aacr_intel'
+import { call, toast } from 'frappe-ui'
 
 export default {
   name: 'CompetitiveIntel',
@@ -163,21 +164,23 @@ export default {
     async reload() {
       this.loading = true
       try {
-        const response = await frappe.call({
-          method: 'crm.fcrm.doctype.aacr_intel.aacr_intel.list_aacr_intel',
-          args: {
+        const data = await call(
+          'crm.fcrm.doctype.aacr_intel.aacr_intel.list_aacr_intel',
+          {
             search: this.search || null,
             presentation_type: this.presentationType || null,
             has_opportunities: this.onlyOpps ? 1 : null,
             limit: this.limit,
             start: this.start,
           },
-        })
-        const data = response.message || { total: 0, rows: [] }
-        this.rows = data.rows || []
-        this.total = data.total || 0
+        )
+        this.rows = (data && data.rows) || []
+        this.total = (data && data.total) || 0
       } catch (error) {
-        frappe.msgprint('Error loading competitive intel: ' + (error.message || error))
+        toast({
+          variant: 'error',
+          title: 'Error loading competitive intel: ' + (error.message || error),
+        })
       } finally {
         this.loading = false
       }
@@ -185,11 +188,11 @@ export default {
     async loadWithOppsCount() {
       // Count of corpus talks that have >=1 opportunity (for the metric band).
       try {
-        const response = await frappe.call({
-          method: 'crm.fcrm.doctype.aacr_intel.aacr_intel.list_aacr_intel',
-          args: { has_opportunities: 1, limit: 1, start: 0 },
-        })
-        this.withOpps = (response.message && response.message.total) || 0
+        const data = await call(
+          'crm.fcrm.doctype.aacr_intel.aacr_intel.list_aacr_intel',
+          { has_opportunities: 1, limit: 1, start: 0 },
+        )
+        this.withOpps = (data && data.total) || 0
       } catch (e) {
         this.withOpps = 0
       }
@@ -218,13 +221,16 @@ export default {
       this.detail = null
       this.detailLoading = true
       try {
-        const response = await frappe.call({
-          method: 'crm.fcrm.doctype.aacr_intel.aacr_intel.get_aacr_intel',
-          args: { talk_id: row.intel_id },
-        })
-        this.detail = response.message || null
+        const data = await call(
+          'crm.fcrm.doctype.aacr_intel.aacr_intel.get_aacr_intel',
+          { talk_id: row.intel_id },
+        )
+        this.detail = data || null
       } catch (error) {
-        frappe.msgprint('Error loading detail: ' + (error.message || error))
+        toast({
+          variant: 'error',
+          title: 'Error loading detail: ' + (error.message || error),
+        })
       } finally {
         this.detailLoading = false
       }
