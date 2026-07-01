@@ -53,22 +53,47 @@ for (let key in globalComponents) {
 
 app.config.globalProperties.$dialog = createDialog
 
-let socket
+function applyBoot(values) {
+  if (!values || typeof values !== 'object') return
+  for (let key in values) {
+    window[key] = values[key]
+  }
+}
+
+function needsSpaBoot() {
+  return !window.csrf_token || window.csrf_token === '{{ csrf_token }}'
+}
+
+async function ensureSpaBoot() {
+  if (!needsSpaBoot()) return
+  try {
+    applyBoot(
+      await frappeRequest({
+        url: 'crm.www.crm.get_spa_boot',
+        method: 'GET',
+      }),
+    )
+  } catch (error) {
+    console.warn('[crm] SPA boot fetch failed:', error)
+  }
+}
+
+async function startApp() {
+  await ensureSpaBoot()
+  const socket = initSocket()
+  app.config.globalProperties.$socket = socket
+  app.mount('#app')
+}
+
 if (import.meta.env.DEV) {
   frappeRequest({ url: '/api/method/crm.www.crm.get_context_for_dev' }).then(
     (values) => {
-      for (let key in values) {
-        window[key] = values[key]
-      }
-      socket = initSocket()
-      app.config.globalProperties.$socket = socket
-      app.mount('#app')
+      applyBoot(values)
+      startApp()
     },
   )
 } else {
-  socket = initSocket()
-  app.config.globalProperties.$socket = socket
-  app.mount('#app')
+  startApp()
 }
 
 if (import.meta.env.DEV) {

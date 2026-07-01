@@ -13,12 +13,15 @@ from frappe.utils.telemetry import capture
 no_cache = 1
 
 
-def get_context():
-	# NOTE: frappe.db.commit() removed — it was triggering an unnecessary write
-	# transaction on every GET request, causing 60-120s hangs on under-resourced DBs.
-	# Frappe commits automatically at the end of each request.
-	context = frappe._dict()
-	context.boot = get_boot()
+def get_context(context):
+	"""Merge CRM SPA boot into the website context.
+
+	Frappe's ``get_website_settings()`` already sets ``context.boot`` to the
+	minimal ``get_boot_data()`` payload (``sysdefaults`` + ``time_zone`` only).
+	TemplatePage calls ``get_context(self.context)`` when the function accepts
+	an argument — we must merge here, not replace the whole context object.
+	"""
+	merge_boot(context)
 	if frappe.session.user != "Guest":
 		capture("active_site", "crm")
 	return context
@@ -31,7 +34,25 @@ def get_context_for_dev():
 	return get_boot()
 
 
+@frappe.whitelist(methods=["GET"], allow_guest=True)
+def get_spa_boot():
+	"""Return SPA boot payload (incl. csrf_token) for clients missing HTML boot."""
+	return get_boot()
+
+
+def merge_boot(context):
+	"""Layer CRM boot keys onto any existing website boot dict."""
+	boot = frappe._dict(context.get("boot") or {})
+	boot.update(get_boot())
+	context.boot = boot
+
+
 def get_boot():
+	tz = {
+		"system": get_system_timezone(),
+		"user": frappe.db.get_value("User", frappe.session.user, "time_zone")
+		or get_system_timezone(),
+	}
 	return frappe._dict(
 		{
 			"frappe_version": frappe.__version__,
@@ -43,11 +64,8 @@ def get_boot():
 			"sysdefaults": frappe.defaults.get_defaults(),
 			"is_demo_site": frappe.conf.get("is_demo_site"),
 			"is_fc_site": is_fc_site(),
-			"timezone": {
-				"system": get_system_timezone(),
-				"user": frappe.db.get_value("User", frappe.session.user, "time_zone")
-				or get_system_timezone(),
-			},
+			"timezone": tz,
+			"time_zone": tz,
 		}
 	)
 
