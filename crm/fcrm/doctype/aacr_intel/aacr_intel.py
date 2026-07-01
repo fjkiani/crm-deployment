@@ -266,3 +266,36 @@ def get_company_intel(company):
 			"distinct_talks": len(talk_ids),
 		},
 	}
+
+
+@frappe.whitelist(methods=["GET"], allow_guest=True)
+def get_spa_boot():
+	"""Return SPA boot (incl. csrf_token) when www/crm.py boot merge is stale on host."""
+	from frappe.utils import cint, get_system_timezone
+
+	try:
+		from frappe.integrations.frappe_providers.frappecloud_billing import is_fc_site
+	except Exception:
+		def is_fc_site():
+			return False
+
+	tz = {
+		"system": get_system_timezone(),
+		"user": frappe.db.get_value("User", frappe.session.user, "time_zone")
+		or get_system_timezone(),
+	}
+	return frappe._dict(
+		{
+			"frappe_version": frappe.__version__,
+			"default_route": "/crm",
+			"site_name": frappe.local.site,
+			"read_only_mode": frappe.flags.read_only,
+			"csrf_token": frappe.sessions.get_csrf_token(),
+			"setup_complete": cint(frappe.get_system_settings("setup_complete")),
+			"sysdefaults": frappe.defaults.get_defaults(),
+			"is_demo_site": frappe.conf.get("is_demo_site"),
+			"is_fc_site": is_fc_site(),
+			"timezone": tz,
+			"time_zone": tz,
+		}
+	)

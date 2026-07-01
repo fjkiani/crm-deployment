@@ -66,15 +66,17 @@ function needsSpaBoot() {
 
 async function ensureSpaBoot() {
   if (!needsSpaBoot()) return
-  try {
-    applyBoot(
-      await frappeRequest({
-        url: 'crm.www.crm.get_spa_boot',
-        method: 'GET',
-      }),
-    )
-  } catch (error) {
-    console.warn('[crm] SPA boot fetch failed:', error)
+  const bootUrls = [
+    'crm.www.crm.get_spa_boot',
+    'crm.fcrm.doctype.aacr_intel.aacr_intel.get_spa_boot',
+  ]
+  for (const url of bootUrls) {
+    try {
+      applyBoot(await frappeRequest({ url, method: 'GET' }))
+      if (!needsSpaBoot()) return
+    } catch (error) {
+      console.warn(`[crm] SPA boot via ${url} failed:`, error)
+    }
   }
 }
 
