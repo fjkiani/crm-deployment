@@ -1,0 +1,64 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "priority",
+  "opportunity_type",
+  "description",
+  "crispro_angle",
+  "transcript_evidence",
+  "external_validation_needed"
+ ],
+ "fields": [
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "label": "Priority",
+   "options": "\nhigh\nmedium\nlow",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "opportunity_type",
+   "fieldtype": "Data",
+   "label": "Opportunity Type",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "crispro_angle",
+   "fieldtype": "Text",
+   "label": "CrisPRO Angle"
+  },
+  {
+   "fieldname": "transcript_evidence",
+   "fieldtype": "Text",
+   "label": "Transcript Evidence"
+  },
+  {
+   "fieldname": "external_validation_needed",
+   "fieldtype": "Small Text",
+   "label": "External Validation Needed"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Intel Opportunity",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "allow_import": 0
+}

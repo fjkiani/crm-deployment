@@ -1,0 +1,199 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "intel_id",
+  "talk_title",
+  "session_title",
+  "speaker_name",
+  "institution",
+  "a_talk_uid",
+  "crm_lead",
+  "source_dataset",
+  "presentation_type",
+  "data_maturity",
+  "sample_size_adequacy",
+  "follow_up_adequacy",
+  "sb_intel_section",
+  "opportunities",
+  "vulnerabilities",
+  "moat_weaknesses",
+  "trial_risks",
+  "competitors",
+  "watchlist"
+ ],
+ "fields": [
+  {
+   "fieldname": "intel_id",
+   "fieldtype": "Data",
+   "label": "Intel ID (canonical_talk_uid)",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "talk_title",
+   "fieldtype": "Data",
+   "label": "Talk Title",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "session_title",
+   "fieldtype": "Data",
+   "label": "Session Title"
+  },
+  {
+   "fieldname": "speaker_name",
+   "fieldtype": "Data",
+   "label": "Speaker Name",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "institution",
+   "fieldtype": "Data",
+   "label": "Institution",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "a_talk_uid",
+   "fieldtype": "Data",
+   "label": "Schema A Talk UID"
+  },
+  {
+   "fieldname": "crm_lead",
+   "fieldtype": "Link",
+   "label": "CRM Lead",
+   "options": "CRM Lead"
+  },
+  {
+   "fieldname": "source_dataset",
+   "fieldtype": "Data",
+   "label": "Source Dataset"
+  },
+  {
+   "fieldname": "presentation_type",
+   "fieldtype": "Data",
+   "label": "Presentation Type"
+  },
+  {
+   "fieldname": "data_maturity",
+   "fieldtype": "Data",
+   "label": "Data Maturity"
+  },
+  {
+   "fieldname": "sample_size_adequacy",
+   "fieldtype": "Select",
+   "label": "Sample Size Adequacy",
+   "options": "\nadequately_powered\nunderpowered\npilot_only\nnot_applicable"
+  },
+  {
+   "fieldname": "follow_up_adequacy",
+   "fieldtype": "Data",
+   "label": "Follow-up Adequacy"
+  },
+  {
+   "fieldname": "sb_intel_section",
+   "fieldtype": "Section Break",
+   "label": "Competitive Intelligence"
+  },
+  {
+   "fieldname": "opportunities",
+   "fieldtype": "Table",
+   "label": "CrisPRO Opportunities",
+   "options": "AACR Intel Opportunity"
+  },
+  {
+   "fieldname": "vulnerabilities",
+   "fieldtype": "Table",
+   "label": "Vulnerabilities",
+   "options": "AACR Intel Vulnerability"
+  },
+  {
+   "fieldname": "moat_weaknesses",
+   "fieldtype": "Table",
+   "label": "Competitive Moat Weaknesses",
+   "options": "AACR Intel Moat Weakness"
+  },
+  {
+   "fieldname": "trial_risks",
+   "fieldtype": "Table",
+   "label": "Trial Dilution Risks",
+   "options": "AACR Intel Trial Risk"
+  },
+  {
+   "fieldname": "competitors",
+   "fieldtype": "Table",
+   "label": "Cited Competitors",
+   "options": "AACR Intel Competitor"
+  },
+  {
+   "fieldname": "watchlist",
+   "fieldtype": "Table",
+   "label": "Watchlist (companies/assets/gaps/questions)",
+   "options": "AACR Intel Watch"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Intel",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1,
+   "if_owner": 0
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "allow_import": 1,
+ "autoname": "field:intel_id",
+ "naming_rule": "By fieldname",
+ "default_view": "List",
+ "grid_page_length": 50,
+ "row_format": "Dynamic",
+ "track_changes": 1,
+ "title_field": "talk_title"
+}

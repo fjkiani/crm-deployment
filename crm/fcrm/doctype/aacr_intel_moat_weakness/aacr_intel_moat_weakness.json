@@ -1,0 +1,50 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "vulnerable_ip_or_chemistry",
+  "ip_vulnerability_note",
+  "clinical_strategy_weakness",
+  "scale_or_manufacturing_bottleneck"
+ ],
+ "fields": [
+  {
+   "fieldname": "vulnerable_ip_or_chemistry",
+   "fieldtype": "Data",
+   "label": "Vulnerable IP / Chemistry",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ip_vulnerability_note",
+   "fieldtype": "Text",
+   "label": "IP Vulnerability Note"
+  },
+  {
+   "fieldname": "clinical_strategy_weakness",
+   "fieldtype": "Text",
+   "label": "Clinical Strategy Weakness"
+  },
+  {
+   "fieldname": "scale_or_manufacturing_bottleneck",
+   "fieldtype": "Text",
+   "label": "Scale / Manufacturing Bottleneck"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Intel Moat Weakness",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "allow_import": 0
+}

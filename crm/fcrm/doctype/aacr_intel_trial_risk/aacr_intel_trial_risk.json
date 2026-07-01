@@ -1,0 +1,70 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "severity",
+  "target_biology",
+  "missing_biomarker",
+  "trial_name_or_nct",
+  "statistical_concern",
+  "flawed_enrollment_criteria",
+  "static_vs_dynamic_failure"
+ ],
+ "fields": [
+  {
+   "fieldname": "severity",
+   "fieldtype": "Select",
+   "label": "Severity",
+   "options": "\nfatal_to_trial\nsignificant_risk\nminor_concern",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "target_biology",
+   "fieldtype": "Data",
+   "label": "Target Biology",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "missing_biomarker",
+   "fieldtype": "Text",
+   "label": "Missing Biomarker"
+  },
+  {
+   "fieldname": "trial_name_or_nct",
+   "fieldtype": "Data",
+   "label": "Trial Name / NCT"
+  },
+  {
+   "fieldname": "statistical_concern",
+   "fieldtype": "Text",
+   "label": "Statistical Concern"
+  },
+  {
+   "fieldname": "flawed_enrollment_criteria",
+   "fieldtype": "Text",
+   "label": "Flawed Enrollment Criteria"
+  },
+  {
+   "fieldname": "static_vs_dynamic_failure",
+   "fieldtype": "Text",
+   "label": "Static vs Dynamic Failure"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "AACR Intel Trial Risk",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "allow_import": 0
+}

@@ -34,6 +34,11 @@ const routes = [
     component: () => import('@/pages/LeadGenDashboard.vue'),
   },
   {
+    path: '/competitive-intel',
+    name: 'Competitive Intel',
+    component: () => import('@/pages/CompetitiveIntel.vue'),
+  },
+  {
     alias: '/leads',
     path: '/leads/view/:viewType?',
     name: 'Leads',
