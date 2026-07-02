@@ -1,2 +1,4 @@
 twilio==8.5.0
-# Cache Buster Thu Feb  5 15:37:00 EST 2026
+frappe-mcp>=0.1.0
+requests>=2.28.0
+# Cache Buster Thu Jul  2 12:55:00 EDT 2026
