@@ -60,7 +60,7 @@ def get_dossier(phone=None, email=None, lead_id=None):
 	data = {}
 
 	if not lead_name and email:
-		lead_name = frappe.db.get_value("CRM Lead", {"email_id": email}, "name")
+		lead_name = frappe.db.get_value("CRM Lead", {"email": email}, "name")
 		if not lead_name and frappe.db.exists("DocType", "Lead Prospect"):
 			prospect = frappe.db.get_value(
 				"Lead Prospect",
@@ -112,7 +112,7 @@ def get_dossier(phone=None, email=None, lead_id=None):
 			"last_name": lead.last_name,
 			"organization": lead.organization,
 			"job_title": lead.job_title,
-			"email_id": lead.email_id,
+			"email": lead.email,
 			"mobile_no": getattr(lead, "mobile_no", None),
 			"status": lead.status,
 			"lead_score": getattr(lead, "lead_score", None),

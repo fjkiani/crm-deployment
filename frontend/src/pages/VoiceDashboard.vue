@@ -276,19 +276,24 @@ export default {
 
     const checkSystemHealth = async () => {
       try {
-        const twilioStatus = await call('crm.integrations.twilio.api.is_enabled')
-        systemHealth.twilio = !!twilioStatus
-      } catch (error) {
-        console.error('Failed to check Twilio status:', error)
-        systemHealth.twilio = false
-      }
-
-      try {
         const vapiHealth = await call('crm.api.vapi.get_health')
         systemHealth.vapi = !!(vapiHealth?.vapi || vapiHealth?.configured)
+        if (typeof vapiHealth?.twilio === 'boolean') {
+          systemHealth.twilio = vapiHealth.twilio
+        }
       } catch (error) {
         console.error('Failed to check Vapi status:', error)
         systemHealth.vapi = false
+      }
+
+      if (!systemHealth.twilio) {
+        try {
+          const twilioStatus = await call('crm.integrations.twilio.api.is_enabled')
+          systemHealth.twilio = !!twilioStatus
+        } catch (error) {
+          console.error('Failed to check Twilio status:', error)
+          systemHealth.twilio = false
+        }
       }
 
       try {

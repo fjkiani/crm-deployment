@@ -423,11 +423,17 @@ def get_health():
 		configured = True
 	except Exception as e:
 		detail = str(e)
+
+	twilio_enabled = False
+	if frappe.db.exists("DocType", "CRM Twilio Settings"):
+		twilio_enabled = bool(frappe.db.get_single_value("CRM Twilio Settings", "enabled"))
+
 	return {
 		"vapi": ok,
 		"configured": configured,
 		"detail": detail,
 		"webhook_url": f"{_webhook_base_url()}/api/method/crm.api.vapi.handle_webhook",
+		"twilio": twilio_enabled,
 	}
 
 

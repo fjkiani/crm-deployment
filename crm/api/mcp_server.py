@@ -95,7 +95,7 @@ def get_leads_batch(limit: int = 5):
     """
     return frappe.get_all(
         "CRM Lead",
-        fields=["name", "lead_name", "organization", "email_id", "status", "lead_score"],
+        fields=["name", "lead_name", "organization", "email", "status", "lead_score"],
         limit=limit,
     )
 
@@ -151,7 +151,7 @@ def get_lead_dossier(lead_name: str):
         "lead_name": lead.name,
         "full_name": f"{lead.first_name or ''} {lead.last_name or ''}".strip(),
         "organization": lead.organization,
-        "email": lead.email_id,
+        "email": lead.email,
         "status": lead.status,
         "job_title": lead.job_title,
         "lead_score": getattr(lead, "lead_score", None),
@@ -188,7 +188,7 @@ def search_leads(query: str = "", status: str = "", score_min: int = 0, limit: i
         "CRM Lead",
         filters=filters,
         or_filters=or_filters if or_filters else None,
-        fields=["name", "lead_name", "organization", "email_id", "status", "lead_score", "source"],
+        fields=["name", "lead_name", "organization", "email", "status", "lead_score", "source"],
         order_by="lead_score desc",
         limit=limit,
     )
