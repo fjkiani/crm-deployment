@@ -80,6 +80,11 @@
             />
           </div>
         </div>
+        <TrackerIntel
+          v-else-if="tab.name == 'GTM'"
+          :doc="doc"
+          :leadId="leadId"
+        />
         <Activities
           v-else
           doctype="CRM Lead"
@@ -195,6 +200,7 @@ import Link from '@/components/Controls/Link.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
+import TrackerIntel from '@/components/TrackerIntel.vue'
 import { setupCustomizations } from '@/utils'
 import { getView } from '@/utils/view'
 import { getSettings } from '@/stores/settings'
@@ -372,6 +378,11 @@ const tabs = computed(() => {
       name: 'Attachments',
       label: __('Attachments'),
       icon: AttachmentIcon,
+    },
+    {
+      name: 'GTM',
+      label: __('GTM Intel'),
+      icon: DetailsIcon,
     },
     {
       name: 'WhatsApp',
