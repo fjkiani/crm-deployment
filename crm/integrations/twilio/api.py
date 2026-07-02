@@ -164,3 +164,22 @@ def get_datetime_from_timestamp(timestamp):
 	system_timezone = frappe.utils.get_system_timezone()
 	converted_datetime = datetime_utc_tz.astimezone(ZoneInfo(system_timezone))
 	return frappe.utils.format_datetime(converted_datetime, "yyyy-MM-dd HH:mm:ss")
+
+
+# ── Vapi AI outbound (delegates to crm.api.vapi) ─────────────────────────────
+
+
+@frappe.whitelist()
+def initiate_outbound_call(**kwargs):
+	"""Backward-compatible entry for Farfalle / docs → unified Vapi module."""
+	from crm.api.vapi import initiate_outbound_call as _initiate
+
+	return _initiate(**kwargs)
+
+
+@frappe.whitelist(allow_guest=True)
+def vapi_webhook(**kwargs):
+	"""Backward-compatible webhook alias."""
+	from crm.api.vapi import vapi_webhook as _webhook
+
+	return _webhook(**kwargs)

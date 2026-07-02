@@ -276,7 +276,6 @@ export default {
 
     const checkSystemHealth = async () => {
       try {
-        // Check Twilio integration
         const twilioStatus = await call('crm.integrations.twilio.api.is_enabled')
         systemHealth.twilio = !!twilioStatus
       } catch (error) {
@@ -285,70 +284,75 @@ export default {
       }
 
       try {
-        // Check Farfalle connection (optional)
-        const farfalleUrl = 'http://localhost:8000' // This would be configurable
-        const response = await fetch(`${farfalleUrl}/health`, { 
-          method: 'GET',
-          timeout: 5000 
-        })
-        systemHealth.farfalle = response.ok
+        const vapiHealth = await call('crm.api.vapi.get_health')
+        systemHealth.vapi = !!(vapiHealth?.vapi || vapiHealth?.configured)
+      } catch (error) {
+        console.error('Failed to check Vapi status:', error)
+        systemHealth.vapi = false
+      }
+
+      try {
+        const farfalleUrl = import.meta.env.VITE_EAIA_URL || ''
+        if (farfalleUrl) {
+          const response = await fetch(`${farfalleUrl.replace(/\/$/, '')}/health`, { method: 'GET' })
+          systemHealth.farfalle = response.ok
+        } else {
+          systemHealth.farfalle = false
+        }
       } catch (error) {
         systemHealth.farfalle = false
       }
-
-      // Vapi status would be checked via Farfalle or environment
-      systemHealth.vapi = false // Default to false for MVP
     }
+
+    const normalizeVapiCall = (row) => ({
+      name: row.name || row.vapi_call_id,
+      from: row.from_number || row.from || '-',
+      to: row.to_number || row.to || '-',
+      status: row.status,
+      duration: row.duration_seconds ?? row.duration ?? 0,
+      recording_url: row.recording_url,
+      creation: row.creation,
+      crm_lead: row.crm_lead,
+      outcome: row.outcome,
+    })
 
     const loadDashboardData = async () => {
       try {
-        // Get recent call logs using existing CRM API
-        const recentCalls = await call('crm.api.doc.get_data', {
-          doctype: 'CRM Call Log',
-          filters: {},
-          order_by: 'creation desc',
-          page_length: 50
-        })
+        const dashboard = await call('crm.api.vapi.get_dashboard')
+        const recent = (dashboard?.recent_calls || []).map(normalizeVapiCall)
+        const active = (dashboard?.active_call_details || []).map(normalizeVapiCall)
 
-        // Get active calls
-        const activeCalls = await call('crm.api.doc.get_data', {
-          doctype: 'CRM Call Log',
-          filters: {
-            status: ['in', ['Initiated', 'Ringing', 'In Progress']]
-          },
-          order_by: 'creation desc',
-          page_length: 20
-        })
+        dashboardData.recent_calls = recent
+        dashboardData.active_call_details = active
+        dashboardData.total_calls = dashboard?.total_calls ?? recent.length
+        dashboardData.active_calls = dashboard?.active_calls ?? active.length
+        dashboardData.analytics = dashboard?.analytics || dashboardData.analytics
 
-        // Update dashboard data
-        dashboardData.recent_calls = recentCalls.data || []
-        dashboardData.active_call_details = activeCalls.data || []
-        dashboardData.total_calls = recentCalls.total_count || 0
-        dashboardData.active_calls = activeCalls.data?.length || 0
-
-        // Calculate analytics
-        const completedCalls = dashboardData.recent_calls.filter(call => call.status === 'Completed')
-        const successRate = dashboardData.recent_calls.length > 0 
-          ? (completedCalls.length / dashboardData.recent_calls.length) * 100 
-          : 0
-
-        const durations = completedCalls
-          .map(call => call.duration)
-          .filter(duration => duration && duration > 0)
-        
-        const avgDuration = durations.length > 0 
-          ? durations.reduce((sum, d) => sum + d, 0) / durations.length 
-          : 0
-
-        dashboardData.analytics = {
-          success_rate: Math.round(successRate * 10) / 10,
-          average_duration: Math.round(avgDuration * 10) / 10,
-          total_duration: durations.reduce((sum, d) => sum + d, 0)
+        if (dashboard?.vapi_health) {
+          systemHealth.vapi = !!(dashboard.vapi_health.vapi || dashboard.vapi_health.configured)
         }
-
       } catch (error) {
-        console.error('Failed to load dashboard data:', error)
-        // Show error toast or notification
+        console.error('Vapi dashboard failed, falling back to CRM Call Log:', error)
+        try {
+          const recentCalls = await call('crm.api.doc.get_data', {
+            doctype: 'CRM Call Log',
+            filters: { telephony_medium: 'Vapi' },
+            order_by: 'creation desc',
+            page_length: 50,
+          })
+          dashboardData.recent_calls = (recentCalls.data || []).map((c) => ({
+            name: c.name,
+            from: c.from,
+            to: c.to,
+            status: c.status,
+            duration: c.duration,
+            recording_url: c.recording_url,
+            creation: c.creation,
+          }))
+          dashboardData.total_calls = recentCalls.total_count || dashboardData.recent_calls.length
+        } catch (fallbackError) {
+          console.error('Failed to load dashboard data:', fallbackError)
+        }
       }
     }
 
@@ -366,23 +370,34 @@ export default {
 
     const viewCallDetails = async (callName) => {
       try {
-        const callDetails = await call('crm.api.doc.get_doc', {
-          doctype: 'CRM Call Log',
-          name: callName
-        })
-        
-        // Get related notes
+        let callDetails = null
+        try {
+          callDetails = await call('crm.api.doc.get_doc', {
+            doctype: 'Vapi Call Log',
+            name: callName,
+          })
+        } catch {
+          callDetails = await call('crm.api.doc.get_doc', {
+            doctype: 'CRM Call Log',
+            name: callName,
+          })
+        }
+
         const notes = await call('crm.api.doc.get_data', {
           doctype: 'FCRM Note',
           filters: {
-            reference_doctype: 'CRM Call Log',
-            reference_docname: callName
-          }
+            reference_doctype: 'CRM Lead',
+            reference_docname: callDetails.crm_lead || callDetails.reference_docname,
+          },
+          page_length: 5,
         })
         
         selectedCall.value = {
           ...callDetails,
-          notes: notes.data || []
+          from: callDetails.from_number || callDetails.from,
+          to: callDetails.to_number || callDetails.to,
+          duration: callDetails.duration_seconds ?? callDetails.duration,
+          notes: notes.data || [],
         }
       } catch (error) {
         console.error('Failed to load call details:', error)

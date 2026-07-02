@@ -196,6 +196,14 @@ def search_leads(query: str = "", status: str = "", score_min: int = 0, limit: i
 
 
 @mcp.tool()
+def search_crm_knowledge(query: str, limit: int = 10):
+    """Search CRM Notes and lead intel for voice assistant / knowledge context."""
+    from crm.api.intelligence import search_crm_knowledge as _search
+
+    return _search(query, limit)
+
+
+@mcp.tool()
 def get_enrichment_status():
     """Health check: counts leads by enrichment completeness.
     Returns counts of leads with intel data vs without.

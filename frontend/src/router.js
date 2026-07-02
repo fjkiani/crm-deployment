@@ -188,11 +188,22 @@ router.beforeEach(async (to, from, next) => {
     window.location.href = '/login?redirect-to=/crm'
   } else if (to.matched.length === 0) {
     next({ name: 'Invalid Page' })
-  } else if (['Deal', 'Lead'].includes(to.name) && !to.hash) {
-    let storageKey = to.name === 'Deal' ? 'lastDealTab' : 'lastLeadTab'
-    const activeTab = localStorage.getItem(storageKey) || 'activity'
-    const hash = '#' + activeTab
-    next({ ...to, hash })
+  } else if (['Deal', 'Lead', 'Contact', 'Organization'].includes(to.name)) {
+    const paramKey = to.name === 'Deal' ? 'dealId' : to.name === 'Lead' ? 'leadId' : to.name === 'Contact' ? 'contactId' : 'organizationId'
+    const raw = to.params[paramKey]
+    const clean = typeof raw === 'string' ? raw.trim().replace(/\s*\(.*$/, '') : raw
+    if (clean && clean !== raw) {
+      next({ ...to, params: { ...to.params, [paramKey]: clean }, replace: true })
+      return
+    }
+    if (!to.hash) {
+      let storageKey = to.name === 'Deal' ? 'lastDealTab' : 'lastLeadTab'
+      const activeTab = localStorage.getItem(storageKey) || 'activity'
+      const hash = '#' + activeTab
+      next({ ...to, hash })
+    } else {
+      next()
+    }
   } else {
     next()
   }
