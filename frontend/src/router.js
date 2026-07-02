@@ -146,6 +146,11 @@ const routes = [
     props: true,
   },
   {
+    path: '/lead-search',
+    name: 'Lead Search',
+    component: () => import('@/pages/LeadSearch.vue'),
+  },
+  {
     path: '/:invalidpath',
     name: 'Invalid Page',
     component: () => import('@/pages/InvalidPage.vue'),

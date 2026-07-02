@@ -150,6 +150,7 @@
 
 <script setup>
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
+import LucideSearch from '~icons/lucide/search'
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
 import ConvertIcon from '@/components/Icons/ConvertIcon.vue'
@@ -277,6 +278,11 @@ const links = [
     label: 'AACR Sessions',
     icon: LucideLayoutDashboard,
     to: 'AACR Sessions',
+  },
+  {
+    label: 'Lead Search',
+    icon: LucideSearch,
+    to: 'Lead Search',
   },
   {
     label: 'AI Copilot',

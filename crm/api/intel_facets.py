@@ -182,6 +182,93 @@ def get_faceted_list(doctype: str = "CRM Lead", filters=None, facet_filters=None
 
 
 @frappe.whitelist()
+def search_leads(q: str = "", facet_filters=None, tier: str = "", score_min=None,
+                 order_by: str = "lead_score desc", page_length: int = 20, start: int = 0,
+                 include_converted: bool = False):
+	"""Facet-aware free-text lead search over CRM Lead ⋈ Lead Intel Facets.
+
+	Fills the "no search in Leads" gap. Free-text `q` matches lead_name /
+	organization / email / source_ref_id (OR-LIKE). `facet_filters` route to the
+	facet table (tier, session_slug, n_opportunities, has_competitive_intel, ...)
+	exactly like get_faceted_list. `tier` and `score_min` are convenience shortcuts.
+
+	Returns {columns, rows, total_count, query} — same shape as get_faceted_list
+	plus the echoed query for the UI. Read-only; no writes.
+	"""
+	facet_filters = frappe.parse_json(facet_filters) if isinstance(facet_filters, str) else (facet_filters or {})
+	if tier:
+		facet_filters["tier"] = tier
+	page_length = min(int(page_length or 20), 100)
+	start = int(start or 0)
+
+	conds, values = ["1=1"], {}
+	if not include_converted:
+		conds.append("(l.converted = 0 OR l.converted IS NULL)")
+
+	# free-text: OR-LIKE across identity columns
+	q = (q or "").strip()
+	if q:
+		values["q"] = f"%{q}%"
+		conds.append(
+			"(l.lead_name LIKE %(q)s OR l.organization LIKE %(q)s "
+			"OR l.email LIKE %(q)s OR l.source_ref_id LIKE %(q)s)"
+		)
+
+	# numeric shortcut
+	if score_min not in (None, ""):
+		conds.append("l.lead_score >= %(score_min)s")
+		values["score_min"] = float(score_min)
+
+	# facet-table filters (support [op, val] or scalar) — identical routing to get_faceted_list
+	fj = []
+	for k, v in (facet_filters or {}).items():
+		col = frappe.db.escape(k, percent=False)[1:-1]
+		if isinstance(v, (list, tuple)) and len(v) == 2:
+			op, val = v
+			# whitelist operator to avoid injection via op position
+			op = op if op in (">", "<", ">=", "<=", "=", "!=") else "="
+			fj.append(f"f.`{col}` {op} %(f_{k})s")
+			values[f"f_{k}"] = val
+		else:
+			fj.append(f"f.`{col}` = %(f_{k})s")
+			values[f"f_{k}"] = v
+	facet_where = (" AND " + " AND ".join(fj)) if fj else ""
+
+	# safe order_by (fieldname [asc|desc]); default lead_score desc for search relevance
+	ob = "l.lead_score desc"
+	parts = str(order_by or "").split()
+	if parts:
+		fld = parts[0].split(".")[-1]
+		direction = parts[1].lower() if len(parts) > 1 and parts[1].lower() in ("asc", "desc") else "desc"
+		ob = f"l.`{frappe.db.escape(fld, percent=False)[1:-1]}` {direction}"
+
+	base = f"""
+		FROM `tabCRM Lead` l
+		LEFT JOIN `tabLead Intel Facets` f ON f.crm_lead = l.name
+		WHERE {' AND '.join(conds)}{facet_where}
+	"""
+	total = frappe.db.sql(f"SELECT COUNT(*) {base}", values)[0][0]
+	rows = frappe.db.sql(
+		f"""SELECT l.name, l.lead_name, l.organization, l.email, l.status,
+		           l.tier, l.lead_score, l.priority_rank, l.source_ref_id,
+		           f.n_opportunities, f.n_vulnerabilities, f.session_slug,
+		           f.presentation_type, f.has_gtm_narrative, f.has_competitive_intel
+		    {base} ORDER BY {ob} LIMIT %(pl)s OFFSET %(st)s""",
+		{**values, "pl": page_length, "st": start}, as_dict=True,
+	)
+	columns = [
+		{"label": "Name", "key": "lead_name"}, {"label": "Organization", "key": "organization"},
+		{"label": "Tier", "key": "tier"}, {"label": "Score", "key": "lead_score"},
+		{"label": "Opps", "key": "n_opportunities"}, {"label": "Vulns", "key": "n_vulnerabilities"},
+		{"label": "Session", "key": "session_slug"}, {"label": "Email", "key": "email"},
+		{"label": "Status", "key": "status"},
+	]
+	return {"columns": columns, "rows": rows, "total_count": total,
+	        "query": {"q": q, "facet_filters": facet_filters, "score_min": score_min,
+	                  "order_by": ob, "page_length": page_length, "start": start}}
+
+
+@frappe.whitelist()
 def rebuild_all_facets(only_resolvable: bool = True, limit: int = 0) -> dict:
 	filters = [["source_ref_id", "like", "%::%"]] if only_resolvable else [["source_ref_id", "is", "set"]]
 	names = frappe.get_all("CRM Lead", filters=filters, pluck="name", limit_page_length=limit or 0)
