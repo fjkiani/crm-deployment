@@ -135,6 +135,17 @@ const routes = [
     component: () => import('@/pages/NyxDashboard.vue'),
   },
   {
+    path: '/sessions',
+    name: 'AACR Sessions',
+    component: () => import('@/pages/AacrSessions.vue'),
+  },
+  {
+    path: '/sessions/:sessionSlug',
+    name: 'AACR Session',
+    component: () => import('@/pages/AacrSession.vue'),
+    props: true,
+  },
+  {
     path: '/:invalidpath',
     name: 'Invalid Page',
     component: () => import('@/pages/InvalidPage.vue'),

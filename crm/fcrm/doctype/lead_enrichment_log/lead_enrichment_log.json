@@ -1,0 +1,47 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-07-02 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "crm_lead",
+  "lead_name_snapshot",
+  "organization",
+  "candidate_email",
+  "deterministic_verdict",
+  "llm_verdict",
+  "llm_reason",
+  "decision",
+  "reason",
+  "source"
+ ],
+ "fields": [
+  {"fieldname": "crm_lead", "fieldtype": "Link", "label": "CRM Lead", "options": "CRM Lead", "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "lead_name_snapshot", "fieldtype": "Data", "label": "Lead Name", "in_list_view": 1},
+  {"fieldname": "organization", "fieldtype": "Data", "label": "Organization"},
+  {"fieldname": "candidate_email", "fieldtype": "Data", "label": "Candidate Email", "in_list_view": 1},
+  {"fieldname": "deterministic_verdict", "fieldtype": "Data", "label": "Deterministic Verdict"},
+  {"fieldname": "llm_verdict", "fieldtype": "Data", "label": "LLM Verdict"},
+  {"fieldname": "llm_reason", "fieldtype": "Small Text", "label": "LLM Reason"},
+  {"fieldname": "decision", "fieldtype": "Select", "label": "Decision", "options": "\nwritten\nwould_write\nheld\nhold_disagree\nhold_llm_skip\nreject_deterministic\nno_candidate\nskip_has_email\nerror", "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "reason", "fieldtype": "Small Text", "label": "Reason"},
+  {"fieldname": "source", "fieldtype": "Data", "label": "Source"}
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-02 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Lead Enrichment Log",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"read": 1, "report": 1, "role": "Sales User"}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

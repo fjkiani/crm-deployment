@@ -274,6 +274,11 @@ const links = [
     to: 'Lead Generation',
   },
   {
+    label: 'AACR Sessions',
+    icon: LucideLayoutDashboard,
+    to: 'AACR Sessions',
+  },
+  {
     label: 'AI Copilot',
     icon: SquareAsterisk,
     to: 'AI Copilot',
