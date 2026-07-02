@@ -37,7 +37,7 @@ Raw research intel on a prospect is below. Extract EXACTLY 3-5 citable signals.
 Only include facts with specific numbers, names, or dates — no generic descriptions.
 
 RAW INTEL:
-{raw_intel}
+__RAW_INTEL__
 
 Return ONLY valid JSON:
 {{
@@ -100,7 +100,7 @@ async def distill_node(state: OutreachState, config: RunnableConfig) -> Outreach
     if cb:
         await cb("distill", "thought", {"message": "Citation combiner extracting signals..."})
 
-    prompt = DISTILL_PROMPT.format(raw_intel=state["raw_research"][:6000])
+    prompt = DISTILL_PROMPT.replace("__RAW_INTEL__", state["raw_research"][:6000])
 
     try:
         signals = llm_json(prompt)

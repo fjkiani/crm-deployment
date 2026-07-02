@@ -107,6 +107,53 @@ def _call_openai(prompt: str, timeout: int) -> Dict[str, Any]:
     return json.loads(r.json()["choices"][0]["message"]["content"])
 
 
+def _strip_json_fence(content: str) -> str:
+    """Strip ```json ... ``` markdown fences some models wrap JSON in."""
+    content = content.strip()
+    if content.startswith("```"):
+        # drop leading fence line (``` or ```json) and trailing fence
+        content = content.split("```", 2)[1]
+        if content.lstrip().lower().startswith("json"):
+            content = content.lstrip()[4:]
+    # some models still emit a trailing ``` if only one fence was captured
+    if content.rstrip().endswith("```"):
+        content = content.rstrip()[:-3]
+    return content.strip()
+
+
+def _call_openrouter(prompt: str, timeout: int) -> Dict[str, Any]:
+    """Call OpenRouter (default model google/gemma-3-27b-it). Model via OPENROUTER_MODEL."""
+    key = os.getenv("OPENROUTER_API_KEY")
+    if not key:
+        raise ValueError("OPENROUTER_API_KEY not set")
+
+    model = os.getenv("OPENROUTER_MODEL", "google/gemma-3-27b-it")
+    r = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Return ONLY valid JSON, no markdown fences or explanation.\n\n"
+                        + prompt
+                    ),
+                }
+            ],
+            "max_tokens": 4096,
+        },
+        timeout=timeout,
+    )
+    r.raise_for_status()
+    content = r.json()["choices"][0]["message"]["content"]
+    return json.loads(_strip_json_fence(content))
+
+
 def _call_anthropic(prompt: str, timeout: int) -> Dict[str, Any]:
     """Call Anthropic claude-3-haiku."""
     key = os.getenv("ANTHROPIC_API_KEY")
@@ -145,6 +192,7 @@ def _call_anthropic(prompt: str, timeout: int) -> Dict[str, Any]:
 # ── Provider Registry ─────────────────────────────────────────────────────────
 
 PROVIDERS = {
+    "openrouter": _call_openrouter,
     "cohere": _call_cohere,
     "openai": _call_openai,
     "anthropic": _call_anthropic,

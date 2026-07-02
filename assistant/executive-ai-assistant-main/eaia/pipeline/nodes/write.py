@@ -118,10 +118,19 @@ async def write_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
             "message": f"Pass 1: Extract talking points from dossier. Pass 2: Write {fw.upper()} email..."
         })
 
+    # Accept any configured LLM provider. If Cohere is absent but another provider
+    # (OpenRouter/Gemma, OpenAI, Anthropic) is set, pass a sentinel so the writer's
+    # _call_cohere delegates to the shared llm_json fallback chain.
     cohere_key = os.getenv("COHERE_API_KEY")
+    has_fallback = any(
+        os.getenv(k) for k in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+    )
     if not cohere_key:
-        state["email_draft"] = {"error": "No COHERE_API_KEY"}
-        return state
+        if has_fallback:
+            cohere_key = "none"  # sentinel → _call_cohere routes to llm_json
+        else:
+            state["email_draft"] = {"error": "No LLM provider configured"}
+            return state
 
     signals = state.get("distilled_signals", {})
     name    = state["prospect_name"]

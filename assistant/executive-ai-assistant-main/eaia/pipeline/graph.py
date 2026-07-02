@@ -44,9 +44,11 @@ def build_graph() -> StateGraph:
     g = StateGraph(OutreachState)
 
     # ── Nodes ──────────────────────────────────────────────────────────────
+    # NOTE: node id "scoring" (not "score") — LangGraph forbids a node name that
+    # collides with a state key, and "score" is a field on OutreachState.
     g.add_node("research", research_node)
     g.add_node("distill",  distill_node)
-    g.add_node("score",    score_node)
+    g.add_node("scoring",  score_node)
     g.add_node("write",    write_node)
     g.add_node("review",   review_node)
     g.add_node("sync",     sync_node)
@@ -54,8 +56,8 @@ def build_graph() -> StateGraph:
     # ── Static edges ───────────────────────────────────────────────────────
     g.set_entry_point("research")
     g.add_edge("research", "distill")
-    g.add_edge("distill",  "score")
-    g.add_edge("score",    "write")
+    g.add_edge("distill",  "scoring")
+    g.add_edge("scoring",  "write")
     g.add_edge("write",    "review")
     g.add_edge("sync",     END)
 

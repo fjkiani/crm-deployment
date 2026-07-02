@@ -163,19 +163,32 @@ Return ONLY valid JSON:
 # ── TWO-PASS ENGINE ──────────────────────────────────────────────────────────
 
 def _call_cohere(prompt: str, cohere_key: str) -> Dict[str, Any]:
-    """Call Cohere v2 chat with JSON response format."""
-    r = requests.post(
-        'https://api.cohere.com/v2/chat',
-        headers={'Authorization': f'Bearer {cohere_key}'},
-        json={
-            'model': 'command-r-plus-08-2024',
-            'messages': [{'role': 'user', 'content': prompt}],
-            'response_format': {'type': 'json_object'}
-        },
-        timeout=45
-    )
-    r.raise_for_status()
-    return json.loads(r.json()['message']['content'][0]['text'])
+    """Call Cohere v2 chat with JSON response format.
+
+    If no real Cohere key is provided (placeholder/empty), delegate to the shared
+    llm_json fallback chain (OpenRouter/Gemma, OpenAI, Anthropic) so the writer
+    works with whatever provider is configured. Zero changes to call sites.
+    """
+    if not cohere_key or cohere_key.strip().lower() in ("", "none", "placeholder", "sk-none"):
+        from eaia.pipeline.llm import llm_json
+        return llm_json(prompt)
+    try:
+        r = requests.post(
+            'https://api.cohere.com/v2/chat',
+            headers={'Authorization': f'Bearer {cohere_key}'},
+            json={
+                'model': 'command-r-plus-08-2024',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'response_format': {'type': 'json_object'}
+            },
+            timeout=45
+        )
+        r.raise_for_status()
+        return json.loads(r.json()['message']['content'][0]['text'])
+    except Exception:
+        # Cohere failed (bad key, rate limit, outage) — fall through to shared chain
+        from eaia.pipeline.llm import llm_json
+        return llm_json(prompt)
 
 
 def _two_pass_generate(

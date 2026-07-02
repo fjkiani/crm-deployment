@@ -46,14 +46,14 @@ ICP: Quantitative/systematic investment firms, AUM > $500M, biotech/healthcare e
 Decision-makers: Portfolio Managers, CIOs, Research Directors, Heads of Alt Data.
 
 PROSPECT:
-Name: {name}
-Company: {company}
-Title: {title}
-AUM Signal: {aum}
-Company Strategy: {strategy}
-LinkedIn Activity: {linkedin_activity}
-Enrichment Signals: {signals}
-Research Context: {research}
+Name: __NAME__
+Company: __COMPANY__
+Title: __TITLE__
+AUM Signal: __AUM__
+Company Strategy: __STRATEGY__
+LinkedIn Activity: __LINKEDIN_ACTIVITY__
+Enrichment Signals: __SIGNALS__
+Research Context: __RESEARCH__
 
 SCORING RUBRIC (additive):
 - AUM > $1B confirmed: +40
@@ -112,19 +112,19 @@ async def score_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
     apollo    = state.get("apollo_data", {})
 
     try:
-        prompt = SCORE_PROMPT.format(
-            name=state["prospect_name"],
-            company=state["company_name"],
-            title=enrichment.get("apollo_title") or apollo.get("title", "Unknown"),
-            aum=enrichment.get("aum_signal") or "Unknown — 13F not found",
-            strategy=enrichment.get("company_strategy") or "Unknown",
-            linkedin_activity=(
-                " | ".join(enrichment.get("linkedin_recent_activity", []))
-                or "None found"
-            ),
-            signals=json.dumps(signals, indent=2),
-            research=state.get("raw_research", "")[:2000],
-        )
+        _subs = {
+            "__NAME__":              state["prospect_name"],
+            "__COMPANY__":           state["company_name"],
+            "__TITLE__":             enrichment.get("apollo_title") or apollo.get("title", "Unknown"),
+            "__AUM__":               enrichment.get("aum_signal") or "Unknown — 13F not found",
+            "__STRATEGY__":          enrichment.get("company_strategy") or "Unknown",
+            "__LINKEDIN_ACTIVITY__": " | ".join(enrichment.get("linkedin_recent_activity", [])) or "None found",
+            "__SIGNALS__":           json.dumps(signals, indent=2),
+            "__RESEARCH__":          state.get("raw_research", "")[:2000],
+        }
+        prompt = SCORE_PROMPT
+        for _k, _v in _subs.items():
+            prompt = prompt.replace(_k, str(_v))
         result = llm_json(prompt)
         score = max(0, min(100, int(result.get("score", 50))))
 

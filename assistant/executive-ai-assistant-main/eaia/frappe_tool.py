@@ -13,7 +13,9 @@ import json
 from typing import Optional
 from langchain_core.tools import tool
 
-FRAPPE_SITE = os.getenv("FRAPPE_SITE_URL", "https://jedilabs2.v.frappe.cloud")
+# Default corrected to the live alpha-crm site (was jedilabs2 — a stale/wrong tenant).
+# Override via FRAPPE_SITE_URL for other deployments.
+FRAPPE_SITE = os.getenv("FRAPPE_SITE_URL", "https://alpha-crm.v.frappe.cloud")
 API_KEY = os.getenv("FRAPPE_API_KEY")
 API_SECRET = os.getenv("FRAPPE_API_SECRET")
 
@@ -21,7 +23,13 @@ _request_counter = 0
 
 
 def _call_mcp(method: str, params: dict = None):
-    """Send a JSON-RPC tools/call request to the Frappe MCP endpoint."""
+    """Send a JSON-RPC tools/call request to the Frappe MCP endpoint.
+
+    If the MCP endpoint (crm.api.mcp_server.handle_mcp) is unavailable — which is
+    the case until the frappe_mcp app is installed on the site (returns 404/417) —
+    fall back to native Frappe REST for the subset of tools the pipeline needs.
+    This keeps the agent functional against a stock Frappe CRM with no MCP app.
+    """
     global _request_counter
     _request_counter += 1
 
@@ -37,14 +45,81 @@ def _call_mcp(method: str, params: dict = None):
         "id": _request_counter,
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    response.raise_for_status()
-    result = response.json()
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        # 404/417 → MCP app not installed on this site; use native REST fallback
+        if response.status_code in (404, 417):
+            return _native_rest_fallback(method, params or {}, headers)
+        response.raise_for_status()
+        result = response.json()
+        if "error" in result:
+            raise Exception(f"MCP Error: {result['error']}")
+        return result.get("result")
+    except requests.exceptions.RequestException:
+        # connection/timeout — try native REST before giving up
+        return _native_rest_fallback(method, params or {}, headers)
 
-    if "error" in result:
-        raise Exception(f"MCP Error: {result['error']}")
 
-    return result.get("result")
+def _native_rest_fallback(method: str, args: dict, headers: dict):
+    """Native Frappe REST implementations for core tools when MCP is absent."""
+    base = f"{FRAPPE_SITE}/api/resource"
+
+    if method == "echo":
+        return {"echo": args.get("message", ""), "via": "native_rest_fallback"}
+
+    if method == "create_lead":
+        body = {
+            "lead_name":   f"{args.get('first_name','')} {args.get('last_name','')}".strip(),
+            "first_name":  args.get("first_name", ""),
+            "last_name":   args.get("last_name", ""),
+            "organization": args.get("organization", ""),
+            "job_title":   args.get("title", ""),
+            "email":       args.get("email", ""),
+            "status":      "New",
+        }
+        body = {k: v for k, v in body.items() if v}
+        r = requests.post(f"{base}/CRM Lead", headers=headers, json=body, timeout=20)
+        r.raise_for_status()
+        return {"name": r.json()["data"]["name"]}
+
+    if method == "update_lead_context":
+        lead = args["lead_name"]
+        body = {"additional_data": args.get("context", "{}")}
+        r = requests.put(f"{base}/CRM Lead/{lead}", headers=headers, json=body, timeout=20)
+        r.raise_for_status()
+        return {"name": lead, "updated": True}
+
+    if method == "update_lead_score":
+        lead = args["lead_name"]
+        # CRM Lead has no native score field in stock schema — persist into additional_data
+        body = {"additional_data": json.dumps({"nyx_score": args.get("score"),
+                                               "reasoning": args.get("reasoning", "")})}
+        r = requests.put(f"{base}/CRM Lead/{lead}", headers=headers, json=body, timeout=20)
+        r.raise_for_status()
+        return {"name": lead, "score": args.get("score")}
+
+    if method == "create_note":
+        body = {
+            "doctype": "FCRM Note",
+            "title": args.get("title", "Note"),
+            "content": args.get("content", ""),
+            "reference_doctype": "CRM Lead",
+            "reference_name": args.get("lead_name"),
+        }
+        r = requests.post(f"{base}/FCRM Note", headers=headers, json=body, timeout=20)
+        r.raise_for_status()
+        return {"name": r.json()["data"]["name"]}
+
+    if method == "get_leads_batch":
+        limit = args.get("limit", 5)
+        r = requests.get(f"{base}/CRM Lead?limit_page_length={limit}"
+                         f'&fields=["name","lead_name","email","organization","status"]',
+                         headers=headers, timeout=20)
+        r.raise_for_status()
+        return {"leads": r.json().get("data", [])}
+
+    raise Exception(f"MCP unavailable and no native REST fallback for tool '{method}'. "
+                    f"Install the frappe_mcp app on the site to enable it.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
