@@ -75,6 +75,18 @@ def run_leadgen_job(job_type: str, params: dict = None) -> Dict[str, Any]:
     if job_type not in valid_types:
         frappe.throw(_(f"Invalid job type. Must be one of: {', '.join(valid_types)}"))
     
+    # Guard: verify the collector module actually exists before enqueuing.
+    # Some job types (consolidate, outreach) have no collector implemented; without
+    # this guard the enqueued worker task raises ModuleNotFoundError invisibly.
+    import importlib.util
+    if importlib.util.find_spec(f"crm.leadgen.collectors.{job_type}_collector") is None:
+        return {
+            "job_name": None,
+            "status": "Unavailable",
+            "message": (f"The '{job_type}' job type is not available yet "
+                        f"(collector not implemented). No job was queued."),
+        }
+
     # Create job record
     job = frappe.get_doc({
         "doctype": "LeadGen Job",
