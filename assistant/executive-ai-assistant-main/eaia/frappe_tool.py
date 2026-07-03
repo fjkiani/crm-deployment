@@ -118,6 +118,77 @@ def _native_rest_fallback(method: str, args: dict, headers: dict):
         r.raise_for_status()
         return {"leads": r.json().get("data", [])}
 
+    if method == "search_leads_faceted":
+        facet_filters = {}
+        if args.get("has_competitive_intel"):
+            facet_filters["has_competitive_intel"] = 1
+        if args.get("has_gtm_narrative"):
+            facet_filters["has_gtm_narrative"] = 1
+        if args.get("min_opportunities"):
+            facet_filters["n_opportunities"] = [">", int(args["min_opportunities"])]
+        if args.get("session_slug"):
+            facet_filters["session_slug"] = args["session_slug"]
+        body = {
+            "q": args.get("query", ""),
+            "tier": args.get("tier", ""),
+            "page_length": args.get("limit", 20),
+        }
+        if args.get("score_min"):
+            body["score_min"] = args["score_min"]
+        if facet_filters:
+            body["facet_filters"] = json.dumps(facet_filters)
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.intel_facets.search_leads",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        msg = r.json().get("message", {})
+        return {"rows": msg.get("rows", []), "total_count": msg.get("total_count", 0)}
+
+    if method == "list_tasks":
+        body = {k: v for k, v in {
+            "lead": args.get("lead", ""),
+            "deal": args.get("deal", ""),
+            "status": args.get("status", ""),
+            "assigned_to": args.get("assigned_to", ""),
+            "limit": args.get("limit", 50),
+        }.items() if v}
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.get_tasks",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        return {"tasks": r.json().get("message", [])}
+
+    if method == "create_task":
+        body = {k: v for k, v in {
+            "title": args.get("title", ""),
+            "lead": args.get("lead", ""),
+            "deal": args.get("deal", ""),
+            "priority": args.get("priority", "Medium"),
+            "status": args.get("status", "Todo"),
+            "due_date": args.get("due_date", ""),
+            "description": args.get("description", ""),
+            "assigned_to": args.get("assigned_to", ""),
+        }.items() if v}
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.create_task",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        return {"name": r.json().get("message"), "created": True}
+
+    if method == "update_task_status":
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.set_status",
+                          headers=headers,
+                          json={"name": args["name"], "status": args["status"]},
+                          timeout=20)
+        r.raise_for_status()
+        return r.json().get("message", {})
+
+    if method == "convert_task":
+        body = {"name": args["name"]}
+        if args.get("target"):
+            body["target"] = args["target"]
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.convert_task",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        return r.json().get("message", {})
+
     raise Exception(f"MCP unavailable and no native REST fallback for tool '{method}'. "
                     f"Install the frappe_mcp app on the site to enable it.")
 
@@ -178,6 +249,108 @@ def delete_all_leads(confirm: bool = False):
 def get_lead_dossier(lead_name: str):
     """Fetch full lead data with latest FCRM Note + intel data."""
     return _call_mcp("get_lead_dossier", {"lead_name": lead_name})
+
+
+@tool
+def search_leads_faceted(
+    query: str = "",
+    tier: str = "",
+    score_min: float = 0,
+    has_competitive_intel: int = 0,
+    has_gtm_narrative: int = 0,
+    min_opportunities: int = 0,
+    session_slug: str = "",
+    limit: int = 20,
+):
+    """RICH facet-aware lead search (CRM Lead JOIN Lead Intel Facets). Prefer this
+    over `search_leads` when you need intelligence facets: tier, opportunity /
+    vulnerability counts, competitive intel, GTM narrative, or source session.
+
+    Args:
+        query: Free-text over name / organization / email / source_ref_id.
+        tier: 'Tier 1' | 'Tier 2' | 'Tier 3'.
+        score_min: Minimum lead_score.
+        has_competitive_intel: 1 to require competitive intel.
+        has_gtm_narrative: 1 to require a GTM narrative.
+        min_opportunities: Require n_opportunities greater than this value.
+        session_slug: Restrict to a given intel session.
+        limit: Max rows.
+    """
+    return _call_mcp("search_leads_faceted", {
+        "query": query,
+        "tier": tier,
+        "score_min": score_min,
+        "has_competitive_intel": has_competitive_intel,
+        "has_gtm_narrative": has_gtm_narrative,
+        "min_opportunities": min_opportunities,
+        "session_slug": session_slug,
+        "limit": limit,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TASKS  (typed lead/deal links + configurable conversion)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@tool
+def list_tasks(lead: str = "", deal: str = "", status: str = "",
+               assigned_to: str = "", limit: int = 50):
+    """List CRM Tasks, optionally scoped to a lead or deal. Understands both the
+    typed lead/deal links and the legacy dynamic reference. Use before creating
+    follow-ups to avoid duplicates.
+
+    Args:
+        lead: CRM Lead name to scope to.
+        deal: CRM Deal name to scope to.
+        status: Backlog | Todo | In Progress | Done | Canceled.
+        assigned_to: User email to filter by owner.
+        limit: Max rows.
+    """
+    return _call_mcp("list_tasks", {
+        "lead": lead, "deal": deal, "status": status,
+        "assigned_to": assigned_to, "limit": limit,
+    })
+
+
+@tool
+def create_task(title: str, lead: str = "", deal: str = "", priority: str = "Medium",
+                status: str = "Todo", due_date: str = "", description: str = "",
+                assigned_to: str = ""):
+    """Create a CRM Task linked to a lead or deal (sets typed + dynamic links).
+
+    Args:
+        title: Task title (required).
+        lead: CRM Lead to link.
+        deal: CRM Deal to link.
+        priority: Low | Medium | High.
+        status: Backlog | Todo | In Progress | Done | Canceled.
+        due_date: ISO datetime (e.g. '2026-07-10 17:00:00').
+        description: Free-text detail.
+        assigned_to: User email to assign to.
+    """
+    return _call_mcp("create_task", {
+        "title": title, "lead": lead, "deal": deal, "priority": priority,
+        "status": status, "due_date": due_date, "description": description,
+        "assigned_to": assigned_to,
+    })
+
+
+@tool
+def update_task_status(name: str, status: str):
+    """Move a CRM Task to a new status (Backlog|Todo|In Progress|Done|Canceled)."""
+    return _call_mcp("update_task_status", {"name": name, "status": status})
+
+
+@tool
+def convert_task(name: str, target: str = ""):
+    """Convert a task's linked lead into a Deal OR append an AACR Intel
+    Opportunity, then mark the task Done. Omit `target` to use the site default.
+
+    Args:
+        name: CRM Task name.
+        target: 'deal' | 'opportunity' (optional).
+    """
+    return _call_mcp("convert_task", {"name": name, "target": target})
 
 
 @tool

@@ -196,6 +196,151 @@ def search_leads(query: str = "", status: str = "", score_min: int = 0, limit: i
 
 
 @mcp.tool()
+def search_leads_faceted(
+    query: str = "",
+    tier: str = "",
+    score_min: float = 0,
+    has_competitive_intel: int = 0,
+    has_gtm_narrative: int = 0,
+    min_opportunities: int = 0,
+    session_slug: str = "",
+    limit: int = 20,
+):
+    """Facet-aware lead search over CRM Lead JOIN Lead Intel Facets — the RICH
+    search. Prefer this over `search_leads` when you need intelligence facets:
+    tier, opportunity/vulnerability counts, competitive intel, GTM narrative, or
+    the source session. Free-text `query` matches name/org/email/source_ref_id.
+
+    Args:
+        query: Free-text over lead_name / organization / email / source_ref_id.
+        tier: 'Tier 1' | 'Tier 2' | 'Tier 3' (convenience facet shortcut).
+        score_min: Minimum lead_score.
+        has_competitive_intel: 1 to require competitive (Schema B) intel.
+        has_gtm_narrative: 1 to require a GTM narrative.
+        min_opportunities: Require n_opportunities greater than this value.
+        session_slug: Restrict to leads sourced from a given intel session.
+        limit: Max rows (capped at 100 server-side).
+    """
+    facet_filters = {}
+    if has_competitive_intel:
+        facet_filters["has_competitive_intel"] = 1
+    if has_gtm_narrative:
+        facet_filters["has_gtm_narrative"] = 1
+    if min_opportunities:
+        facet_filters["n_opportunities"] = [">", int(min_opportunities)]
+    if session_slug:
+        facet_filters["session_slug"] = session_slug
+
+    from crm.api.intel_facets import search_leads as _facet_search
+
+    res = _facet_search(
+        q=query,
+        facet_filters=facet_filters or None,
+        tier=tier or "",
+        score_min=score_min or None,
+        page_length=limit,
+    )
+    # Return the rows + count in an LLM-friendly shape (drop the columns metadata).
+    rows = res.get("rows") if isinstance(res, dict) else res
+    return {"rows": rows or [], "total_count": (res.get("total_count") if isinstance(res, dict) else len(rows or []))}
+
+
+@mcp.tool()
+def list_tasks(
+    lead: str = "",
+    deal: str = "",
+    status: str = "",
+    assigned_to: str = "",
+    limit: int = 50,
+):
+    """List CRM Tasks, optionally scoped to a lead or deal. Understands the
+    typed `lead`/`deal` links AND the legacy dynamic reference. Use this to see
+    what follow-ups exist for a prospect before creating new ones.
+
+    Args:
+        lead: CRM Lead name to scope tasks to.
+        deal: CRM Deal name to scope tasks to.
+        status: Backlog | Todo | In Progress | Done | Canceled.
+        assigned_to: User email to filter by owner.
+        limit: Max rows (capped server-side).
+    """
+    from crm.api.tasks import get_tasks as _get_tasks
+
+    return {
+        "tasks": _get_tasks(
+            lead=lead or None,
+            deal=deal or None,
+            status=status or None,
+            assigned_to=assigned_to or None,
+            limit=limit,
+        )
+    }
+
+
+@mcp.tool()
+def create_task(
+    title: str,
+    lead: str = "",
+    deal: str = "",
+    priority: str = "Medium",
+    status: str = "Todo",
+    due_date: str = "",
+    description: str = "",
+    assigned_to: str = "",
+):
+    """Create a CRM Task. Sets BOTH the typed link and the legacy dynamic
+    reference so old and new consumers both see it. Provide `lead` (or `deal`)
+    to link the follow-up to a prospect.
+
+    Args:
+        title: Task title (required).
+        lead: CRM Lead to link.
+        deal: CRM Deal to link.
+        priority: Low | Medium | High.
+        status: Backlog | Todo | In Progress | Done | Canceled.
+        due_date: ISO datetime string (e.g. '2026-07-10 17:00:00').
+        description: Free-text detail.
+        assigned_to: User email to assign to.
+    """
+    from crm.api.tasks import create_task as _create_task
+
+    name = _create_task(
+        title=title,
+        lead=lead or None,
+        deal=deal or None,
+        priority=priority or "Medium",
+        status=status or "Todo",
+        due_date=due_date or None,
+        description=description or None,
+        assigned_to=assigned_to or None,
+    )
+    return {"name": name, "created": True}
+
+
+@mcp.tool()
+def update_task_status(name: str, status: str):
+    """Move a CRM Task to a new status (Backlog|Todo|In Progress|Done|Canceled)."""
+    from crm.api.tasks import set_status as _set_status
+
+    return _set_status(name, status)
+
+
+@mcp.tool()
+def convert_task(name: str, target: str = ""):
+    """Convert a task's linked lead into a Deal OR append an AACR Intel
+    Opportunity, then mark the task Done.
+
+    Args:
+        name: CRM Task name.
+        target: 'deal' | 'opportunity'. Omit to use the site's configured
+                default (site config key nyx_task_convert_default).
+    """
+    from crm.api.tasks import convert_task as _convert_task
+
+    return _convert_task(name, target=target or None)
+
+
+@mcp.tool()
 def search_crm_knowledge(query: str, limit: int = 10):
     """Search CRM Notes and lead intel for voice assistant / knowledge context."""
     from crm.api.intelligence import search_crm_knowledge as _search
