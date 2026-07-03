@@ -7,6 +7,12 @@
 			<h2>🤖 Human Inbox - AI Drafts</h2>
 			<p class="text-muted">{{ total_drafts }} drafts</p>
 
+			<div class="mb-3">
+				<button type="button" class="btn btn-outline-dark btn-sm" id="nyx-batch-draft"
+					onclick="batchDraft()">🧠 Draft for top leads</button>
+				<span class="text-muted ml-2" id="nyx-batch-status"></span>
+			</div>
+
 			<form class="form-inline mb-3" method="get">
 				<div class="form-group mr-2">
 					<label class="mr-2">Doctype</label>
@@ -76,6 +82,36 @@ function sendDraft(name) {
 			} else {
 				frappe.show_alert('Send failed', 'danger');
 			}
+		}
+	});
+}
+
+function batchDraft() {
+	var btn = document.getElementById('nyx-batch-draft');
+	var status = document.getElementById('nyx-batch-status');
+	btn.disabled = true;
+	status.textContent = 'Queuing drafts for top leads…';
+	frappe.call({
+		method: 'crm.api.nyx_email_brain.batch_triage_and_draft',
+		args: { limit: 10, only_with_email: 1 },
+		callback: function(r) {
+			btn.disabled = false;
+			var m = r.message || {};
+			if (m.ok) {
+				status.textContent = 'Queued ' + (m.queued_count || 0) +
+					' lead(s) for drafting (backend: ' + (m.backend || '?') +
+					', skipped ' + (m.skipped_existing_draft || 0) + ' with existing drafts). ' +
+					'Drafts appear here as workers finish.';
+				frappe.show_alert('Queued ' + (m.queued_count || 0) + ' drafts', 'success');
+				setTimeout(() => window.location.reload(), 4000);
+			} else {
+				status.textContent = 'Batch draft failed.';
+				frappe.show_alert('Batch draft failed', 'danger');
+			}
+		},
+		error: function() {
+			btn.disabled = false;
+			status.textContent = 'Batch draft errored.';
 		}
 	});
 }

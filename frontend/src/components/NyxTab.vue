@@ -14,6 +14,13 @@
           @click="runEnrichment"
         />
         <Button
+          variant="subtle"
+          :label="triaging ? __('Drafting...') : __('Triage & Draft')"
+          iconLeft="edit"
+          :loading="triaging"
+          @click="triageAndDraft"
+        />
+        <Button
           v-if="draftReady"
           variant="solid"
           :label="approving ? __('Sending...') : __('Approve & Send')"
@@ -256,6 +263,8 @@ const props = defineProps({
 
 const enriching = ref(false)
 const approving = ref(false)
+const triaging = ref(false)
+const draftCommName = ref(null)  // Communication name of the last brain-produced draft
 const enrichStage = ref('web, Apollo, BrightData, PubMed, ClinicalTrials...')
 
 // ── Computed from CRM Lead additional_data ───────────────────────────────────
@@ -441,6 +450,37 @@ const enrichResource = createResource({
   makeParams: () => ({ lead_name: props.leadId, write: true }),
 })
 
+// NYX Email Brain (runtime-swappable): on-demand triage -> draft into Human Inbox.
+// Inbound-reply drafting is handled separately by the EAIA Gmail cron loop; this
+// button covers proactive/outbound drafting from inside the app.
+const triageResource = createResource({
+  url: 'crm.api.nyx_email_brain.triage_and_draft',
+  makeParams: () => ({ lead_name: props.leadId, force: true }),
+})
+
+// Approve & send always routes through the Frappe send gate (auditable),
+// regardless of which brain backend produced the draft.
+const sendResource = createResource({
+  url: 'crm.api.nyx_email_brain.approve_and_send',
+  makeParams: (name) => ({ communication_name: name }),
+})
+
+// Fallback lookup: latest draft Communication linked to this lead, used when the
+// draft was produced out-of-band (e.g. by the EAIA inbound loop, not this session).
+const draftLookup = createResource({
+  url: 'crm.api.email.get_inbox',
+  makeParams: () => ({ doctype: 'CRM Lead', docname: props.leadId, limit: 5 }),
+})
+
+async function resolvePendingDraft() {
+  if (draftCommName.value) return draftCommName.value
+  const rows = (await draftLookup.submit()) || []
+  const draft = rows.find(
+    (r) => r.communication_type === 'Communication' && r.status !== 'Sent',
+  )
+  return draft ? draft.name : null
+}
+
 async function runEnrichment() {
   enriching.value = true
   enrichStage.value = 'discovering verified email (Tavily two-gate)...'
@@ -478,26 +518,64 @@ async function runEnrichment() {
   }
 }
 
-async function approveDraft() {
-  approving.value = true
-
+async function triageAndDraft() {
+  triaging.value = true
   try {
-    const response = await fetch(`${EAIA_URL}/approve/${props.leadId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    })
+    // In-app brain: triage the lead and, if warranted, draft a reply into the
+    // Human Inbox for approval. force=true so a proactive outbound draft is made.
+    const result = (await triageResource.submit()) || {}
+    const decision = result.decision
 
-    const result = await response.json()
-
-    if (result.status === 'sent') {
-      toast({ variant: 'success', title: `Email sent to ${result.to_email}` })
+    if (decision === 'drafted') {
+      draftCommName.value = result.communication || null
+      toast({
+        variant: 'success',
+        title: 'Draft ready for approval',
+        text: `Subject: ${result.subject || '(none)'} — review it in the Human Inbox, then Approve & Send.`,
+      })
       window.location.reload()
+    } else if (decision === 'ignore' || decision === 'notify') {
+      toast({
+        variant: 'info',
+        title: `Triage: ${decision}`,
+        text: result.reason || 'No draft was created.',
+      })
+    } else if (decision === 'no_llm') {
+      toast({ variant: 'error', title: 'No LLM provider configured for the email brain.' })
+    } else if (decision === 'draft_failed') {
+      toast({ variant: 'error', title: 'Draft generation failed', text: result.error || '' })
+    } else if (decision && decision.startsWith('eaia')) {
+      toast({ variant: 'info', title: `EAIA backend: ${decision}`, text: result.error || '' })
     } else {
-      toast({ variant: 'error', title: result.detail || 'Approval failed' })
+      toast({ variant: 'info', title: `Triage result: ${decision || 'unknown'}` })
     }
   } catch (err) {
-    toast({ variant: 'error', title: `Approve error: ${err.message}` })
+    toast({ variant: 'error', title: `Triage error: ${err.message || err}` })
+  } finally {
+    triaging.value = false
+  }
+}
+
+async function approveDraft() {
+  approving.value = true
+  try {
+    // Route the pending draft through the Frappe send gate (frappe.sendmail).
+    // Runtime-agnostic: does NOT depend on the external EAIA service.
+    const name = await resolvePendingDraft()
+    if (!name) {
+      toast({ variant: 'warning', title: 'No pending draft found for this lead to send.' })
+      return
+    }
+    const result = (await sendResource.submit(name)) || {}
+    if (result.ok) {
+      toast({ variant: 'success', title: 'Email sent' })
+      draftCommName.value = null
+      window.location.reload()
+    } else {
+      toast({ variant: 'error', title: result.error || 'Send failed' })
+    }
+  } catch (err) {
+    toast({ variant: 'error', title: `Approve error: ${err.message || err}` })
   } finally {
     approving.value = false
   }
