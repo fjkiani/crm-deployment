@@ -422,5 +422,35 @@ def link_provider_ids(communication_name: str, provider: str | None = None, prov
 	return {"ok": True}
 
 
+@frappe.whitelist()
+def find_communication_by_provider_id(provider_message_id: str | None = None, provider_thread_id: str | None = None):
+	"""Durable idempotency lookup for the EAIA bridge.
+
+	Returns the existing Communication (name + reference) for a given provider
+	message/thread id, or None. Because the CRM is the source of truth, this
+	survives EAIA-service restarts (unlike a local processed_ids.json file).
+	"""
+	if provider_message_id:
+		name = frappe.db.get_value(
+			"Communication",
+			{"provider_message_id": provider_message_id},
+			["name", "reference_doctype", "reference_name", "status"],
+			as_dict=True,
+		)
+		if name:
+			return name
+	if provider_thread_id:
+		name = frappe.db.get_value(
+			"Communication",
+			{"provider_thread_id": provider_thread_id},
+			["name", "reference_doctype", "reference_name", "status"],
+			as_dict=True,
+			order_by="creation desc",
+		)
+		if name:
+			return name
+	return None
+
+
 def raise_frappe(message: str):
 	frappe.throw(_(message))
