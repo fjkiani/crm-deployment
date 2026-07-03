@@ -17,7 +17,7 @@ async def main():
     print("Posting draft...")
     resp = await post_draft_with_provider(email)
     print("Draft response:", resp)
-    comm = get_communication_for_ids(email["id"], email["thread_id"]) or ""
+    comm = await get_communication_for_ids(email["id"], email["thread_id"]) or ""
     if os.getenv("EAIA_TEST_SEND", "0") == "1" and comm:
         print("Sending communication:", comm)
         send_resp = await send_communication(comm)

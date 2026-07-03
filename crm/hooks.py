@@ -170,7 +170,12 @@ doc_events = {
 		"validate_reset_password": ["crm.api.demo.validate_reset_password"],
 	},
 	"Communication": {
-		"after_insert": ["crm.api.email.auto_link_communication"],
+		"after_insert": [
+			# 1) resolve + persist reference (Lead/Deal/Contact) on the Communication
+			"crm.api.email.auto_link_communication",
+			# 2) NYX inbound router: auto-triage inbound replies (opt-in, multi-tenant)
+			"crm.api.nyx_inbound.route_inbound_communication",
+		],
 	},
 }
 

@@ -7,6 +7,8 @@ SUPPORTED = {
 	"email.draft_with_provider",
 	"email.send",
 	"email.link_provider_ids",
+	"email.resolve_reference",
+	"email.find_by_provider_id",
 }
 
 
@@ -55,6 +57,18 @@ def run(command: str, params: dict | None = None):
 			"crm.api.email.link_provider_ids",
 			communication_name=params.get("communication_name"),
 			provider=params.get("provider"),
+			provider_message_id=params.get("provider_message_id"),
+			provider_thread_id=params.get("provider_thread_id"),
+		)
+	if command == "email.resolve_reference":
+		return frappe.call(
+			"crm.api.email.resolve_reference",
+			emails=params.get("emails"),
+			in_reply_to=params.get("in_reply_to"),
+		)
+	if command == "email.find_by_provider_id":
+		return frappe.call(
+			"crm.api.email.find_communication_by_provider_id",
 			provider_message_id=params.get("provider_message_id"),
 			provider_thread_id=params.get("provider_thread_id"),
 		)
