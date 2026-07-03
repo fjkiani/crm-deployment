@@ -143,6 +143,52 @@ def _native_rest_fallback(method: str, args: dict, headers: dict):
         msg = r.json().get("message", {})
         return {"rows": msg.get("rows", []), "total_count": msg.get("total_count", 0)}
 
+    if method == "list_tasks":
+        body = {k: v for k, v in {
+            "lead": args.get("lead", ""),
+            "deal": args.get("deal", ""),
+            "status": args.get("status", ""),
+            "assigned_to": args.get("assigned_to", ""),
+            "limit": args.get("limit", 50),
+        }.items() if v}
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.get_tasks",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        return {"tasks": r.json().get("message", [])}
+
+    if method == "create_task":
+        body = {k: v for k, v in {
+            "title": args.get("title", ""),
+            "lead": args.get("lead", ""),
+            "deal": args.get("deal", ""),
+            "priority": args.get("priority", "Medium"),
+            "status": args.get("status", "Todo"),
+            "due_date": args.get("due_date", ""),
+            "description": args.get("description", ""),
+            "assigned_to": args.get("assigned_to", ""),
+        }.items() if v}
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.create_task",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        return {"name": r.json().get("message"), "created": True}
+
+    if method == "update_task_status":
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.set_status",
+                          headers=headers,
+                          json={"name": args["name"], "status": args["status"]},
+                          timeout=20)
+        r.raise_for_status()
+        return r.json().get("message", {})
+
+    if method == "convert_task":
+        body = {"name": args["name"]}
+        if args.get("target"):
+            body["target"] = args["target"]
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.tasks.convert_task",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        return r.json().get("message", {})
+
     raise Exception(f"MCP unavailable and no native REST fallback for tool '{method}'. "
                     f"Install the frappe_mcp app on the site to enable it.")
 
@@ -240,6 +286,71 @@ def search_leads_faceted(
         "session_slug": session_slug,
         "limit": limit,
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TASKS  (typed lead/deal links + configurable conversion)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@tool
+def list_tasks(lead: str = "", deal: str = "", status: str = "",
+               assigned_to: str = "", limit: int = 50):
+    """List CRM Tasks, optionally scoped to a lead or deal. Understands both the
+    typed lead/deal links and the legacy dynamic reference. Use before creating
+    follow-ups to avoid duplicates.
+
+    Args:
+        lead: CRM Lead name to scope to.
+        deal: CRM Deal name to scope to.
+        status: Backlog | Todo | In Progress | Done | Canceled.
+        assigned_to: User email to filter by owner.
+        limit: Max rows.
+    """
+    return _call_mcp("list_tasks", {
+        "lead": lead, "deal": deal, "status": status,
+        "assigned_to": assigned_to, "limit": limit,
+    })
+
+
+@tool
+def create_task(title: str, lead: str = "", deal: str = "", priority: str = "Medium",
+                status: str = "Todo", due_date: str = "", description: str = "",
+                assigned_to: str = ""):
+    """Create a CRM Task linked to a lead or deal (sets typed + dynamic links).
+
+    Args:
+        title: Task title (required).
+        lead: CRM Lead to link.
+        deal: CRM Deal to link.
+        priority: Low | Medium | High.
+        status: Backlog | Todo | In Progress | Done | Canceled.
+        due_date: ISO datetime (e.g. '2026-07-10 17:00:00').
+        description: Free-text detail.
+        assigned_to: User email to assign to.
+    """
+    return _call_mcp("create_task", {
+        "title": title, "lead": lead, "deal": deal, "priority": priority,
+        "status": status, "due_date": due_date, "description": description,
+        "assigned_to": assigned_to,
+    })
+
+
+@tool
+def update_task_status(name: str, status: str):
+    """Move a CRM Task to a new status (Backlog|Todo|In Progress|Done|Canceled)."""
+    return _call_mcp("update_task_status", {"name": name, "status": status})
+
+
+@tool
+def convert_task(name: str, target: str = ""):
+    """Convert a task's linked lead into a Deal OR append an AACR Intel
+    Opportunity, then mark the task Done. Omit `target` to use the site default.
+
+    Args:
+        name: CRM Task name.
+        target: 'deal' | 'opportunity' (optional).
+    """
+    return _call_mcp("convert_task", {"name": name, "target": target})
 
 
 @tool

@@ -276,6 +276,32 @@ def _exec_farfalle_deep_research(args):
             return str(pool.submit(asyncio.run, farfalle_deep_research.ainvoke({"query": query})).result())
 
 
+# ── CRM Task tools ────────────────────────────────────────────────────────────
+
+def _exec_list_tasks(args):
+    """List CRM Tasks scoped to a lead/deal (typed + dynamic aware)."""
+    from eaia.frappe_tool import list_tasks
+    return str(list_tasks.invoke(args))
+
+
+def _exec_create_task(args):
+    """Create a CRM Task linked to a lead/deal."""
+    from eaia.frappe_tool import create_task
+    return str(create_task.invoke(args))
+
+
+def _exec_update_task_status(args):
+    """Move a CRM Task to a new status."""
+    from eaia.frappe_tool import update_task_status
+    return str(update_task_status.invoke(args))
+
+
+def _exec_convert_task(args):
+    """Convert a task's lead to a deal or intel opportunity, then mark it done."""
+    from eaia.frappe_tool import convert_task
+    return str(convert_task.invoke(args))
+
+
 # ── The registry: name → handler ──────────────────────────────────────────────
 
 TOOL_REGISTRY = {
@@ -287,6 +313,11 @@ TOOL_REGISTRY = {
     "get_lead_dossier":         _exec_get_dossier,
     "get_lead_status_snapshot": _exec_lead_snapshot,
     "search_leads_faceted":     _exec_search_leads_faceted,
+    # Tasks (typed lead/deal links + convert)
+    "list_tasks":               _exec_list_tasks,
+    "create_task":              _exec_create_task,
+    "update_task_status":       _exec_update_task_status,
+    "convert_task":             _exec_convert_task,
     # Deep research
     "farfalle_deep_research":   _exec_farfalle_deep_research,
     # Research tools

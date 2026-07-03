@@ -57,6 +57,18 @@ try:
 except ImportError:
     pass
 
+# Stream C/D: CRM Task tools (list / create / status / convert-to-deal-or-opportunity).
+try:
+    from eaia.frappe_tool import (
+        list_tasks as _t_list_tasks,
+        create_task as _t_create_task,
+        update_task_status as _t_update_task_status,
+        convert_task as _t_convert_task,
+    )
+    _mcp_tools += [_t_list_tasks, _t_create_task, _t_update_task_status, _t_convert_task]
+except ImportError:
+    pass
+
 tools = [
     NewEmailDraft,
     ResponseEmailDraft,
