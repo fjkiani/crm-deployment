@@ -1140,3 +1140,122 @@ def get_deal_status_change_counts(from_date, to_date, deal_conds=""):
 		as_dict=True,
 	)
 	return result or []
+
+
+# ---------------------------------------------------------------------------
+# NYX: task analytics  (status + overdue + per-owner + funnel-stage linkage)
+# ---------------------------------------------------------------------------
+@frappe.whitelist()
+def get_task_summary(user="", include_stage=1):
+	"""Aggregate CRM Task health for the NYX Tasks dashboard.
+
+	Returns:
+	  by_status       : [{status, count}]  over Backlog/Todo/In Progress/Done/Canceled
+	  overdue         : int   (open tasks past due_date)
+	  due_today       : int
+	  by_owner        : [{assigned_to, open, overdue}]
+	  by_funnel_stage : [{stage, count}]  open tasks grouped by the CRM Deal
+	                    status of their linked deal (typed `deal` field) — the
+	                    "funnel linkage" view. Only when include_stage.
+	  total_open      : int
+	"""
+	user_cond = ""
+	params = {}
+	if user:
+		user_cond = " AND assigned_to = %(user)s"
+		params["user"] = user
+
+	open_statuses = ("Backlog", "Todo", "In Progress")
+
+	# by status
+	by_status = frappe.db.sql(
+		f"""
+			SELECT status, COUNT(*) AS count
+			FROM `tabCRM Task`
+			WHERE 1=1 {user_cond}
+			GROUP BY status
+		""",
+		params,
+		as_dict=True,
+	)
+
+	# overdue open tasks
+	overdue = frappe.db.sql(
+		f"""
+			SELECT COUNT(*) AS count
+			FROM `tabCRM Task`
+			WHERE status IN ('Backlog','Todo','In Progress')
+			  AND due_date IS NOT NULL
+			  AND due_date < NOW()
+			  {user_cond}
+		""",
+		params,
+		as_dict=True,
+	)
+	overdue_count = overdue[0].count if overdue else 0
+
+	due_today = frappe.db.sql(
+		f"""
+			SELECT COUNT(*) AS count
+			FROM `tabCRM Task`
+			WHERE status IN ('Backlog','Todo','In Progress')
+			  AND due_date IS NOT NULL
+			  AND DATE(due_date) = CURDATE()
+			  {user_cond}
+		""",
+		params,
+		as_dict=True,
+	)
+	due_today_count = due_today[0].count if due_today else 0
+
+	total_open = frappe.db.sql(
+		f"""
+			SELECT COUNT(*) AS count
+			FROM `tabCRM Task`
+			WHERE status IN ('Backlog','Todo','In Progress') {user_cond}
+		""",
+		params,
+		as_dict=True,
+	)
+	total_open_count = total_open[0].count if total_open else 0
+
+	# per-owner open + overdue
+	by_owner = frappe.db.sql(
+		"""
+			SELECT
+				COALESCE(assigned_to, '(unassigned)') AS assigned_to,
+				SUM(CASE WHEN status IN ('Backlog','Todo','In Progress') THEN 1 ELSE 0 END) AS open,
+				SUM(CASE WHEN status IN ('Backlog','Todo','In Progress')
+				          AND due_date IS NOT NULL AND due_date < NOW() THEN 1 ELSE 0 END) AS overdue
+			FROM `tabCRM Task`
+			GROUP BY assigned_to
+			ORDER BY open DESC
+		""",
+		as_dict=True,
+	)
+
+	result = {
+		"by_status": by_status or [],
+		"overdue": overdue_count,
+		"due_today": due_today_count,
+		"total_open": total_open_count,
+		"by_owner": by_owner or [],
+	}
+
+	# funnel-stage linkage: open tasks joined to their linked deal's status
+	if int(include_stage or 0):
+		by_stage = frappe.db.sql(
+			f"""
+				SELECT COALESCE(d.status, '(no deal)') AS stage, COUNT(*) AS count
+				FROM `tabCRM Task` t
+				LEFT JOIN `tabCRM Deal` d ON d.name = t.deal
+				WHERE t.status IN ('Backlog','Todo','In Progress') {('AND t.assigned_to = %(user)s' if user else '')}
+				GROUP BY d.status
+				ORDER BY count DESC
+			""",
+			params,
+			as_dict=True,
+		)
+		result["by_funnel_stage"] = by_stage or []
+
+	return result

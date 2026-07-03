@@ -13,6 +13,8 @@
   "start_date",
   "reference_doctype",
   "reference_docname",
+  "lead",
+  "deal",
   "column_break_cqua",
   "assigned_to",
   "status",
@@ -83,11 +85,25 @@
    "fieldtype": "Dynamic Link",
    "label": "Reference Doc",
    "options": "reference_doctype"
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Lead",
+   "options": "CRM Lead"
+  },
+  {
+   "fieldname": "deal",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Deal",
+   "options": "CRM Deal"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-02-08 12:04:00.955984",
+ "modified": "2026-07-03 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "FCRM",
  "name": "CRM Task",
