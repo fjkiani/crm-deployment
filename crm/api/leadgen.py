@@ -49,6 +49,20 @@ def _split_pi_name(pi_name: str):
     return parts[0], " ".join(parts[1:])
 
 
+
+def _user_roles() -> set:
+    return set(frappe.get_roles() or [])
+
+
+def _is_sales_user_only() -> bool:
+    roles = _user_roles()
+    return "Sales User" in roles and "Sales Manager" not in roles
+
+
+def _is_sales_manager() -> bool:
+    return "Sales Manager" in _user_roles()
+
+
 @frappe.whitelist()
 def run_leadgen_job(job_type: str, params: dict = None) -> Dict[str, Any]:
     """Run lead generation job using unified job system"""
@@ -96,8 +110,7 @@ def job_status(job_name: str) -> Dict[str, Any]:
         frappe.throw(_("Insufficient permissions"))
     
     # Check if user can access this job
-    roles = frappe.get_roles()
-    if "Sales User" in roles and "Sales Manager" not in roles:
+    if _is_sales_user_only():
         job = frappe.get_doc("LeadGen Job", job_name)
         if job.owner != frappe.session.user:
             frappe.throw(_("You can only view your own jobs"))
@@ -126,8 +139,7 @@ def get_prospects(filters: dict = None, limit: int = 20, include_raw: bool = Fal
         frappe.throw(_("Insufficient permissions"))
     
     # Apply owner filter for Sales Users
-    roles = frappe.get_roles()
-    if "Sales User" in roles and "Sales Manager" not in roles:
+    if _is_sales_user_only():
         filters = filters or {}
         filters["owner"] = frappe.session.user
     
@@ -139,7 +151,7 @@ def get_prospects(filters: dict = None, limit: int = 20, include_raw: bool = Fal
     ]
     
     # Add PII fields only for managers
-    if include_raw and "Sales Manager" in roles:
+    if include_raw and _is_sales_manager():
         fields.extend(["raw", "pi_email", "enriched_data"])
     
     prospects = frappe.get_list(
@@ -283,9 +295,8 @@ def get_dashboard_metrics() -> Dict[str, Any]:
         frappe.throw(_("Insufficient permissions"))
     
     # Apply owner filter for Sales Users
-    roles = frappe.get_roles()
     filters = {}
-    if "Sales User" in roles and "Sales Manager" not in roles:
+    if _is_sales_user_only():
         filters["owner"] = frappe.session.user
     
     # Total prospects
@@ -313,7 +324,7 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     
     # Recent jobs
     job_filters = {}
-    if "Sales User" in roles and "Sales Manager" not in roles:
+    if _is_sales_user_only():
         job_filters["owner"] = frappe.session.user
     
     recent_jobs = frappe.get_all(
