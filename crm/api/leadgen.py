@@ -8,6 +8,46 @@ from frappe import _
 from frappe.utils import now, cint, flt
 from typing import Dict, List, Any, Optional
 import json
+import re
+
+# Trailing academic/clinical credential suffixes to strip before splitting a
+# person name into first/last (e.g. "Steven Bellon, PhD" -> first "Steven",
+# last "Bellon"). Order-independent; matches one or more comma/space-separated
+# credentials at the end of the string, case-insensitively.
+_CREDENTIALS = (
+    "phd", "md", "do", "mph", "ms", "msc", "mba", "bsc", "ba", "bs",
+    "rn", "np", "pa", "pharmd", "dds", "dvm", "jd", "facp", "faan", "mrcp",
+    "frcp", "dphil", "scd", "edd", "psyd", "msn", "dnp",
+)
+
+
+def _split_pi_name(pi_name: str):
+    """Split a PI name into (first_name, last_name), stripping trailing
+    credential suffixes. Single-token names -> (name, ""). Never returns a bare
+    credential as the first name. `lead_name` should keep the original pi_name."""
+    if not pi_name or not str(pi_name).strip():
+        return "Unknown", ""
+    name = str(pi_name).strip()
+    # Iteratively strip trailing credentials (handles ", MD, PhD" / " MD PhD").
+    changed = True
+    while changed and name:
+        changed = False
+        # split off a trailing token after comma or whitespace
+        m = re.search(r"[,\s]+([A-Za-z\.]+)\s*$", name)
+        if m:
+            tok = m.group(1).replace(".", "").lower()
+            if tok in _CREDENTIALS:
+                name = name[: m.start()].strip().rstrip(",").strip()
+                changed = True
+    if not name:  # name was only credentials
+        name = str(pi_name).strip()
+    parts = name.split()
+    if not parts:
+        return "Unknown", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
 
 @frappe.whitelist()
 def run_leadgen_job(job_type: str, params: dict = None) -> Dict[str, Any]:
@@ -56,7 +96,8 @@ def job_status(job_name: str) -> Dict[str, Any]:
         frappe.throw(_("Insufficient permissions"))
     
     # Check if user can access this job
-    if frappe.has_role("Sales User") and not frappe.has_role("Sales Manager"):
+    roles = frappe.get_roles()
+    if "Sales User" in roles and "Sales Manager" not in roles:
         job = frappe.get_doc("LeadGen Job", job_name)
         if job.owner != frappe.session.user:
             frappe.throw(_("You can only view your own jobs"))
@@ -85,7 +126,8 @@ def get_prospects(filters: dict = None, limit: int = 20, include_raw: bool = Fal
         frappe.throw(_("Insufficient permissions"))
     
     # Apply owner filter for Sales Users
-    if frappe.has_role("Sales User") and not frappe.has_role("Sales Manager"):
+    roles = frappe.get_roles()
+    if "Sales User" in roles and "Sales Manager" not in roles:
         filters = filters or {}
         filters["owner"] = frappe.session.user
     
@@ -97,7 +139,7 @@ def get_prospects(filters: dict = None, limit: int = 20, include_raw: bool = Fal
     ]
     
     # Add PII fields only for managers
-    if include_raw and frappe.has_role("Sales Manager"):
+    if include_raw and "Sales Manager" in roles:
         fields.extend(["raw", "pi_email", "enriched_data"])
     
     prospects = frappe.get_list(
@@ -133,10 +175,11 @@ def promote_prospects(prospect_names: List[str], lead_owner: str = None) -> Dict
                 continue
             
             # Create CRM Lead
+            _first, _last = _split_pi_name(prospect.pi_name)
             lead = frappe.get_doc({
                 "doctype": "CRM Lead",
-                "first_name": prospect.pi_name.split()[0] if prospect.pi_name else "Unknown",
-                "last_name": " ".join(prospect.pi_name.split()[1:]) if prospect.pi_name and len(prospect.pi_name.split()) > 1 else "",
+                "first_name": _first,
+                "last_name": _last,
                 "lead_name": prospect.pi_name,
                 "email": prospect.pi_email,
                 "organization": prospect.institution,
@@ -240,8 +283,9 @@ def get_dashboard_metrics() -> Dict[str, Any]:
         frappe.throw(_("Insufficient permissions"))
     
     # Apply owner filter for Sales Users
+    roles = frappe.get_roles()
     filters = {}
-    if frappe.has_role("Sales User") and not frappe.has_role("Sales Manager"):
+    if "Sales User" in roles and "Sales Manager" not in roles:
         filters["owner"] = frappe.session.user
     
     # Total prospects
@@ -269,16 +313,19 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     
     # Recent jobs
     job_filters = {}
-    if frappe.has_role("Sales User") and not frappe.has_role("Sales Manager"):
+    if "Sales User" in roles and "Sales Manager" not in roles:
         job_filters["owner"] = frappe.session.user
     
     recent_jobs = frappe.get_all(
         "LeadGen Job",
-        fields=["name", "job_type", "status", "created", "records_processed"],
+        fields=["name", "job_type", "status", "creation", "records_processed"],
         filters=job_filters,
         limit=10,
-        order_by="created desc"
+        order_by="creation desc"
     )
+    # Backwards-compat: expose `created` alias alongside standard `creation`
+    for j in recent_jobs:
+        j["created"] = j.get("creation")
     
     return {
         "total_prospects": total_prospects,
@@ -315,23 +362,26 @@ def unsubscribe(prospect_name: str):
     try:
         prospect = frappe.get_doc("Lead Prospect", prospect_name)
         
-        # Update prospect status
-        prospect.status = "Unsubscribed"
+        # Update prospect status (field is `outreach_status`; "Unsubscribed" is a valid option)
+        prospect.outreach_status = "Unsubscribed"
         prospect.notes = f"Unsubscribed on {frappe.utils.now()}"
         prospect.save(ignore_permissions=True)
         
-        # Update any active outreach sequences
+        # Cancel any non-terminal outreach sequence instances for this prospect.
+        # OSI link field is `prospect`; there is no "Active" status — the live-running
+        # states are Not Started / In Progress / Paused.
         active_instances = frappe.get_all(
             "Outreach Sequence Instance",
             filters={
-                "lead_prospect": prospect_name,
-                "status": "Active"
+                "prospect": prospect_name,
+                "status": ["in", ["Not Started", "In Progress", "Paused"]]
             }
         )
         
         for instance_data in active_instances:
             instance = frappe.get_doc("Outreach Sequence Instance", instance_data.name)
             instance.status = "Unsubscribed"
+            instance.unsubscribed = 1
             instance.save(ignore_permissions=True)
         
         return {"status": "success", "message": "You have been unsubscribed from future communications."}
