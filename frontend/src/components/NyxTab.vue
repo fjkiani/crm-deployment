@@ -227,6 +227,67 @@
       </div>
     </div>
 
+    <!-- NYX Tasks (typed lead-linked + convert) -->
+    <div class="mx-4 mt-4 mb-4 sm:mx-10">
+      <div class="rounded-lg border border-surface-gray-3 bg-surface-white">
+        <div class="flex items-center justify-between border-b px-4 py-3">
+          <span class="text-sm font-semibold text-ink-gray-8">✅ Tasks</span>
+          <span class="text-xs text-ink-gray-4">
+            converts to {{ convertDefault === 'opportunity' ? 'intel opportunity' : 'deal' }}
+          </span>
+        </div>
+        <div class="p-4 space-y-3">
+          <!-- quick add -->
+          <div class="flex items-center gap-2">
+            <input
+              v-model="newTaskTitle"
+              type="text"
+              :placeholder="__('Add a task for this lead...')"
+              class="flex-1 rounded-md border border-surface-gray-3 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+              @keyup.enter="quickAddTask"
+            />
+            <Button
+              variant="subtle"
+              iconLeft="plus"
+              :loading="addingTask"
+              :label="__('Add')"
+              @click="quickAddTask"
+            />
+          </div>
+
+          <!-- list -->
+          <div v-if="loadingTasks" class="text-xs text-ink-gray-4">Loading tasks...</div>
+          <div v-else-if="!tasks.length" class="text-xs text-ink-gray-4">No tasks yet for this lead.</div>
+          <div v-else class="space-y-2">
+            <div
+              v-for="task in tasks"
+              :key="task.name"
+              class="flex items-center justify-between gap-2 rounded-md border border-surface-gray-2 px-3 py-2"
+            >
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm text-ink-gray-8">{{ task.title }}</div>
+                <div class="mt-0.5 flex items-center gap-2">
+                  <span class="rounded-full px-2 py-0.5 text-[10px] font-medium" :class="taskStatusClass(task.status)">
+                    {{ task.status }}
+                  </span>
+                  <span v-if="task.deal" class="text-[10px] text-green-600">→ {{ task.deal }}</span>
+                  <span v-if="isOverdue(task)" class="text-[10px] font-medium text-red-500">overdue</span>
+                </div>
+              </div>
+              <Button
+                v-if="!task.deal"
+                variant="ghost"
+                size="sm"
+                :label="__('Convert')"
+                :loading="convertingTask === task.name"
+                @click="convertTask(task)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Empty state -->
     <div
       v-if="!score && !enriching"
@@ -253,7 +314,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Button, toast, createResource } from 'frappe-ui'
 
 const props = defineProps({
@@ -265,6 +326,14 @@ const enriching = ref(false)
 const approving = ref(false)
 const triaging = ref(false)
 const draftCommName = ref(null)  // Communication name of the last brain-produced draft
+
+// ── NYX Tasks (typed lead/deal links + configurable conversion) ──────────────
+const tasks = ref([])
+const loadingTasks = ref(false)
+const newTaskTitle = ref('')
+const addingTask = ref(false)
+const convertingTask = ref(null) // task name currently being converted
+const convertDefault = ref('deal')
 const enrichStage = ref('web, Apollo, BrightData, PubMed, ClinicalTrials...')
 
 // ── Computed from CRM Lead additional_data ───────────────────────────────────
@@ -480,6 +549,100 @@ async function resolvePendingDraft() {
   )
   return draft ? draft.name : null
 }
+
+// ── NYX Tasks resources + actions ────────────────────────────────────────────
+const tasksResource = createResource({
+  url: 'crm.api.tasks.get_tasks',
+  makeParams: () => ({ lead: props.leadId, limit: 50 }),
+})
+const createTaskResource = createResource({
+  url: 'crm.api.tasks.create_task',
+})
+const convertTaskResource = createResource({
+  url: 'crm.api.tasks.convert_task',
+})
+const convertDefaultResource = createResource({
+  url: 'crm.api.tasks.get_convert_default',
+})
+
+async function loadTasks() {
+  loadingTasks.value = true
+  try {
+    tasks.value = (await tasksResource.submit()) || []
+  } catch (err) {
+    // non-fatal: tasks panel is additive
+    tasks.value = []
+  } finally {
+    loadingTasks.value = false
+  }
+}
+
+async function quickAddTask() {
+  const title = (newTaskTitle.value || '').trim()
+  if (!title) return
+  addingTask.value = true
+  try {
+    await createTaskResource.submit({
+      title,
+      lead: props.leadId,
+      status: 'Todo',
+      priority: 'Medium',
+    })
+    newTaskTitle.value = ''
+    toast({ variant: 'success', title: 'Task created' })
+    await loadTasks()
+  } catch (err) {
+    toast({ variant: 'error', title: `Create failed: ${err.message || err}` })
+  } finally {
+    addingTask.value = false
+  }
+}
+
+async function convertTask(task) {
+  convertingTask.value = task.name
+  try {
+    // target omitted -> backend uses site config default (deal|opportunity)
+    const result = (await convertTaskResource.submit({ name: task.name })) || {}
+    if (result.target === 'deal') {
+      toast({ variant: 'success', title: `Converted to deal ${result.deal}` })
+    } else if (result.target === 'opportunity') {
+      toast({ variant: 'success', title: `Added intel opportunity (${result.aacr_intel})` })
+    } else {
+      toast({ variant: 'success', title: 'Task converted' })
+    }
+    await loadTasks()
+  } catch (err) {
+    toast({ variant: 'error', title: `Convert failed: ${err.message || err}` })
+  } finally {
+    convertingTask.value = null
+  }
+}
+
+function taskStatusClass(status) {
+  const m = {
+    'Backlog': 'bg-gray-100 text-gray-600',
+    'Todo': 'bg-blue-100 text-blue-700',
+    'In Progress': 'bg-yellow-100 text-yellow-700',
+    'Done': 'bg-green-100 text-green-700',
+    'Canceled': 'bg-red-100 text-red-600',
+  }
+  return m[status] || 'bg-gray-100 text-gray-600'
+}
+
+function isOverdue(task) {
+  if (!task.due_date) return false
+  if (['Done', 'Canceled'].includes(task.status)) return false
+  return new Date(task.due_date) < new Date()
+}
+
+onMounted(() => {
+  loadTasks()
+  convertDefaultResource.submit().then((r) => {
+    if (r && r.default_target) convertDefault.value = r.default_target
+  }).catch(() => {})
+})
+
+watch(() => props.leadId, () => { loadTasks() })
 
 async function runEnrichment() {
   enriching.value = true
