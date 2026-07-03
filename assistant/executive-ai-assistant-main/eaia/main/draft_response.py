@@ -43,6 +43,20 @@ try:
 except ImportError:
     pass
 
+# Stream C: rich faceted lead search (CRM Lead ⋈ Lead Intel Facets) via MCP.
+try:
+    from eaia.frappe_tool import search_leads_faceted
+    _mcp_tools.append(search_leads_faceted)
+except ImportError:
+    pass
+
+# Stream C: deep multi-source research via Farfalle RAG (httpx SSE).
+try:
+    from eaia.tools.farfalle_tools import farfalle_deep_research
+    _mcp_tools.append(farfalle_deep_research)
+except ImportError:
+    pass
+
 tools = [
     NewEmailDraft,
     ResponseEmailDraft,

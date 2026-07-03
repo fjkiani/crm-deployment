@@ -118,6 +118,31 @@ def _native_rest_fallback(method: str, args: dict, headers: dict):
         r.raise_for_status()
         return {"leads": r.json().get("data", [])}
 
+    if method == "search_leads_faceted":
+        facet_filters = {}
+        if args.get("has_competitive_intel"):
+            facet_filters["has_competitive_intel"] = 1
+        if args.get("has_gtm_narrative"):
+            facet_filters["has_gtm_narrative"] = 1
+        if args.get("min_opportunities"):
+            facet_filters["n_opportunities"] = [">", int(args["min_opportunities"])]
+        if args.get("session_slug"):
+            facet_filters["session_slug"] = args["session_slug"]
+        body = {
+            "q": args.get("query", ""),
+            "tier": args.get("tier", ""),
+            "page_length": args.get("limit", 20),
+        }
+        if args.get("score_min"):
+            body["score_min"] = args["score_min"]
+        if facet_filters:
+            body["facet_filters"] = json.dumps(facet_filters)
+        r = requests.post(f"{FRAPPE_SITE}/api/method/crm.api.intel_facets.search_leads",
+                          headers=headers, json=body, timeout=30)
+        r.raise_for_status()
+        msg = r.json().get("message", {})
+        return {"rows": msg.get("rows", []), "total_count": msg.get("total_count", 0)}
+
     raise Exception(f"MCP unavailable and no native REST fallback for tool '{method}'. "
                     f"Install the frappe_mcp app on the site to enable it.")
 
@@ -178,6 +203,43 @@ def delete_all_leads(confirm: bool = False):
 def get_lead_dossier(lead_name: str):
     """Fetch full lead data with latest FCRM Note + intel data."""
     return _call_mcp("get_lead_dossier", {"lead_name": lead_name})
+
+
+@tool
+def search_leads_faceted(
+    query: str = "",
+    tier: str = "",
+    score_min: float = 0,
+    has_competitive_intel: int = 0,
+    has_gtm_narrative: int = 0,
+    min_opportunities: int = 0,
+    session_slug: str = "",
+    limit: int = 20,
+):
+    """RICH facet-aware lead search (CRM Lead JOIN Lead Intel Facets). Prefer this
+    over `search_leads` when you need intelligence facets: tier, opportunity /
+    vulnerability counts, competitive intel, GTM narrative, or source session.
+
+    Args:
+        query: Free-text over name / organization / email / source_ref_id.
+        tier: 'Tier 1' | 'Tier 2' | 'Tier 3'.
+        score_min: Minimum lead_score.
+        has_competitive_intel: 1 to require competitive intel.
+        has_gtm_narrative: 1 to require a GTM narrative.
+        min_opportunities: Require n_opportunities greater than this value.
+        session_slug: Restrict to a given intel session.
+        limit: Max rows.
+    """
+    return _call_mcp("search_leads_faceted", {
+        "query": query,
+        "tier": tier,
+        "score_min": score_min,
+        "has_competitive_intel": has_competitive_intel,
+        "has_gtm_narrative": has_gtm_narrative,
+        "min_opportunities": min_opportunities,
+        "session_slug": session_slug,
+        "limit": limit,
+    })
 
 
 @tool

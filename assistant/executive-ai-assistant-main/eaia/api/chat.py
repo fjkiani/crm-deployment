@@ -255,6 +255,27 @@ def _exec_apollo_enrich(args):
         return str(result) if result else "No Apollo data found."
 
 
+def _exec_search_leads_faceted(args):
+    """Rich facet-aware lead search via the Frappe MCP (intel_facets)."""
+    from eaia.frappe_tool import search_leads_faceted
+    return str(search_leads_faceted.invoke(args))
+
+
+def _exec_farfalle_deep_research(args):
+    """Deep multi-source web research via the Farfalle RAG pipeline (async tool)."""
+    import asyncio
+    from eaia.tools.farfalle_tools import farfalle_deep_research
+    query = args.get("query", "")
+    if not query:
+        return "❌ Missing 'query' for Farfalle deep research."
+    try:
+        return str(asyncio.run(farfalle_deep_research.ainvoke({"query": query})))
+    except RuntimeError:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return str(pool.submit(asyncio.run, farfalle_deep_research.ainvoke({"query": query})).result())
+
+
 # ── The registry: name → handler ──────────────────────────────────────────────
 
 TOOL_REGISTRY = {
@@ -265,6 +286,9 @@ TOOL_REGISTRY = {
     "communication_history":    _exec_communication_history,
     "get_lead_dossier":         _exec_get_dossier,
     "get_lead_status_snapshot": _exec_lead_snapshot,
+    "search_leads_faceted":     _exec_search_leads_faceted,
+    # Deep research
+    "farfalle_deep_research":   _exec_farfalle_deep_research,
     # Research tools
     "brightdata_web_search":    _exec_brightdata_search,
     "web_search":               _exec_web_search,

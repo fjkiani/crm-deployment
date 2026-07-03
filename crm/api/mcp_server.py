@@ -196,6 +196,56 @@ def search_leads(query: str = "", status: str = "", score_min: int = 0, limit: i
 
 
 @mcp.tool()
+def search_leads_faceted(
+    query: str = "",
+    tier: str = "",
+    score_min: float = 0,
+    has_competitive_intel: int = 0,
+    has_gtm_narrative: int = 0,
+    min_opportunities: int = 0,
+    session_slug: str = "",
+    limit: int = 20,
+):
+    """Facet-aware lead search over CRM Lead JOIN Lead Intel Facets — the RICH
+    search. Prefer this over `search_leads` when you need intelligence facets:
+    tier, opportunity/vulnerability counts, competitive intel, GTM narrative, or
+    the source session. Free-text `query` matches name/org/email/source_ref_id.
+
+    Args:
+        query: Free-text over lead_name / organization / email / source_ref_id.
+        tier: 'Tier 1' | 'Tier 2' | 'Tier 3' (convenience facet shortcut).
+        score_min: Minimum lead_score.
+        has_competitive_intel: 1 to require competitive (Schema B) intel.
+        has_gtm_narrative: 1 to require a GTM narrative.
+        min_opportunities: Require n_opportunities greater than this value.
+        session_slug: Restrict to leads sourced from a given intel session.
+        limit: Max rows (capped at 100 server-side).
+    """
+    facet_filters = {}
+    if has_competitive_intel:
+        facet_filters["has_competitive_intel"] = 1
+    if has_gtm_narrative:
+        facet_filters["has_gtm_narrative"] = 1
+    if min_opportunities:
+        facet_filters["n_opportunities"] = [">", int(min_opportunities)]
+    if session_slug:
+        facet_filters["session_slug"] = session_slug
+
+    from crm.api.intel_facets import search_leads as _facet_search
+
+    res = _facet_search(
+        q=query,
+        facet_filters=facet_filters or None,
+        tier=tier or "",
+        score_min=score_min or None,
+        page_length=limit,
+    )
+    # Return the rows + count in an LLM-friendly shape (drop the columns metadata).
+    rows = res.get("rows") if isinstance(res, dict) else res
+    return {"rows": rows or [], "total_count": (res.get("total_count") if isinstance(res, dict) else len(rows or []))}
+
+
+@mcp.tool()
 def search_crm_knowledge(query: str, limit: int = 10):
     """Search CRM Notes and lead intel for voice assistant / knowledge context."""
     from crm.api.intelligence import search_crm_knowledge as _search
