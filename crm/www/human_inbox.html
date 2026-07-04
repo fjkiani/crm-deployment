@@ -1,11 +1,13 @@
 {% extends "templates/web.html" %}
 
 {% block page_content %}
-<div class="container">
+<div class="container-fluid">
 	<div class="row">
 		<div class="col-12">
-			<h2>🤖 Human Inbox - AI Drafts</h2>
-			<p class="text-muted">{{ total_drafts }} drafts</p>
+			<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+				<h1 class="h3 mb-2">🤖 Human Inbox - AI Drafts</h1>
+				<div class="badge badge-primary mb-2">{{ total_drafts }} items</div>
+			</div>
 
 			<div class="mb-3">
 				<button type="button" class="btn btn-outline-dark btn-sm" id="nyx-batch-draft"
@@ -13,75 +15,357 @@
 				<span class="text-muted ml-2" id="nyx-batch-status"></span>
 			</div>
 
-			<form class="form-inline mb-3" method="get">
-				<div class="form-group mr-2">
+			<form class="form-inline mb-4" method="get">
+				<div class="form-group mr-2 mb-2">
 					<label class="mr-2">Doctype</label>
 					<input type="text" class="form-control" name="doctype" value="{{ filter_doctype or '' }}" placeholder="CRM Lead / Contact" />
 				</div>
-				<div class="form-group mr-2">
+				<div class="form-group mr-2 mb-2">
 					<label class="mr-2">Docname</label>
 					<input type="text" class="form-control" name="docname" value="{{ filter_docname or '' }}" placeholder="Name" />
 				</div>
-				<div class="form-group mr-2">
+				<div class="form-group mr-2 mb-2">
 					<div class="form-check">
 						<input class="form-check-input" type="checkbox" name="only_drafts" id="only_drafts" {% if filter_only_drafts %}checked{% endif %}>
 						<label class="form-check-label" for="only_drafts">Only Drafts</label>
 					</div>
 				</div>
-				<div class="form-group mr-2">
+				<div class="form-group mr-2 mb-2">
 					<label class="mr-2">Limit</label>
 					<input type="number" min="1" max="200" class="form-control" name="limit" value="{{ filter_limit or 50 }}" />
 				</div>
-				<button type="submit" class="btn btn-primary">Apply</button>
+				<button type="submit" class="btn btn-primary mb-2">Apply</button>
 			</form>
 
+			{% if drafts %}
+			<div class="card mb-4">
+				<div class="card-header">
+					<h5 class="mb-0">📋 Emails Needing Triage ({{ drafts|length }})</h5>
+				</div>
+				<div class="card-body">
+					<div class="table-responsive">
+						<table class="table table-hover">
+							<thead>
+								<tr>
+									<th>From</th>
+									<th>Subject</th>
+									<th>To</th>
+									<th>Status</th>
+									<th>Date</th>
+									<th>Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for draft in drafts %}
+								<tr>
+									<td>{{ draft.sender or '-' }}</td>
+									<td>{{ draft.subject }}</td>
+									<td>{{ draft.recipients }}</td>
+									<td><span class="badge badge-warning">{{ draft.status }}</span></td>
+									<td>{{ frappe.format_date(draft.creation) }}</td>
+									<td>
+										<button type="button" class="btn btn-sm btn-outline-primary" onclick="triageEmail('{{ draft.name }}')">
+											🤖 AI Triage
+										</button>
+										<button type="button" class="btn btn-sm btn-outline-success" onclick="draftResponse('{{ draft.name }}')">
+											✍️ Draft Response
+										</button>
+										<button type="button" class="btn btn-sm btn-outline-secondary" onclick="viewInbound('{{ draft.name }}')">
+											👁️ View
+										</button>
+									</td>
+								</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+			{% endif %}
+
 			{% if ai_drafts %}
-			<table class="table table-striped">
-				<thead>
-					<tr>
-						<th>Subject</th>
-						<th>From</th>
-						<th>To</th>
-						<th>Status</th>
-						<th>Created</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-				{% for d in ai_drafts %}
-					<tr>
-						<td>{{ d.subject }}</td>
-						<td>{{ d.sender or '-' }}</td>
-						<td>{{ d.recipients }}</td>
-						<td>{{ d.status }}</td>
-						<td>{{ frappe.format_date(d.creation) }}</td>
-						<td>
-							<a class="btn btn-sm btn-outline-primary" href="/app/communication/{{ d.name }}" target="_blank">Open</a>
-							<button type="button" class="btn btn-sm btn-outline-success" onclick="sendDraft('{{ d.name }}')">Send</button>
-						</td>
-					</tr>
-				{% endfor %}
-				</tbody>
-			</table>
-			{% else %}
-			<div class="text-muted">No drafts found.</div>
+			<div class="card mb-4">
+				<div class="card-header">
+					<h5 class="mb-0">✍️ AI-Generated Drafts ({{ ai_drafts|length }})</h5>
+				</div>
+				<div class="card-body">
+					<div class="table-responsive">
+						<table class="table table-hover">
+							<thead>
+								<tr>
+									<th>From</th>
+									<th>Subject</th>
+									<th>To</th>
+									<th>Status</th>
+									<th>Date</th>
+									<th>Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for draft in ai_drafts %}
+								<tr>
+									<td>{{ draft.sender or '-' }}</td>
+									<td>{{ draft.subject }}</td>
+									<td>{{ draft.recipients }}</td>
+									<td><span class="badge badge-info">{{ draft.status }}</span></td>
+									<td>{{ frappe.format_date(draft.creation) }}</td>
+									<td>
+										<button type="button" class="btn btn-sm btn-outline-primary" onclick="viewDraft('{{ draft.name }}')">
+											👁️ View
+										</button>
+										<button type="button" class="btn btn-sm btn-outline-success" onclick="sendDraft('{{ draft.name }}')">
+											📤 Send
+										</button>
+										<button type="button" class="btn btn-sm btn-outline-warning" onclick="editDraft('{{ draft.name }}')">
+											✏️ Edit
+										</button>
+									</td>
+								</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+			{% endif %}
+
+			{% if not drafts and not ai_drafts %}
+			<div class="text-center py-5">
+				<div class="text-muted">
+					<h4>🎉 All caught up!</h4>
+					<p>No emails need triage or review at the moment.</p>
+				</div>
+			</div>
 			{% endif %}
 		</div>
 	</div>
 </div>
 
+<div class="modal fade" id="triageModal" tabindex="-1">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">🤖 AI Triage Result</h5>
+				<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+			</div>
+			<div class="modal-body" id="triageResult"></div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+				<button type="button" class="btn btn-primary" onclick="createDraftFromTriage()">Create Draft</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="draftModal" tabindex="-1">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">✍️ Email Draft</h5>
+				<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+			</div>
+			<div class="modal-body" id="draftContent"></div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+				<button type="button" class="btn btn-success" onclick="sendCurrentDraft()">Send Email</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="inboundModal" tabindex="-1">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">📥 Inbound Email</h5>
+				<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+			</div>
+			<div class="modal-body" id="inboundContent"></div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+			</div>
+		</div>
+	</div>
+</div>
+
 <script>
-function sendDraft(name) {
+let currentCommunication = null;
+let currentTriageResult = null;
+
+function triageEmail(communicationName) {
 	frappe.call({
 		method: 'crm.api.agent.run',
-		args: { command: 'email.send', params: { communication_name: name } },
+		args: {
+			command: 'email.triage',
+			params: { communication_name: communicationName }
+		},
+		callback: function(r) {
+			if (r.message) {
+				currentCommunication = communicationName;
+				currentTriageResult = r.message;
+				showTriageResult(r.message);
+			}
+		}
+	});
+}
+
+function showTriageResult(result) {
+	const actionClass = {
+		'respond': 'success',
+		'notify': 'warning',
+		'ignore': 'secondary'
+	}[result.action] || 'info';
+
+	$('#triageResult').html(`
+		<div class="alert alert-${actionClass}">
+			<h6>AI Recommendation: ${(result.action || '').toUpperCase()}</h6>
+			<p><strong>Reason:</strong> ${result.reason || ''}</p>
+			<p><strong>Priority:</strong> <span class="badge badge-${actionClass}">${result.priority || ''}</span></p>
+			<p><strong>Suggested Response:</strong> ${result.suggested_response || ''}</p>
+		</div>
+	`);
+	$('#triageModal').modal('show');
+}
+
+function draftResponse(communicationName) {
+	frappe.call({
+		method: 'crm.api.agent.run',
+		args: {
+			command: 'email.draft_ai',
+			params: {
+				communication_name: communicationName,
+				tone: 'professional',
+				include_context: true
+			}
+		},
+		callback: function(r) {
+			if (r.message) {
+				currentCommunication = r.message.communication_name || communicationName;
+				showDraft(r.message);
+			}
+		}
+	});
+}
+
+function stripHtml(html) {
+	return (html || '').replace(/<[^>]*>/g, '');
+}
+
+function showDraft(draft) {
+	const subject = frappe.utils.escape_html(draft.subject || '');
+	const body = frappe.utils.escape_html(stripHtml(draft.content || ''));
+	const summary = frappe.utils.escape_html(draft.summary || '');
+
+	$('#draftContent').html(`
+		<div class="form-group">
+			<label><strong>Subject:</strong></label>
+			<input type="text" class="form-control" id="draftSubject" value="${subject}">
+		</div>
+		<div class="form-group">
+			<label><strong>Content:</strong></label>
+			<textarea class="form-control" id="draftBody" rows="12">${body}</textarea>
+		</div>
+		<div class="alert alert-info"><strong>Summary:</strong> ${summary}</div>
+	`);
+	$('#draftModal').modal('show');
+}
+
+function viewDraft(communicationName) {
+	frappe.call({
+		method: 'crm.api.email.thread_context',
+		args: { communication: communicationName },
+		callback: function(r) {
+			if (r.message && r.message.length > 0) {
+				const comm = r.message[r.message.length - 1];
+				currentCommunication = communicationName;
+				showDraft({
+					subject: comm.subject,
+					content: comm.content,
+					summary: 'Existing draft'
+				});
+			}
+		}
+	});
+}
+
+function viewInbound(communicationName) {
+	frappe.call({
+		method: 'crm.api.email.thread_context',
+		args: { communication: communicationName },
+		callback: function(r) {
+			if (r.message && r.message.length > 0) {
+				const comm = r.message[0];
+				$('#inboundContent').html(`
+					<p><strong>From:</strong> ${frappe.utils.escape_html(comm.sender || '')}</p>
+					<p><strong>To:</strong> ${frappe.utils.escape_html(comm.recipients || '')}</p>
+					<p><strong>Subject:</strong> ${frappe.utils.escape_html(comm.subject || '')}</p>
+					<hr>
+					<div class="email-body">${comm.content || ''}</div>
+				`);
+				$('#inboundModal').modal('show');
+			}
+		}
+	});
+}
+
+function sendDraft(communicationName) {
+	frappe.call({
+		method: 'crm.api.agent.run',
+		args: {
+			command: 'email.send',
+			params: { communication_name: communicationName }
+		},
 		callback: function(r) {
 			if (r.message && r.message.ok) {
-				frappe.show_alert('Email sent!', 'success');
-				setTimeout(() => window.location.reload(), 800);
+				frappe.show_alert('Email sent successfully!', 'success');
+				setTimeout(() => location.reload(), 1000);
 			} else {
 				frappe.show_alert('Send failed', 'danger');
 			}
+		}
+	});
+}
+
+function editDraft(communicationName) {
+	window.location.href = `/app/communication/${communicationName}`;
+}
+
+function createDraftFromTriage() {
+	if (!currentCommunication || !currentTriageResult) return;
+	frappe.call({
+		method: 'crm.api.agent.run',
+		args: {
+			command: 'email.draft_ai',
+			params: {
+				communication_name: currentCommunication,
+				tone: 'professional',
+				include_context: true
+			}
+		},
+		callback: function(r) {
+			if (r.message) {
+				currentCommunication = r.message.communication_name || currentCommunication;
+				$('#triageModal').modal('hide');
+				showDraft(r.message);
+			}
+		}
+	});
+}
+
+function sendCurrentDraft() {
+	if (!currentCommunication) return;
+	const subject = $('#draftSubject').val();
+	const content = $('#draftBody').val();
+	frappe.call({
+		method: 'frappe.client.set_value',
+		args: {
+			doctype: 'Communication',
+			name: currentCommunication,
+			fieldname: { subject: subject, content: content }
+		},
+		callback: function() {
+			sendDraft(currentCommunication);
+			$('#draftModal').modal('hide');
 		}
 	});
 }
@@ -100,8 +384,7 @@ function batchDraft() {
 			if (m.ok) {
 				status.textContent = 'Queued ' + (m.queued_count || 0) +
 					' lead(s) for drafting (backend: ' + (m.backend || '?') +
-					', skipped ' + (m.skipped_existing_draft || 0) + ' with existing drafts). ' +
-					'Drafts appear here as workers finish.';
+					', skipped ' + (m.skipped_existing_draft || 0) + ' with existing drafts).';
 				frappe.show_alert('Queued ' + (m.queued_count || 0) + ' drafts', 'success');
 				setTimeout(() => window.location.reload(), 4000);
 			} else {

@@ -3,6 +3,8 @@ from frappe import _
 
 
 SUPPORTED = {
+	"email.triage",
+	"email.draft_ai",
 	"email.draft",
 	"email.draft_with_provider",
 	"email.send",
@@ -16,6 +18,8 @@ SUPPORTED = {
 def run(command: str, params: dict | None = None):
 	"""Agent action router. Supported commands:
 
+	- email.triage: { communication_name }
+	- email.draft_ai: { communication_name, tone?, include_context? }
 	- email.draft: { reference_doctype, reference_name, to, subject, html, cc?, bcc?, provider_thread_id? }
 	- email.draft_with_provider: { reference_doctype, reference_name, to, subject, html, provider?, provider_message_id?, provider_thread_id?, cc?, bcc? }
 	- email.send: { communication_name }
@@ -24,6 +28,18 @@ def run(command: str, params: dict | None = None):
 	if command not in SUPPORTED:
 		frappe.throw(_(f"Unsupported command: {command}"))
 	params = params or {}
+	if command == "email.triage":
+		return frappe.call(
+			"crm.api.email.triage_communication",
+			communication_name=params.get("communication_name"),
+		)
+	if command == "email.draft_ai":
+		return frappe.call(
+			"crm.api.email.draft_ai_response",
+			communication_name=params.get("communication_name"),
+			tone=params.get("tone", "professional"),
+			include_context=params.get("include_context", True),
+		)
 	if command == "email.draft":
 		return frappe.call(
 			"crm.api.email.save_draft",

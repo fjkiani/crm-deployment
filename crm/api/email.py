@@ -455,5 +455,129 @@ def find_communication_by_provider_id(provider_message_id: str | None = None, pr
 	return None
 
 
+def _lead_for_communication(comm) -> str | None:
+	ref_dt = comm.reference_doctype
+	ref_dn = comm.reference_name
+	if not (ref_dt and ref_dn):
+		return None
+	if ref_dt == "CRM Lead":
+		return ref_dn
+	if ref_dt == "CRM Deal":
+		return frappe.db.get_value("CRM Deal", ref_dn, "lead")
+	return None
+
+
+def _map_triage_action(action: str) -> str:
+	normalized = (action or "NOTIFY").upper()
+	if normalized == "RESPOND":
+		return "respond"
+	if normalized == "IGNORE":
+		return "ignore"
+	return "notify"
+
+
+@frappe.whitelist()
+def triage_communication(communication_name: str) -> dict:
+	"""AI triage for Human Inbox. Returns action/reason/priority/suggested_response."""
+	if not communication_name:
+		raise_frappe("communication_name is required")
+
+	comm = frappe.get_doc("Communication", communication_name)
+	lead_name = _lead_for_communication(comm)
+
+	try:
+		from crm.api.nyx_email_brain import TRIAGE_SYSTEM, _lead_context, _resolve_llm, _safe_json
+
+		complete = _resolve_llm()
+		if complete and lead_name:
+			lead = frappe.get_doc("CRM Lead", lead_name)
+			ctx = _lead_context(lead, comm.content)
+			triage_raw = complete(f"{TRIAGE_SYSTEM}\n\nLEAD CONTEXT:\n{ctx}")
+			triage = _safe_json(triage_raw, {"action": "NOTIFY", "reason": "unparseable triage"})
+			action = _map_triage_action(triage.get("action"))
+			return {
+				"action": action,
+				"reason": triage.get("reason") or "",
+				"priority": "high" if action == "respond" else "medium",
+				"suggested_response": "Draft a personalized reply" if action == "respond" else "",
+			}
+	except Exception:
+		frappe.log_error(title="triage_communication failed", message=frappe.get_traceback())
+
+	return {
+		"action": "notify",
+		"reason": "Manual review recommended",
+		"priority": "medium",
+		"suggested_response": "Review this email and draft a reply if needed",
+	}
+
+
+@frappe.whitelist()
+def draft_ai_response(
+	communication_name: str,
+	tone: str = "professional",
+	include_context: bool = True,
+) -> dict:
+	"""Draft a reply for Human Inbox. Creates a Draft Communication when possible."""
+	if not communication_name:
+		raise_frappe("communication_name is required")
+
+	comm = frappe.get_doc("Communication", communication_name)
+	lead_name = _lead_for_communication(comm)
+
+	if lead_name:
+		result = frappe.call(
+			"crm.api.nyx_email_brain.triage_and_draft",
+			lead_name=lead_name,
+			incoming=comm.content,
+			force=True,
+		)
+		draft_name = result.get("communication")
+		if draft_name:
+			draft = frappe.get_doc("Communication", draft_name)
+			return {
+				"subject": draft.subject,
+				"content": draft.content,
+				"summary": f"NYX draft ({result.get('triage') or result.get('decision') or 'ready'})",
+				"communication_name": draft.name,
+			}
+
+	try:
+		from crm.api.nyx_email_brain import DRAFT_SYSTEM, _resolve_llm, _safe_json
+
+		complete = _resolve_llm()
+		if complete and comm.reference_doctype and comm.reference_name:
+			context = f"Linked to {comm.reference_doctype} {comm.reference_name}"
+			if include_context:
+				context += f"\nInbound from: {comm.sender}\nSubject: {comm.subject}\n{comm.content[:2000]}"
+			draft_raw = complete(f"{DRAFT_SYSTEM}\n\n{context}\nTone: {tone}")
+			draft = _safe_json(draft_raw, {})
+			subject = (draft.get("subject") or f"Re: {comm.subject}").strip()
+			html = (draft.get("html") or "").strip()
+			if html:
+				to = (comm.sender or comm.recipients or "").split(",")[0].strip()
+				draft_name = save_draft(
+					reference_doctype=comm.reference_doctype,
+					reference_name=comm.reference_name,
+					to=to,
+					subject=subject,
+					html=html,
+				)
+				return {
+					"subject": subject,
+					"content": html,
+					"summary": "AI draft ready for review",
+					"communication_name": draft_name,
+				}
+	except Exception:
+		frappe.log_error(title="draft_ai_response failed", message=frappe.get_traceback())
+
+	return {
+		"subject": f"Re: {comm.subject}",
+		"content": "<p>Thank you for your email. I will review this and follow up shortly.</p>",
+		"summary": "Fallback draft — edit before sending",
+	}
+
+
 def raise_frappe(message: str):
 	frappe.throw(_(message))
