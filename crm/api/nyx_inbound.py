@@ -221,12 +221,14 @@ def provision_gmail_email_account(
         "email_server": "imap.gmail.com",
         "incoming_port": 993,
         "use_ssl": 1,
-        # Where inbound lands + how it is attributed
-        "imap_folder": imap_folder,
-        "append_to": "CRM Lead",
         "default_incoming": 1 if int(enable_incoming) else 0,
         "create_contact": 0,
+        "email_sync_option": "UNSEEN",
+        "initial_sync_count": "100",
     })
+    # imap_folder is a child table (not a scalar); append_to lives on each row.
+    doc.set("imap_folder", [])
+    doc.append("imap_folder", {"folder_name": imap_folder, "append_to": "CRM Lead"})
     # App password is the auth secret for both SMTP and IMAP with Gmail.
     doc.password = app_password
 
@@ -262,7 +264,7 @@ def get_inbound_status() -> dict:
         accts = frappe.get_all(
             "Email Account",
             filters={"enable_incoming": 1},
-            fields=["name", "email_id", "service", "email_server", "imap_folder"],
+            fields=["name", "email_id", "service", "email_server"],
         )
         out["email_accounts"] = accts
         out["incoming_configured"] = len(accts) > 0
