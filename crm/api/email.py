@@ -315,23 +315,25 @@ def save_draft(reference_doctype: str, reference_name: str, to: str, subject: st
 	if not to or not subject or not html:
 		raise_frappe("to, subject and html are required")
 
-	comm = frappe.get_doc(
-		{
-			"doctype": "Communication",
-			"communication_type": "Communication",
-			"communication_medium": "Email",
-			"subject": subject,
-			"sender": frappe.session.user,
-			"recipients": to,
-			"cc": cc,
-			"bcc": bcc,
-			"content": html,
-			"reference_doctype": reference_doctype,
-			"reference_name": reference_name,
-			"provider_thread_id": provider_thread_id,
-			"status": "Draft",
-		}
-	)
+	fields = {
+		"doctype": "Communication",
+		"communication_type": "Communication",
+		"communication_medium": "Email",
+		"sent_or_received": "Sent",
+		"subject": subject,
+		"sender": frappe.session.user,
+		"recipients": to,
+		"cc": cc,
+		"bcc": bcc,
+		"content": html,
+		"reference_doctype": reference_doctype,
+		"reference_name": reference_name,
+		"status": "Draft",
+	}
+	if provider_thread_id and frappe.get_meta("Communication").has_field("provider_thread_id"):
+		fields["provider_thread_id"] = provider_thread_id
+
+	comm = frappe.get_doc(fields)
 	comm.insert()
 
 	# Realtime notify for Human Inbox
@@ -410,12 +412,13 @@ def send(communication_name: str):
 def link_provider_ids(communication_name: str, provider: str | None = None, provider_message_id: str | None = None, provider_thread_id: str | None = None):
 	"""Attach external provider IDs to an existing Communication."""
 	comm = frappe.get_doc("Communication", communication_name)
+	meta = frappe.get_meta("Communication")
 	updates: dict[str, object] = {}
-	if provider:
+	if provider and meta.has_field("provider"):
 		updates["provider"] = provider
-	if provider_message_id:
+	if provider_message_id and meta.has_field("provider_message_id"):
 		updates["provider_message_id"] = provider_message_id
-	if provider_thread_id:
+	if provider_thread_id and meta.has_field("provider_thread_id"):
 		updates["provider_thread_id"] = provider_thread_id
 	if updates:
 		comm.db_set(updates)

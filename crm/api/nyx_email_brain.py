@@ -37,13 +37,17 @@ DEFAULT_BACKEND = "frappe"
 
 
 def _get_conf(*names, default=None):
-    """Resolve a config value from env, site_config, or CRM Global Settings."""
+    """Resolve a config value from site_config, env, or CRM Global Settings.
+
+    Site config wins over env so Frappe Cloud Site Config edits take effect even
+    when the bench carries a stale OPENROUTER_API_KEY (or similar) in env.
+    """
     for n in names:
-        v = os.getenv(n.upper())
+        v = frappe.conf.get(n.lower())
         if v:
             return v
     for n in names:
-        v = frappe.conf.get(n.lower())
+        v = os.getenv(n.upper())
         if v:
             return v
     # CRM Global Settings single doctype (native, editable from /app)
@@ -176,7 +180,7 @@ def batch_triage_and_draft(limit: int = 10, only_with_email: int = 1) -> dict:
 
 
 def _has_pending_draft(reference_doctype: str, reference_name: str) -> bool:
-    """True if there's a non-sent email Communication already linked to the doc."""
+    """True if an outbound draft is already awaiting human review on this doc."""
     return bool(frappe.db.exists(
         "Communication",
         {
@@ -184,7 +188,8 @@ def _has_pending_draft(reference_doctype: str, reference_name: str) -> bool:
             "reference_name": reference_name,
             "communication_type": "Communication",
             "communication_medium": "Email",
-            "status": ["!=", "Sent"],
+            "sent_or_received": "Sent",
+            "status": ["in", ["Draft", "Open"]],
         },
     ))
 
@@ -237,16 +242,14 @@ def _frappe_triage_and_draft(lead_name: str, incoming: str | None, force: bool) 
 
     to = lead.email or ""
     # 3) write draft as a Communication (lands in Human Inbox), never auto-send
-    comm = frappe.call(
-        "crm.api.email.save_draft_with_provider",
+    comm_name = frappe.call(
+        "crm.api.email.save_draft",
         reference_doctype="CRM Lead",
         reference_name=lead_name,
         to=to,
         subject=subject,
         html=html,
-        provider="frappe",
     )
-    comm_name = (comm.get("communication_name") or comm.get("name")) if isinstance(comm, dict) else comm
     _record_brain_event(comm_name, "drafted",
                         {"backend": "frappe", "triage": action, "lead": lead_name})
     return {"decision": "drafted", "backend": "frappe", "communication": comm_name,
