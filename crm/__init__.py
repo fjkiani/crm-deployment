@@ -1,2 +1,2 @@
-__version__ = "1.0.1"
-print("Loaded CRM Deployment Module 1.0.1")
+__version__ = "1.0.2"
+print("Loaded CRM Deployment Module 1.0.2")

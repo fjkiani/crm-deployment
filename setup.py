@@ -8,7 +8,7 @@ except FileNotFoundError:
 
 setup(
     name="crm",
-    version="1.0.1",
+    version="1.0.2",
     description="Kick-ass Open Source CRM",
     author="Frappe Technologies Pvt. Ltd.",
     author_email="shariq@frappe.io",
