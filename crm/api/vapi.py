@@ -417,7 +417,7 @@ def _process_end_of_call_report(report: dict):
 	)
 
 	if lead_name and transcript:
-		_create_follow_up_note(lead_name, call_id, outcome, transcript, summary, duration)
+		_create_follow_up_note(lead_name, call_id, outcome, transcript, summary, duration, structured)
 
 	if lead_name and outcome:
 		crm_status, _priority = map_outcome_to_status_priority(outcome)
@@ -442,7 +442,16 @@ def _process_status_update(message: dict):
 	return {"status": "updated", "call_id": call_id}
 
 
-def _create_follow_up_note(lead_name: str, call_id: str, outcome: str, transcript: str, summary: str, duration: int):
+def _create_follow_up_note(
+	lead_name: str,
+	call_id: str,
+	outcome: str,
+	transcript: str,
+	summary: str,
+	duration: int,
+	structured: dict | None = None,
+):
+	structured = structured or {}
 	note_content = (
 		f"**Vapi Call** `{call_id}`\n"
 		f"**Outcome:** {outcome}\n"
@@ -460,8 +469,9 @@ def _create_follow_up_note(lead_name: str, call_id: str, outcome: str, transcrip
 		}
 	).insert(ignore_permissions=True)
 
+	blob = (transcript + " " + summary).lower()
 	keywords = ["follow up", "call back", "schedule", "demo", "meeting"]
-	if any(k in (transcript + summary).lower() for k in keywords):
+	if any(k in blob for k in keywords):
 		frappe.get_doc(
 			{
 				"doctype": "CRM Task",
@@ -474,7 +484,120 @@ def _create_follow_up_note(lead_name: str, call_id: str, outcome: str, transcrip
 			}
 		).insert(ignore_permissions=True)
 
+	# Post-call action: draft a grounded follow-up EMAIL into the Human Inbox
+	# (draft, not auto-send — human approves; consistent with anti-hallucination
+	# posture). Only when the lead has an email and structured data asks for it or
+	# the conversation implied a follow-up.
+	_maybe_draft_follow_up_email(lead_name, outcome, summary, transcript, structured)
+
+	# Post-call action: BOOK A MEETING when the call secured one.
+	_maybe_book_meeting(lead_name, call_id, summary, transcript, structured)
+
 	frappe.db.commit()
+
+
+def _maybe_draft_follow_up_email(
+	lead_name: str, outcome: str, summary: str, transcript: str, structured: dict
+):
+	"""Draft (not send) a follow-up email via the grounded email brain so it lands
+	in the Human Inbox for approval. Best-effort; never breaks webhook."""
+	blob = (transcript + " " + summary).lower()
+	wants_email = bool(structured.get("send_follow_up_email")) or any(
+		k in blob for k in ("send me", "email me", "send info", "send details", "follow up", "send over")
+	)
+	if not wants_email:
+		return
+	try:
+		email = frappe.db.get_value("CRM Lead", lead_name, "email")
+		if not email:
+			return
+		from crm.api.nyx_email_brain import triage_and_draft
+
+		incoming = (
+			f"[Auto-context from voice call] Outcome: {outcome}. "
+			f"Call summary: {summary or transcript[:800]}. "
+			f"Draft a concise, professional follow-up email to the prospect based only on "
+			f"verified CRM context; do not invent facts."
+		)
+		triage_and_draft(lead_name=lead_name, incoming=incoming, force=True)
+	except Exception as e:
+		frappe.log_error(f"Post-call email draft failed for {lead_name}: {e}", "Vapi Post-Call")
+
+
+def _parse_meeting_time(structured: dict):
+	"""Best-effort extraction of a meeting start time from Vapi structuredData."""
+	from frappe.utils import get_datetime, add_to_date
+
+	raw = (
+		structured.get("meeting_time")
+		or structured.get("appointment_time")
+		or structured.get("scheduled_at")
+	)
+	if raw:
+		try:
+			return get_datetime(raw)
+		except Exception:
+			pass
+	# Default: 2 business-ish days out at 15:00 if a meeting was booked but no time parsed
+	return add_to_date(now_datetime(), days=2).replace(hour=15, minute=0, second=0, microsecond=0)
+
+
+def _maybe_book_meeting(lead_name: str, call_id: str, summary: str, transcript: str, structured: dict):
+	"""Create a calendar Event (meeting) when the call secured one. Best-effort."""
+	blob = (transcript + " " + summary).lower()
+	booked = bool(structured.get("meeting_booked")) or any(
+		k in blob for k in ("booked", "scheduled a", "set up a call", "calendar invite", "confirmed the meeting", "demo scheduled")
+	)
+	if not booked:
+		return
+	if not frappe.db.exists("DocType", "Event"):
+		return
+	try:
+		from frappe.utils import add_to_date
+
+		starts_on = _parse_meeting_time(structured)
+		ends_on = add_to_date(starts_on, minutes=30)
+		lead = frappe.db.get_value(
+			"CRM Lead", lead_name, ["first_name", "last_name", "email"], as_dict=True
+		) or {}
+		who = (f"{lead.get('first_name') or ''} {lead.get('last_name') or ''}").strip() or lead_name
+
+		event = frappe.get_doc(
+			{
+				"doctype": "Event",
+				"subject": f"Meeting: {who} (from Vapi call {call_id})",
+				"event_type": "Private",
+				"starts_on": starts_on,
+				"ends_on": ends_on,
+				"description": (
+					f"Auto-booked from voice call {call_id}.\n"
+					f"CRM Lead: {lead_name}\nContact email: {lead.get('email') or 'n/a'}\n\n"
+					f"Call summary: {summary or transcript[:800]}"
+				),
+			}
+		)
+		# Link the lead as a participant when the child schema supports references.
+		try:
+			event.append(
+				"event_participants",
+				{"reference_doctype": "CRM Lead", "reference_docname": lead_name},
+			)
+		except Exception:
+			pass
+		event.insert(ignore_permissions=True)
+
+		# Cross-link a note so the meeting is visible on the lead timeline.
+		frappe.get_doc(
+			{
+				"doctype": "FCRM Note",
+				"title": f"📅 Meeting booked: {starts_on}",
+				"content": f"Auto-booked meeting from call `{call_id}` — Event `{event.name}` at {starts_on}.",
+				"reference_doctype": "CRM Lead",
+				"reference_docname": lead_name,
+			}
+		).insert(ignore_permissions=True)
+	except Exception as e:
+		frappe.log_error(f"Post-call meeting booking failed for {lead_name}: {e}", "Vapi Post-Call")
 
 
 # ── Dashboard / health ────────────────────────────────────────────────────────
