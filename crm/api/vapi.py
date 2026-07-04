@@ -26,19 +26,40 @@ MAX_RETRIES_PER_LEAD = 5
 # ── Config helpers ────────────────────────────────────────────────────────────
 
 
+def _vapi_conf(*names: str) -> str | None:
+	"""Resolve Vapi config from (in order): env var (UPPER), frappe.conf (lower),
+	optional CRM Vapi Settings single doctype. Multi-tenant safe: never hardcoded.
+
+	NOTE: the legacy code read Vapi keys from *CRM Twilio Settings*, a Twilio
+	doctype that does not even exist on the live DB. We keep an opt-in probe of a
+	dedicated ``CRM Vapi Settings`` single (if a tenant defines one) but never
+	depend on it, and never fall back to a baked-in credential.
+	"""
+	for n in names:
+		val = os.environ.get(n.upper()) or frappe.conf.get(n.lower())
+		if val:
+			return val
+	# Optional per-tenant single doctype (only if the tenant created it)
+	if frappe.db.exists("DocType", "CRM Vapi Settings"):
+		for n in names:
+			try:
+				val = frappe.db.get_single_value("CRM Vapi Settings", n.lower())
+			except Exception:
+				val = None
+			if val:
+				return val
+	return None
+
+
 def _vapi_api_key() -> str:
-	key = frappe.conf.get("vapi_api_key") or os.environ.get("VAPI_API_KEY")
-	if not key and frappe.db.exists("DocType", "CRM Twilio Settings"):
-		key = frappe.db.get_single_value("CRM Twilio Settings", "vapi_api_key")
+	key = _vapi_conf("vapi_api_key")
 	if not key:
 		frappe.throw(_("Vapi API key not configured (site config vapi_api_key or VAPI_API_KEY)"))
 	return key
 
 
 def _vapi_phone_number_id() -> str:
-	pid = frappe.conf.get("vapi_phone_number_id") or os.environ.get("VAPI_PHONE_NUMBER_ID")
-	if not pid and frappe.db.exists("DocType", "CRM Twilio Settings"):
-		pid = frappe.db.get_single_value("CRM Twilio Settings", "vapi_phone_number_id")
+	pid = _vapi_conf("vapi_phone_number_id")
 	if not pid:
 		frappe.throw(_("Vapi phone number ID not configured (vapi_phone_number_id or VAPI_PHONE_NUMBER_ID)"))
 	return pid
@@ -99,20 +120,57 @@ def should_call_lead(lead_name: str) -> tuple[bool, str]:
 # ── Dossier for system prompt ───────────────────────────────────────────────
 
 
-def _build_call_context(lead_name: str | None, context: str | None) -> str:
-	parts = []
-	if lead_name:
+_NO_KB_SENTINEL = "No dossier found"
+
+
+def _build_call_context(
+	lead_name: str | None,
+	context: str | None,
+	phone: str | None = None,
+	topic: str | None = None,
+) -> tuple[str, bool]:
+	"""Assemble KB-grounded pre-call context.
+
+	Returns ``(context_text, grounded)`` where ``grounded`` is True iff we found
+	real CRM knowledge (a lead dossier, a phone-matched dossier, or topic KB
+	hits). When False, the caller MUST switch the assistant into a strict
+	no-fabrication mode so the voice agent never invents facts.
+	"""
+	parts: list[str] = []
+	grounded = False
+
+	if lead_name or phone:
 		try:
 			from crm.api.intelligence import get_dossier
 
-			dossier = get_dossier(lead_id=lead_name)
-			if isinstance(dossier, dict) and dossier.get("formatted"):
-				parts.append(dossier["formatted"])
+			dossier = get_dossier(lead_id=lead_name, phone=phone)
+			formatted = dossier.get("formatted") if isinstance(dossier, dict) else None
+			if formatted and _NO_KB_SENTINEL not in formatted:
+				parts.append(formatted)
+				grounded = True
 		except Exception as e:
 			frappe.log_error(f"Vapi dossier fetch failed: {e}", "Vapi Call")
+
+	# Topic-level knowledge base (FCRM Notes / lead fields) — anti-hallucination
+	if topic:
+		try:
+			from crm.api.intelligence import search_crm_knowledge
+
+			kb = search_crm_knowledge(query=topic, limit=3)
+			kb_notes = (kb or {}).get("notes") or []
+			if kb_notes:
+				kb_text = "\n".join(f"- {n.get('title', 'Note')}: {n.get('content', '')}" for n in kb_notes)
+				parts.append(f"RELEVANT KNOWLEDGE BASE:\n{kb_text}")
+				grounded = True
+		except Exception as e:
+			frappe.log_error(f"Vapi KB search failed: {e}", "Vapi Call")
+
 	if context:
 		parts.append(context)
-	return "\n\n".join(parts) if parts else "No pre-call intelligence available."
+		grounded = True
+
+	text = "\n\n".join(parts) if parts else "No pre-call intelligence available."
+	return text, grounded
 
 
 # ── Outbound call ─────────────────────────────────────────────────────────────
@@ -141,7 +199,22 @@ def initiate_outbound_call(
 	if not ok:
 		frappe.throw(_(reason))
 
-	dossier_text = _build_call_context(lead_name, context)
+	dossier_text, grounded = _build_call_context(lead_name, context, phone=phone_number, topic=topic)
+
+	# Anti-hallucination guardrail: when we have no verified CRM knowledge, the
+	# assistant must NOT invent facts, prices, dates, or claims.
+	if grounded:
+		grounding_rule = (
+			"- Ground every factual claim in the DOSSIER / KNOWLEDGE BASE above. "
+			"If asked something not covered there, say you will follow up by email — do not guess."
+		)
+	else:
+		grounding_rule = (
+			"- You have NO verified background on this contact. Do NOT state any specific "
+			"facts, figures, prices, names, or commitments. Introduce yourself, state the "
+			"high-level objective, ask permission to follow up, and offer to email details."
+		)
+
 	system_message = f"""You are Nyx, an AI executive assistant for CrisPRO / Zeta Intelligence.
 Objective: {call_objective}
 
@@ -151,6 +224,7 @@ RULES:
 - Professional, concise, confident
 - If voicemail: 20-second message referencing the objective
 - Never claim to be a human
+{grounding_rule}
 """
 
 	first_message = f"Hi, I'm calling on behalf of our research team regarding {call_objective}. Do you have a minute?"
@@ -478,3 +552,115 @@ def get_dashboard():
 		},
 		"vapi_health": get_health(),
 	}
+
+
+# ── Who-to-call queue + campaign runner ───────────────────────────────────────
+#
+# Production gap the audit found: nothing decided WHICH leads to dial. Callers
+# had to already know a phone number. These endpoints give agents (and the Voice
+# page) a prioritised, governor-aware call queue and a batch campaign runner that
+# reuses the SAME hardened initiate_outbound_call spine (grounding + logging +
+# dedup all inherited).
+
+
+def _phone_of(lead: dict) -> str | None:
+	return (lead.get("mobile_no") or lead.get("phone") or "").strip() or None
+
+
+@frappe.whitelist()
+def get_call_queue(
+	limit: int = 25,
+	tier: str | None = None,
+	status: str | None = None,
+	min_score: float | None = None,
+):
+	"""Return the prioritised who-to-call list.
+
+	Selection: leads that (a) have a phone/mobile, (b) are not converted, and
+	(c) pass the call governor (not called today, under MAX_RETRIES_PER_LEAD).
+	Ordering: lead_score desc, then tier, then oldest-first (fair rotation).
+	"""
+	limit = int(limit or 25)
+	filters = {"converted": 0}
+	if tier:
+		filters["tier"] = tier
+	if status:
+		filters["status"] = status
+
+	rows = frappe.get_all(
+		"CRM Lead",
+		filters=filters,
+		fields=[
+			"name", "first_name", "last_name", "organization", "job_title",
+			"mobile_no", "phone", "status", "tier", "lead_score", "email",
+		],
+		order_by="lead_score desc, modified asc",
+		limit=limit * 4,  # over-fetch; we filter no-phone + governor below
+	)
+
+	queue = []
+	for r in rows:
+		phone = _phone_of(r)
+		if not phone:
+			continue
+		if min_score is not None and (r.get("lead_score") or 0) < float(min_score):
+			continue
+		ok, reason = should_call_lead(r["name"])
+		if not ok:
+			continue
+		queue.append(
+			{
+				"lead_name": r["name"],
+				"display_name": (f"{r.get('first_name') or ''} {r.get('last_name') or ''}").strip()
+				or r["name"],
+				"organization": r.get("organization"),
+				"job_title": r.get("job_title"),
+				"phone": phone,
+				"status": r.get("status"),
+				"tier": r.get("tier"),
+				"lead_score": r.get("lead_score") or 0,
+				"call_count": _total_call_count(r["name"]),
+			}
+		)
+		if len(queue) >= limit:
+			break
+
+	return {"count": len(queue), "queue": queue}
+
+
+@frappe.whitelist()
+def run_call_campaign(
+	limit: int = 5,
+	tier: str | None = None,
+	status: str | None = None,
+	min_score: float | None = None,
+	topic: str | None = None,
+	dry_run: int = 0,
+):
+	"""Dial the top N leads from the call queue (governor + grounding inherited).
+
+	``dry_run=1`` returns exactly who *would* be called without placing calls —
+	safe default for operators to preview a campaign.
+	"""
+	limit = int(limit or 5)
+	dry_run = int(dry_run or 0)
+	q = get_call_queue(limit=limit, tier=tier, status=status, min_score=min_score)
+	targets = q["queue"]
+
+	if dry_run:
+		return {"dry_run": True, "would_call": len(targets), "targets": targets}
+
+	results = []
+	for t in targets:
+		try:
+			res = initiate_outbound_call(
+				to_number=t["phone"],
+				lead_name=t["lead_name"],
+				topic=topic or "Follow up on our research outreach",
+			)
+			results.append({"lead_name": t["lead_name"], "ok": True, "call_id": res.get("call_id")})
+		except Exception as e:
+			results.append({"lead_name": t["lead_name"], "ok": False, "error": str(e)[:200]})
+
+	placed = sum(1 for r in results if r["ok"])
+	return {"dry_run": False, "attempted": len(results), "placed": placed, "results": results}
