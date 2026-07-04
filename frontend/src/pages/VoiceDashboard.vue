@@ -18,12 +18,12 @@
     <!-- System Health Status -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
       <div class="status-card">
-        <div class="status-indicator" :class="systemHealth.twilio ? 'status-healthy' : 'status-error'">
+        <div class="status-indicator" :class="systemHealth.twilio ? 'status-healthy' : 'status-warning'">
           <PhoneIcon class="w-6 h-6" />
         </div>
         <div class="status-info">
           <h3>Twilio</h3>
-          <p>{{ systemHealth.twilio ? 'Connected' : 'Error' }}</p>
+          <p>{{ systemHealth.twilio ? 'Connected' : 'Not Configured' }}</p>
         </div>
       </div>
       
@@ -76,6 +76,78 @@
         <h3>Success Rate</h3>
         <div class="metric text-green-600">{{ dashboardData.analytics?.success_rate || 0 }}%</div>
         <p class="metric-subtitle">Last 50 calls</p>
+      </div>
+    </div>
+
+    <!-- Who To Call (call queue + campaign launcher) -->
+    <div class="dashboard-section mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="section-title mb-0">Who To Call
+          <span class="text-sm font-normal text-gray-500">({{ callQueue.count }} ready)</span>
+        </h2>
+        <div class="flex items-center gap-2">
+          <input
+            v-model="campaign.topic"
+            placeholder="Call objective (optional)"
+            class="border rounded px-2 py-1 text-sm w-64"
+          />
+          <input
+            v-model.number="campaign.limit"
+            type="number" min="1" max="50"
+            class="border rounded px-2 py-1 text-sm w-16"
+            title="How many to dial"
+          />
+          <button @click="previewCampaign" :disabled="campaignBusy" class="btn btn-sm btn-outline">
+            Preview
+          </button>
+          <button @click="runCampaign" :disabled="campaignBusy || !callQueue.count" class="btn btn-sm btn-primary">
+            {{ campaignBusy ? 'Dialing…' : `Call top ${campaign.limit}` }}
+          </button>
+          <button @click="loadCallQueue" :disabled="queueLoading" class="btn btn-sm btn-outline">
+            {{ queueLoading ? '…' : 'Refresh queue' }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="campaign.lastResult" class="text-sm mb-3 p-2 rounded bg-gray-50 border">
+        <span v-if="campaign.lastResult.dry_run">
+          Preview: would call {{ campaign.lastResult.would_call }} lead(s).
+        </span>
+        <span v-else>
+          Placed {{ campaign.lastResult.placed }} / {{ campaign.lastResult.attempted }} call(s).
+        </span>
+      </div>
+
+      <div class="calls-table">
+        <table class="min-w-full" v-if="callQueue.queue.length">
+          <thead>
+            <tr>
+              <th>Lead</th><th>Org</th><th>Phone</th><th>Tier</th><th>Score</th><th>Prior calls</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in callQueue.queue" :key="row.lead_name">
+              <td>{{ row.display_name }}</td>
+              <td>{{ row.organization || '-' }}</td>
+              <td>{{ row.phone }}</td>
+              <td>{{ row.tier || '-' }}</td>
+              <td>{{ row.lead_score }}</td>
+              <td>{{ row.call_count }}</td>
+              <td>
+                <button
+                  @click="placeCall(row)"
+                  :disabled="row._calling"
+                  class="btn btn-sm btn-primary"
+                >
+                  {{ row._calling ? 'Calling…' : 'Call' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="text-gray-500 text-sm py-4">
+          No leads currently eligible to call (need a phone number, not converted, and under the daily/retry governor).
+        </p>
       </div>
     </div>
 
@@ -254,6 +326,11 @@ export default {
   setup() {
     const loading = ref(false)
     const selectedCall = ref(null)
+    const queueLoading = ref(false)
+    const campaignBusy = ref(false)
+
+    const callQueue = reactive({ count: 0, queue: [] })
+    const campaign = reactive({ topic: '', limit: 5, lastResult: null })
     
     const systemHealth = reactive({
       twilio: false,
@@ -361,12 +438,76 @@ export default {
       }
     }
 
+    const loadCallQueue = async () => {
+      queueLoading.value = true
+      try {
+        const res = await call('crm.api.vapi.get_call_queue', { limit: 25 })
+        callQueue.count = res?.count || 0
+        callQueue.queue = (res?.queue || []).map((r) => ({ ...r, _calling: false }))
+      } catch (error) {
+        console.error('Failed to load call queue:', error)
+        callQueue.count = 0
+        callQueue.queue = []
+      } finally {
+        queueLoading.value = false
+      }
+    }
+
+    const placeCall = async (row) => {
+      row._calling = true
+      try {
+        await call('crm.api.vapi.initiate_outbound_call', {
+          to_number: row.phone,
+          lead_name: row.lead_name,
+          topic: campaign.topic || undefined,
+        })
+        await Promise.all([loadCallQueue(), loadDashboardData()])
+      } catch (error) {
+        console.error('Call failed:', error)
+        alert(`Call failed: ${error?.message || error}`)
+        row._calling = false
+      }
+    }
+
+    const previewCampaign = async () => {
+      campaignBusy.value = true
+      try {
+        campaign.lastResult = await call('crm.api.vapi.run_call_campaign', {
+          limit: campaign.limit,
+          topic: campaign.topic || undefined,
+          dry_run: 1,
+        })
+      } catch (error) {
+        console.error('Preview failed:', error)
+      } finally {
+        campaignBusy.value = false
+      }
+    }
+
+    const runCampaign = async () => {
+      campaignBusy.value = true
+      try {
+        campaign.lastResult = await call('crm.api.vapi.run_call_campaign', {
+          limit: campaign.limit,
+          topic: campaign.topic || undefined,
+          dry_run: 0,
+        })
+        await Promise.all([loadCallQueue(), loadDashboardData()])
+      } catch (error) {
+        console.error('Campaign failed:', error)
+        alert(`Campaign failed: ${error?.message || error}`)
+      } finally {
+        campaignBusy.value = false
+      }
+    }
+
     const refreshData = async () => {
       loading.value = true
       try {
         await Promise.all([
           checkSystemHealth(),
-          loadDashboardData()
+          loadDashboardData(),
+          loadCallQueue()
         ])
       } finally {
         loading.value = false
@@ -445,10 +586,18 @@ export default {
 
     return {
       loading,
+      queueLoading,
+      campaignBusy,
       systemHealth,
       dashboardData,
+      callQueue,
+      campaign,
       selectedCall,
       refreshData,
+      loadCallQueue,
+      placeCall,
+      previewCampaign,
+      runCampaign,
       viewCallDetails,
       closeModal,
       playRecording,
