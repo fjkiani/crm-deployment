@@ -458,6 +458,26 @@ def log_call_outcome(
     })
 
 
+@tool
+def get_call_queue(limit: int = 25, tier: str = None, min_score: float = None):
+    """Get the prioritised who-to-call list — leads with a phone number that are
+    not converted and pass the daily/retry call governor, ordered by lead score.
+    Use this to decide WHO to call next."""
+    return _call_mcp("get_call_queue", {"limit": limit, "tier": tier, "min_score": min_score})
+
+
+@tool
+def run_call_campaign(limit: int = 5, tier: str = None, min_score: float = None,
+                      objective: str = None, dry_run: int = 1):
+    """Dial the top N leads from the call queue. Grounding + logging + governor
+    are inherited. Defaults to dry_run=1 (preview only); pass dry_run=0 to place
+    real calls. Use get_call_queue first to review who will be dialed."""
+    return _call_mcp("run_call_campaign", {
+        "limit": limit, "tier": tier, "min_score": min_score,
+        "objective": objective, "dry_run": dry_run,
+    })
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INTELLIGENCE PILLAR
 # ═══════════════════════════════════════════════════════════════════════════════
