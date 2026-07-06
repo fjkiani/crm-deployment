@@ -1112,6 +1112,64 @@ def get_portfolio_links(organization: str, email_domain: str = None) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# VOICE PILLAR — agent-facing outbound calling (grounded + logged + governed)
+# All three delegate to crm.api.vapi so agents place calls the SAME way the UI
+# does: dossier/KB grounding, Vapi Call Log + CRM Call Log, and the per-lead call
+# governor are all inherited. Agents never build a raw Vapi payload.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+def get_call_queue(limit: int = 25, tier: str = None, min_score: float = None):
+    """Return the prioritised who-to-call list (leads with a phone, not converted,
+    passing the call governor; ordered by lead_score/tier).
+
+    Args:
+        limit: Max leads to return.
+        tier: Optional tier filter (e.g. Tier1).
+        min_score: Optional minimum lead_score.
+    """
+    from crm.api.vapi import get_call_queue as _q
+
+    return _q(limit=limit, tier=tier, min_score=min_score)
+
+
+@mcp.tool()
+def place_call(phone_number: str, lead_name: str = None, objective: str = None):
+    """Place an outbound AI voice call to a lead. Grounded in the lead's CRM
+    dossier / knowledge base; if no verified background exists the assistant is
+    constrained to avoid inventing facts. The call is logged automatically.
+
+    Args:
+        phone_number: Number to dial (E.164, e.g. +14155551234).
+        lead_name: CRM Lead ID for grounding + tracking (strongly recommended).
+        objective: Goal of the call (e.g. "Confirm interest in STC-1010").
+    """
+    from crm.api.vapi import initiate_outbound_call
+
+    return initiate_outbound_call(
+        to_number=phone_number, lead_name=lead_name, objective=objective
+    )
+
+
+@mcp.tool()
+def run_call_campaign(limit: int = 5, tier: str = None, min_score: float = None,
+                      objective: str = None, dry_run: int = 1):
+    """Dial the top N leads from the call queue (governor + grounding inherited).
+    Defaults to dry_run=1 (preview only) so the agent must opt in to real dialing.
+
+    Args:
+        limit: How many leads to dial.
+        tier: Optional tier filter.
+        min_score: Optional minimum lead_score.
+        objective: Call objective applied to the batch.
+        dry_run: 1 = preview who would be called; 0 = actually place calls.
+    """
+    from crm.api.vapi import run_call_campaign as _run
+
+    return _run(limit=limit, tier=tier, min_score=min_score, topic=objective, dry_run=dry_run)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MCP ENDPOINT — exposes all tools above
 # ═══════════════════════════════════════════════════════════════════════════════
 

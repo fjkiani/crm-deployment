@@ -69,6 +69,16 @@ try:
 except ImportError:
     pass
 
+# Voice pillar: who-to-call queue + campaign runner (place_call is voice_call above).
+try:
+    from eaia.frappe_tool import (
+        get_call_queue as _v_get_call_queue,
+        run_call_campaign as _v_run_call_campaign,
+    )
+    _mcp_tools += [_v_get_call_queue, _v_run_call_campaign]
+except ImportError:
+    pass
+
 tools = [
     NewEmailDraft,
     ResponseEmailDraft,
