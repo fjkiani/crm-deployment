@@ -26,19 +26,40 @@ MAX_RETRIES_PER_LEAD = 5
 # ── Config helpers ────────────────────────────────────────────────────────────
 
 
+def _vapi_conf(*names: str) -> str | None:
+	"""Resolve Vapi config from (in order): env var (UPPER), frappe.conf (lower),
+	optional CRM Vapi Settings single doctype. Multi-tenant safe: never hardcoded.
+
+	NOTE: the legacy code read Vapi keys from *CRM Twilio Settings*, a Twilio
+	doctype that does not even exist on the live DB. We keep an opt-in probe of a
+	dedicated ``CRM Vapi Settings`` single (if a tenant defines one) but never
+	depend on it, and never fall back to a baked-in credential.
+	"""
+	for n in names:
+		val = os.environ.get(n.upper()) or frappe.conf.get(n.lower())
+		if val:
+			return val
+	# Optional per-tenant single doctype (only if the tenant created it)
+	if frappe.db.exists("DocType", "CRM Vapi Settings"):
+		for n in names:
+			try:
+				val = frappe.db.get_single_value("CRM Vapi Settings", n.lower())
+			except Exception:
+				val = None
+			if val:
+				return val
+	return None
+
+
 def _vapi_api_key() -> str:
-	key = frappe.conf.get("vapi_api_key") or os.environ.get("VAPI_API_KEY")
-	if not key and frappe.db.exists("DocType", "CRM Twilio Settings"):
-		key = frappe.db.get_single_value("CRM Twilio Settings", "vapi_api_key")
+	key = _vapi_conf("vapi_api_key")
 	if not key:
 		frappe.throw(_("Vapi API key not configured (site config vapi_api_key or VAPI_API_KEY)"))
 	return key
 
 
 def _vapi_phone_number_id() -> str:
-	pid = frappe.conf.get("vapi_phone_number_id") or os.environ.get("VAPI_PHONE_NUMBER_ID")
-	if not pid and frappe.db.exists("DocType", "CRM Twilio Settings"):
-		pid = frappe.db.get_single_value("CRM Twilio Settings", "vapi_phone_number_id")
+	pid = _vapi_conf("vapi_phone_number_id")
 	if not pid:
 		frappe.throw(_("Vapi phone number ID not configured (vapi_phone_number_id or VAPI_PHONE_NUMBER_ID)"))
 	return pid
@@ -99,20 +120,57 @@ def should_call_lead(lead_name: str) -> tuple[bool, str]:
 # ── Dossier for system prompt ───────────────────────────────────────────────
 
 
-def _build_call_context(lead_name: str | None, context: str | None) -> str:
-	parts = []
-	if lead_name:
+_NO_KB_SENTINEL = "No dossier found"
+
+
+def _build_call_context(
+	lead_name: str | None,
+	context: str | None,
+	phone: str | None = None,
+	topic: str | None = None,
+) -> tuple[str, bool]:
+	"""Assemble KB-grounded pre-call context.
+
+	Returns ``(context_text, grounded)`` where ``grounded`` is True iff we found
+	real CRM knowledge (a lead dossier, a phone-matched dossier, or topic KB
+	hits). When False, the caller MUST switch the assistant into a strict
+	no-fabrication mode so the voice agent never invents facts.
+	"""
+	parts: list[str] = []
+	grounded = False
+
+	if lead_name or phone:
 		try:
 			from crm.api.intelligence import get_dossier
 
-			dossier = get_dossier(lead_id=lead_name)
-			if isinstance(dossier, dict) and dossier.get("formatted"):
-				parts.append(dossier["formatted"])
+			dossier = get_dossier(lead_id=lead_name, phone=phone)
+			formatted = dossier.get("formatted") if isinstance(dossier, dict) else None
+			if formatted and _NO_KB_SENTINEL not in formatted:
+				parts.append(formatted)
+				grounded = True
 		except Exception as e:
 			frappe.log_error(f"Vapi dossier fetch failed: {e}", "Vapi Call")
+
+	# Topic-level knowledge base (FCRM Notes / lead fields) — anti-hallucination
+	if topic:
+		try:
+			from crm.api.intelligence import search_crm_knowledge
+
+			kb = search_crm_knowledge(query=topic, limit=3)
+			kb_notes = (kb or {}).get("notes") or []
+			if kb_notes:
+				kb_text = "\n".join(f"- {n.get('title', 'Note')}: {n.get('content', '')}" for n in kb_notes)
+				parts.append(f"RELEVANT KNOWLEDGE BASE:\n{kb_text}")
+				grounded = True
+		except Exception as e:
+			frappe.log_error(f"Vapi KB search failed: {e}", "Vapi Call")
+
 	if context:
 		parts.append(context)
-	return "\n\n".join(parts) if parts else "No pre-call intelligence available."
+		grounded = True
+
+	text = "\n\n".join(parts) if parts else "No pre-call intelligence available."
+	return text, grounded
 
 
 # ── Outbound call ─────────────────────────────────────────────────────────────
@@ -141,7 +199,22 @@ def initiate_outbound_call(
 	if not ok:
 		frappe.throw(_(reason))
 
-	dossier_text = _build_call_context(lead_name, context)
+	dossier_text, grounded = _build_call_context(lead_name, context, phone=phone_number, topic=topic)
+
+	# Anti-hallucination guardrail: when we have no verified CRM knowledge, the
+	# assistant must NOT invent facts, prices, dates, or claims.
+	if grounded:
+		grounding_rule = (
+			"- Ground every factual claim in the DOSSIER / KNOWLEDGE BASE above. "
+			"If asked something not covered there, say you will follow up by email — do not guess."
+		)
+	else:
+		grounding_rule = (
+			"- You have NO verified background on this contact. Do NOT state any specific "
+			"facts, figures, prices, names, or commitments. Introduce yourself, state the "
+			"high-level objective, ask permission to follow up, and offer to email details."
+		)
+
 	system_message = f"""You are Nyx, an AI executive assistant for CrisPRO / Zeta Intelligence.
 Objective: {call_objective}
 
@@ -151,6 +224,7 @@ RULES:
 - Professional, concise, confident
 - If voicemail: 20-second message referencing the objective
 - Never claim to be a human
+{grounding_rule}
 """
 
 	first_message = f"Hi, I'm calling on behalf of our research team regarding {call_objective}. Do you have a minute?"
@@ -343,7 +417,7 @@ def _process_end_of_call_report(report: dict):
 	)
 
 	if lead_name and transcript:
-		_create_follow_up_note(lead_name, call_id, outcome, transcript, summary, duration)
+		_create_follow_up_note(lead_name, call_id, outcome, transcript, summary, duration, structured)
 
 	if lead_name and outcome:
 		crm_status, _priority = map_outcome_to_status_priority(outcome)
@@ -368,7 +442,16 @@ def _process_status_update(message: dict):
 	return {"status": "updated", "call_id": call_id}
 
 
-def _create_follow_up_note(lead_name: str, call_id: str, outcome: str, transcript: str, summary: str, duration: int):
+def _create_follow_up_note(
+	lead_name: str,
+	call_id: str,
+	outcome: str,
+	transcript: str,
+	summary: str,
+	duration: int,
+	structured: dict | None = None,
+):
+	structured = structured or {}
 	note_content = (
 		f"**Vapi Call** `{call_id}`\n"
 		f"**Outcome:** {outcome}\n"
@@ -386,8 +469,9 @@ def _create_follow_up_note(lead_name: str, call_id: str, outcome: str, transcrip
 		}
 	).insert(ignore_permissions=True)
 
+	blob = (transcript + " " + summary).lower()
 	keywords = ["follow up", "call back", "schedule", "demo", "meeting"]
-	if any(k in (transcript + summary).lower() for k in keywords):
+	if any(k in blob for k in keywords):
 		frappe.get_doc(
 			{
 				"doctype": "CRM Task",
@@ -400,7 +484,120 @@ def _create_follow_up_note(lead_name: str, call_id: str, outcome: str, transcrip
 			}
 		).insert(ignore_permissions=True)
 
+	# Post-call action: draft a grounded follow-up EMAIL into the Human Inbox
+	# (draft, not auto-send — human approves; consistent with anti-hallucination
+	# posture). Only when the lead has an email and structured data asks for it or
+	# the conversation implied a follow-up.
+	_maybe_draft_follow_up_email(lead_name, outcome, summary, transcript, structured)
+
+	# Post-call action: BOOK A MEETING when the call secured one.
+	_maybe_book_meeting(lead_name, call_id, summary, transcript, structured)
+
 	frappe.db.commit()
+
+
+def _maybe_draft_follow_up_email(
+	lead_name: str, outcome: str, summary: str, transcript: str, structured: dict
+):
+	"""Draft (not send) a follow-up email via the grounded email brain so it lands
+	in the Human Inbox for approval. Best-effort; never breaks webhook."""
+	blob = (transcript + " " + summary).lower()
+	wants_email = bool(structured.get("send_follow_up_email")) or any(
+		k in blob for k in ("send me", "email me", "send info", "send details", "follow up", "send over")
+	)
+	if not wants_email:
+		return
+	try:
+		email = frappe.db.get_value("CRM Lead", lead_name, "email")
+		if not email:
+			return
+		from crm.api.nyx_email_brain import triage_and_draft
+
+		incoming = (
+			f"[Auto-context from voice call] Outcome: {outcome}. "
+			f"Call summary: {summary or transcript[:800]}. "
+			f"Draft a concise, professional follow-up email to the prospect based only on "
+			f"verified CRM context; do not invent facts."
+		)
+		triage_and_draft(lead_name=lead_name, incoming=incoming, force=True)
+	except Exception as e:
+		frappe.log_error(f"Post-call email draft failed for {lead_name}: {e}", "Vapi Post-Call")
+
+
+def _parse_meeting_time(structured: dict):
+	"""Best-effort extraction of a meeting start time from Vapi structuredData."""
+	from frappe.utils import get_datetime, add_to_date
+
+	raw = (
+		structured.get("meeting_time")
+		or structured.get("appointment_time")
+		or structured.get("scheduled_at")
+	)
+	if raw:
+		try:
+			return get_datetime(raw)
+		except Exception:
+			pass
+	# Default: 2 business-ish days out at 15:00 if a meeting was booked but no time parsed
+	return add_to_date(now_datetime(), days=2).replace(hour=15, minute=0, second=0, microsecond=0)
+
+
+def _maybe_book_meeting(lead_name: str, call_id: str, summary: str, transcript: str, structured: dict):
+	"""Create a calendar Event (meeting) when the call secured one. Best-effort."""
+	blob = (transcript + " " + summary).lower()
+	booked = bool(structured.get("meeting_booked")) or any(
+		k in blob for k in ("booked", "scheduled a", "set up a call", "calendar invite", "confirmed the meeting", "demo scheduled")
+	)
+	if not booked:
+		return
+	if not frappe.db.exists("DocType", "Event"):
+		return
+	try:
+		from frappe.utils import add_to_date
+
+		starts_on = _parse_meeting_time(structured)
+		ends_on = add_to_date(starts_on, minutes=30)
+		lead = frappe.db.get_value(
+			"CRM Lead", lead_name, ["first_name", "last_name", "email"], as_dict=True
+		) or {}
+		who = (f"{lead.get('first_name') or ''} {lead.get('last_name') or ''}").strip() or lead_name
+
+		event = frappe.get_doc(
+			{
+				"doctype": "Event",
+				"subject": f"Meeting: {who} (from Vapi call {call_id})",
+				"event_type": "Private",
+				"starts_on": starts_on,
+				"ends_on": ends_on,
+				"description": (
+					f"Auto-booked from voice call {call_id}.\n"
+					f"CRM Lead: {lead_name}\nContact email: {lead.get('email') or 'n/a'}\n\n"
+					f"Call summary: {summary or transcript[:800]}"
+				),
+			}
+		)
+		# Link the lead as a participant when the child schema supports references.
+		try:
+			event.append(
+				"event_participants",
+				{"reference_doctype": "CRM Lead", "reference_docname": lead_name},
+			)
+		except Exception:
+			pass
+		event.insert(ignore_permissions=True)
+
+		# Cross-link a note so the meeting is visible on the lead timeline.
+		frappe.get_doc(
+			{
+				"doctype": "FCRM Note",
+				"title": f"📅 Meeting booked: {starts_on}",
+				"content": f"Auto-booked meeting from call `{call_id}` — Event `{event.name}` at {starts_on}.",
+				"reference_doctype": "CRM Lead",
+				"reference_docname": lead_name,
+			}
+		).insert(ignore_permissions=True)
+	except Exception as e:
+		frappe.log_error(f"Post-call meeting booking failed for {lead_name}: {e}", "Vapi Post-Call")
 
 
 # ── Dashboard / health ────────────────────────────────────────────────────────
@@ -478,3 +675,115 @@ def get_dashboard():
 		},
 		"vapi_health": get_health(),
 	}
+
+
+# ── Who-to-call queue + campaign runner ───────────────────────────────────────
+#
+# Production gap the audit found: nothing decided WHICH leads to dial. Callers
+# had to already know a phone number. These endpoints give agents (and the Voice
+# page) a prioritised, governor-aware call queue and a batch campaign runner that
+# reuses the SAME hardened initiate_outbound_call spine (grounding + logging +
+# dedup all inherited).
+
+
+def _phone_of(lead: dict) -> str | None:
+	return (lead.get("mobile_no") or lead.get("phone") or "").strip() or None
+
+
+@frappe.whitelist()
+def get_call_queue(
+	limit: int = 25,
+	tier: str | None = None,
+	status: str | None = None,
+	min_score: float | None = None,
+):
+	"""Return the prioritised who-to-call list.
+
+	Selection: leads that (a) have a phone/mobile, (b) are not converted, and
+	(c) pass the call governor (not called today, under MAX_RETRIES_PER_LEAD).
+	Ordering: lead_score desc, then tier, then oldest-first (fair rotation).
+	"""
+	limit = int(limit or 25)
+	filters = {"converted": 0}
+	if tier:
+		filters["tier"] = tier
+	if status:
+		filters["status"] = status
+
+	rows = frappe.get_all(
+		"CRM Lead",
+		filters=filters,
+		fields=[
+			"name", "first_name", "last_name", "organization", "job_title",
+			"mobile_no", "phone", "status", "tier", "lead_score", "email",
+		],
+		order_by="lead_score desc, modified asc",
+		limit=limit * 4,  # over-fetch; we filter no-phone + governor below
+	)
+
+	queue = []
+	for r in rows:
+		phone = _phone_of(r)
+		if not phone:
+			continue
+		if min_score is not None and (r.get("lead_score") or 0) < float(min_score):
+			continue
+		ok, reason = should_call_lead(r["name"])
+		if not ok:
+			continue
+		queue.append(
+			{
+				"lead_name": r["name"],
+				"display_name": (f"{r.get('first_name') or ''} {r.get('last_name') or ''}").strip()
+				or r["name"],
+				"organization": r.get("organization"),
+				"job_title": r.get("job_title"),
+				"phone": phone,
+				"status": r.get("status"),
+				"tier": r.get("tier"),
+				"lead_score": r.get("lead_score") or 0,
+				"call_count": _total_call_count(r["name"]),
+			}
+		)
+		if len(queue) >= limit:
+			break
+
+	return {"count": len(queue), "queue": queue}
+
+
+@frappe.whitelist()
+def run_call_campaign(
+	limit: int = 5,
+	tier: str | None = None,
+	status: str | None = None,
+	min_score: float | None = None,
+	topic: str | None = None,
+	dry_run: int = 0,
+):
+	"""Dial the top N leads from the call queue (governor + grounding inherited).
+
+	``dry_run=1`` returns exactly who *would* be called without placing calls —
+	safe default for operators to preview a campaign.
+	"""
+	limit = int(limit or 5)
+	dry_run = int(dry_run or 0)
+	q = get_call_queue(limit=limit, tier=tier, status=status, min_score=min_score)
+	targets = q["queue"]
+
+	if dry_run:
+		return {"dry_run": True, "would_call": len(targets), "targets": targets}
+
+	results = []
+	for t in targets:
+		try:
+			res = initiate_outbound_call(
+				to_number=t["phone"],
+				lead_name=t["lead_name"],
+				topic=topic or "Follow up on our research outreach",
+			)
+			results.append({"lead_name": t["lead_name"], "ok": True, "call_id": res.get("call_id")})
+		except Exception as e:
+			results.append({"lead_name": t["lead_name"], "ok": False, "error": str(e)[:200]})
+
+	placed = sum(1 for r in results if r["ok"])
+	return {"dry_run": False, "attempted": len(results), "placed": placed, "results": results}
