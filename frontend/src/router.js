@@ -157,6 +157,17 @@ const routes = [
     props: true,
   },
   {
+    path: '/industry',
+    name: 'Industry Dashboard',
+    component: () => import('@/pages/IndustryDashboard.vue'),
+  },
+  {
+    path: '/industry/:slug',
+    name: 'Industry Engagement',
+    component: () => import('@/pages/IndustryEngagement.vue'),
+    props: true,
+  },
+  {
     path: '/lead-search',
     name: 'Lead Search',
     component: () => import('@/pages/LeadSearch.vue'),
