@@ -1,0 +1,2129 @@
+[
+  {
+    "slug": "agenus",
+    "front_matter": {
+      "title": "Agenus — CrisPRO Outreach Strategy",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Agenus Inc.",
+      "lead_drug": "Botensilimab + Balstilimab (BOT/BAL)",
+      "target": "CTLA-4 (botensilimab, Fc-enhanced) + PD-1 (balstilimab)",
+      "trial": "BATTMAN (CO.33 / NCT05608044) — Phase 3; Noetik TARIO-2 partnership (ASCO 2026)",
+      "phase": "Phase 3",
+      "outreach_priority_rank": "2",
+      "claim_posture": "gap-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Steven O'Day, MD — CMO, Agenus",
+      "backup_contact": "Derek Jonker, MD — BATTMAN CO.33 lead, Ottawa Hospital / CCTG",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "CTLA-4",
+        "PD-1",
+        "IO",
+        "MSS-CRC",
+        "NLM",
+        "TME",
+        "Noetik",
+        "TARIO-2",
+        "gap-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/agenus/**"
+      ]
+    },
+    "snapshot": "**Company:** Agenus Inc. (Lexington, MA)\n**Lead drug:** Botensilimab (anti-CTLA-4, Fc-enhanced) + Balstilimab (anti-PD-1)\n**Target:** CTLA-4 + PD-1 dual checkpoint blockade; Fc-enhanced CTLA-4 mechanism\n**Trial:** BATTMAN (CO.33, NCT05608044) — Phase 3 randomized trial in MSS mCRC\n**Phase:** Phase 3 (enrolling)\n**Status:** Active; Noetik TARIO-2 AI biomarker partnership announced ASCO 2026 (May 21, 2026)\n\n**Key efficacy data (public — Phase 2 / earlier cohorts):**\n- n = 123 (NLM = no liver metastases subgroup, MSS mCRC)\n- ORR: 20%, DCR: 69%\n- Median OS: 21 months; 42% 2-year survival\n- NLM subgroup is the critical efficacy signal — liver-met patients show substantially attenuated response\n- Noetik TARIO-2 (ASCO 2026): retrospective H&E-based AI model identified subgroup with 64% ORR vs. 9% ORR in remainder\n\n**Why this trial is in the CRC landscape sweep:**\nBOT/BAL is the most clinically advanced IO combination in MSS mCRC. The NLM subgroup signal is real and reproducible. The Noetik TARIO-2 partnership (announced ASCO May 21, 2026) means Agenus is already engaged with AI-based biomarker stratification — the gap is prospective validation, not discovery. BATTMAN is the Phase 3 that will define whether MSS CRC IO is viable.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "4",
+          "rationale": "NLM subgroup is the signal; Noetik TARIO-2 is retrospective H&E — prospective validation gap is real"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "BATTMAN control arm benchmarking in NLM MSS mCRC is non-trivial; historical NLM-specific data is sparse"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "4",
+          "rationale": "NLM vs. liver-met stratification is the critical design question; co-mutation landscape adds complexity"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "5",
+          "rationale": "BATTMAN risks an uninterpretable ITT result if NLM enrichment is not pre-specified; Noetik signal needs prospective validation"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "4.25",
+          "rationale": "Second-highest priority; Phase 3 design window is live"
+        }
+      ],
+      "composite": "4.25",
+      "sharpest_hook": "Agenus already has a retrospective AI biomarker signal (Noetik TARIO-2: 64% ORR in identified subgroup vs. 9% remainder). The gap is not that Agenus is naive to AI stratification — they are not. The gap is that TARIO-2 is retrospective H&E-based, and the question of whether that signal can be prospectively validated in BATTMAN — and whether it aligns with or diverges from molecular co-mutation landscape data — is open. CrisPRO's angle is orthogonal to Noetik: molecular landscape indexing vs. histomorphological AI.",
+      "crispro_can": [
+        "Provide a molecular landscape complement to the Noetik TARIO-2 histomorphological signal — do the two approaches identify the same patients or different subpopulations?",
+        "Index the NLM MSS mCRC population against co-mutation landscape data to identify molecular features that co-segregate with the TARIO-2 signal",
+        "Provide a population-adjusted historical benchmark for NLM MSS mCRC OS — the 21-month median OS needs context against what the BATTMAN control arm will look like"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the BATTMAN dataset — no claim is made that a model has been run",
+        "CrisPRO is not a competitor to Noetik — the approaches are orthogonal (molecular vs. histomorphological)",
+        "CrisPRO cannot access Agenus's proprietary BATTMAN data",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Steven O'Day, MD",
+        "title": "Chief Medical Officer, Agenus Inc.",
+        "institution": "Agenus Inc. (Lexington, MA)",
+        "linkedin": "linkedin.com/in/steven-oday-md (search: Steven O'Day Agenus CMO)",
+        "public_email_verified": "NO",
+        "rationale": "CMO with direct oversight of BATTMAN design and the Noetik partnership. Appropriate entry point for a scientific positioning conversation about prospective validation strategy."
+      },
+      "backup": {
+        "name": "Derek Jonker, MD",
+        "title": "GI Oncology Lead, Ottawa Hospital Cancer Centre / CCTG",
+        "institution": "Ottawa Hospital / Canadian Cancer Trials Group",
+        "linkedin": "linkedin.com/in/derek-jonker-md (search: Derek Jonker Ottawa oncology)",
+        "public_email_verified": "NO",
+        "rationale": "BATTMAN CO.33 lead investigator. Academic KOL with direct trial access. Use if Steven O'Day does not respond within 2 weeks."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. O'Day — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following the BOT/BAL NLM signal and the Noetik TARIO-2 announcement closely. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about prospective validation in BATTMAN. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. O'Day — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nThe Noetik TARIO-2 announcement at ASCO is a meaningful development — a 64% ORR in the AI-identified subgroup vs. 9% in the remainder is a striking signal. The question it raises for BATTMAN is whether the histomorphological signal and the molecular co-mutation landscape identify the same patients or different ones. If they diverge, the prospective validation design becomes more complex.\n\nCrisPRO has indexed the MSS mCRC molecular landscape in a way that may be orthogonal to — and complementary with — what Noetik is doing. I'm not suggesting a competitive approach; I'm raising a scientific question about whether the two signals converge. Would you be open to a 20-minute conversation before the BATTMAN prospective validation design is locked?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. O'Day — I'm Robin [Last Name], CMO at CrisPRO.ai. I've been following the BOT/BAL program closely — the NLM subgroup signal is one of the more compelling results in MSS CRC IO, and the Noetik TARIO-2 announcement at ASCO adds an important dimension.\n\nOne question the TARIO-2 data raises: the retrospective H&E signal (64% ORR in identified subgroup) is striking, but the relationship between that histomorphological signal and the molecular co-mutation landscape in NLM MSS mCRC is not yet characterized. CrisPRO has indexed that molecular landscape in a way that may be orthogonal to what Noetik is doing — the two approaches may identify the same patients, or they may not.\n\nI'm not proposing a competitive approach to Noetik — I'm raising a scientific question about signal convergence that I think is worth 20 minutes before the prospective validation design is locked. Would you be open to a brief exchange?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to anyone at Agenus or CCTG",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Steven O'Day is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for a CMO-level contact"
+        },
+        {
+          "scenario": "Derek Jonker is the entry point (backup)",
+          "recommended_option": "Option B, addressed to Jonker — reference BATTMAN CO.33 specifically"
+        },
+        {
+          "scenario": "Fahad has met O'Day at ASCO/AACR",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "BOT/BAL NLM subgroup: ORR 20%, DCR 69%, median OS 21 months, 42% 2-year survival",
+          "source": "Published Phase 2 data; ASCO presentations",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "State NLM subgroup explicitly; do not apply to ITT"
+        },
+        {
+          "claim": "Noetik TARIO-2: 64% ORR in AI-identified subgroup vs. 9% remainder",
+          "source": "ASCO 2026 abstract (May 21, 2026)",
+          "evidence_status": "CONFERENCE-ABSTRACT",
+          "notes": "Preliminary; subject to change; cite as ASCO 2026 abstract"
+        },
+        {
+          "claim": "BATTMAN (CO.33) is a Phase 3 randomized trial in MSS mCRC",
+          "source": "NCT05608044",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Noetik TARIO-2 is a retrospective H&E-based AI model",
+          "source": "ASCO 2026 announcement",
+          "evidence_status": "CONFERENCE-ABSTRACT",
+          "notes": ""
+        },
+        {
+          "claim": "NLM vs. liver-met stratification is the critical design question for BOT/BAL",
+          "source": "Published Phase 2 data",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the BATTMAN dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "CrisPRO is superior to or replaces Noetik TARIO-2",
+          "reason": "Competitive claim — prohibited; approaches are orthogonal"
+        },
+        {
+          "claim": "BATTMAN will fail without prospective biomarker validation",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "The Noetik TARIO-2 signal is unreliable",
+          "reason": "Disparaging a named competitor — prohibited"
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**Noetik TARIO-2 acknowledgment is mandatory:** Any outreach message that does not acknowledge the Noetik partnership will appear uninformed. The hook must be framed as complementary to TARIO-2, not competitive with it.",
+        "**NLM subgroup specificity:** All efficacy claims must be attributed to the NLM subgroup. Do not apply NLM ORR/OS data to the ITT population.",
+        "**TARIO-2 is CONFERENCE-ABSTRACT:** The 64% ORR figure is from an ASCO 2026 abstract (May 21, 2026). It is preliminary and subject to change. Cite as such.",
+        "**Prospective validation framing:** The gap is prospective validation of the TARIO-2 signal, not discovery of a gap Agenus hasn't seen. Do not imply Agenus is naive to AI biomarker stratification."
+      ]
+    }
+  },
+  {
+    "slug": "amgen",
+    "front_matter": {
+      "title": "Amgen — CrisPRO Outreach Strategy (Sotorasib + Panitumumab / CodeBreaK 301)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Amgen Inc.",
+      "lead_drug": "Sotorasib + Panitumumab (LUMAKRAS + VECTIBIX)",
+      "target": "KRAS G12C (sotorasib) + EGFR (panitumumab)",
+      "trial": "CodeBreaK 301 (NCT06252649) — Phase 3, 1L KRAS G12C CRC",
+      "phase": "Phase 3 (enrolling); CodeBreaK 300 FDA-approved January 2025 (2L)",
+      "outreach_priority_rank": "7",
+      "claim_posture": "benchmark-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "David Hyman, MD — CMO, Amgen Oncology",
+      "backup_contact": "Marwan Fakih, MD — CodeBreaK 300/301 PI, City of Hope",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "KRAS-G12C",
+        "EGFR",
+        "sotorasib",
+        "panitumumab",
+        "CRC",
+        "approved",
+        "benchmark-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/amgen/**"
+      ]
+    },
+    "snapshot": "**Company:** Amgen Inc. (Thousand Oaks, CA)\n**Lead drug:** Sotorasib (LUMAKRAS) + Panitumumab (VECTIBIX)\n**Target:** KRAS G12C (sotorasib) + EGFR (panitumumab) — combination targeting\n**Trial:** CodeBreaK 301 (NCT06252649) — Phase 3, 1L KRAS G12C mCRC; sotorasib + panitumumab + FOLFIRI vs. FOLFIRI ± bevacizumab\n**Phase:** Phase 3 (enrolling); CodeBreaK 300 FDA-approved January 2025 (2L indication)\n**Status:** CodeBreaK 300 approved; CodeBreaK 301 active Phase 3\n\n**Key efficacy data (public — CodeBreaK 300, FDA-approved January 2025):**\n- CodeBreaK 300: PFS 5.6 months vs. 2.0 months (HR 0.48, p=0.005); ORR 26%\n- FDA-approved January 2025 for 2L KRAS G12C mCRC\n- CodeBreaK 301 is the 1L registrational trial — no design gap to exploit; benchmark-hook is correct posture\n- Resistance mechanism profiling post-CodeBreaK 300 approval is the scientific wedge\n\n**Why this trial is in the CRC landscape sweep:**\nCodeBreaK 300 is FDA-approved. CodeBreaK 301 is the 1L Phase 3. The benchmark-hook is the population-adjusted KRAS G12C-specific historical benchmark for the 1L control arm (FOLFIRI ± bevacizumab). The resistance mechanism profiling gap post-approval is the secondary scientific wedge.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "3",
+          "rationale": "KRAS G12C is the selection criterion; resistance mechanism profiling is the secondary gap post-approval"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "1L KRAS G12C-specific historical benchmark is sparse; FOLFIRI ± bev control arm interpretation is non-trivial"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "3",
+          "rationale": "KRAS G12C CRC is ~3–4% of mCRC; population is selected but not ultra-selected"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "3",
+          "rationale": "CodeBreaK 301 is well-designed; benchmark-hook is the primary angle"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "3.50",
+          "rationale": "Seventh-highest priority (tied with Mirati/BMS)"
+        }
+      ],
+      "composite": "3.50",
+      "sharpest_hook": "CodeBreaK 301 is a 1L Phase 3 with FOLFIRI ± bevacizumab as the control arm. The KRAS G12C-specific historical benchmark for 1L CRC is not straightforward — most historical 1L CRC trial data includes mixed KRAS mutation populations. CrisPRO has indexed the KRAS G12C CRC molecular landscape in a way that may be relevant to the CodeBreaK 301 control arm interpretation and resistance mechanism profiling.",
+      "crispro_can": [
+        "Provide a KRAS G12C-specific historical benchmark for 1L CRC ORR/PFS/OS — separating KRAS G12C from other KRAS mutations in historical trial data",
+        "Index the KRAS G12C CRC co-mutation landscape to identify resistance mechanism profiles relevant to sotorasib + panitumumab",
+        "Model which co-mutation profiles are most likely to drive primary or acquired resistance in the CodeBreaK 301 population"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the CodeBreaK 301 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access Amgen's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "David Hyman, MD",
+        "title": "Chief Medical Officer, Amgen Oncology",
+        "institution": "Amgen Inc. (Thousand Oaks, CA)",
+        "linkedin": "linkedin.com/in/david-hyman-md (search: David Hyman Amgen CMO oncology)",
+        "public_email_verified": "NO",
+        "rationale": "CMO of Amgen Oncology — direct oversight of CodeBreaK program post-approval. Appropriate entry point for a benchmark-hook conversation about CodeBreaK 301 and resistance profiling."
+      },
+      "backup": {
+        "name": "Marwan Fakih, MD",
+        "title": "GI Oncology Lead, City of Hope (Duarte, CA)",
+        "institution": "City of Hope Comprehensive Cancer Center",
+        "linkedin": "linkedin.com/in/marwan-fakih-md (search: Marwan Fakih City of Hope oncology)",
+        "public_email_verified": "NO",
+        "rationale": "Lead PI for CodeBreaK 300 and 301. Academic KOL with direct trial access. Use if Hyman does not respond within 2 weeks."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. Hyman — I'm Fahad Kiani, co-founder of CrisPRO.ai. Congratulations on the CodeBreaK 300 approval — a meaningful result for KRAS G12C CRC. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about the CodeBreaK 301 control arm benchmark. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. Hyman — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nThe CodeBreaK 300 approval is a landmark for KRAS G12C CRC. The question I'd raise for CodeBreaK 301 is about the 1L control arm benchmark: most historical 1L CRC trial data includes mixed KRAS mutation populations — the KRAS G12C-specific historical benchmark for the FOLFIRI ± bevacizumab control arm is not straightforward. The population-adjusted interpretation will matter for the regulatory submission and for understanding the resistance mechanism landscape post-approval.\n\nCrisPRO has indexed the KRAS G12C CRC molecular landscape in a way that may be relevant to both questions. I'm not pitching a service — I'm raising a scientific point I think is worth 20 minutes. Would you be open to a brief conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. Hyman — I'm Robin [Last Name], CMO at CrisPRO.ai. The CodeBreaK 300 approval is a landmark for KRAS G12C CRC — a meaningful result for a population that has historically had very limited options.\n\nOne question for CodeBreaK 301: the 1L control arm benchmark (FOLFIRI ± bevacizumab) is not straightforward in a KRAS G12C-specific population. Most historical 1L CRC trial data includes mixed KRAS mutation populations — the population-adjusted interpretation will matter for the regulatory submission. CrisPRO has indexed the KRAS G12C CRC molecular landscape in a way that may be relevant to that benchmark question and to resistance mechanism profiling post-approval.\n\nI'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Hyman or Fakih",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Hyman is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for a CMO-level contact"
+        },
+        {
+          "scenario": "Marwan Fakih is the entry point (backup)",
+          "recommended_option": "Option B, addressed to Fakih — reference CodeBreaK 300/301 PI role"
+        },
+        {
+          "scenario": "Fahad has met Hyman at ASCO/AACR",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "CodeBreaK 300: PFS 5.6 vs. 2.0 months (HR 0.48, p=0.005), ORR 26%",
+          "source": "FDA approval record; published data",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "CodeBreaK 300 FDA-approved January 2025 for 2L KRAS G12C mCRC",
+          "source": "FDA approval record",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "CodeBreaK 301 is a Phase 3 randomized trial (1L)",
+          "source": "NCT06252649 registry",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "KRAS G12C is present in ~3–4% of mCRC",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Most historical 1L CRC trial data includes mixed KRAS mutation populations",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the CodeBreaK 301 dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "CodeBreaK 301 will fail without a KRAS G12C-specific benchmark",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**Approved asset — capability-match boundary:** CodeBreaK 300 is FDA-approved. Do not imply the approved drug has a design gap. The benchmark-hook is additive intelligence, not corrective.",
+        "**Congratulatory framing:** The CodeBreaK 300 approval is a genuine milestone. Acknowledging it in the opening is appropriate and not sycophantic — it establishes that CrisPRO is tracking the program.",
+        "**KRAS G12C specificity:** All efficacy claims must specify KRAS G12C. Do not generalize to KRAS-mutant CRC broadly.",
+        "**Mirati/BMS coordination:** Mirati/BMS (KRYSTAL-10, adagrasib + cetuximab) is also a KRAS G12C CRC target (MDC #7a). Both are benchmark-hook posture. Coordinate timing — do not send both messages in the same week if Hyman and Bendell are in the same professional network."
+      ]
+    }
+  },
+  {
+    "slug": "astrazeneca",
+    "front_matter": {
+      "title": "AstraZeneca — CrisPRO Outreach Strategy (Durvalumab / CO.26 Liver-Met Signal)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "AstraZeneca",
+      "lead_drug": "Durvalumab (IMFINZI) + chemotherapy combinations",
+      "target": "PD-L1 — immune checkpoint blockade",
+      "trial": "CO.26 (NCT02870920) — Phase 2 completed; liver-met secondary analysis (PMID 38727700); future CRC expansion trials",
+      "phase": "Phase 2 (CO.26 complete); expansion trials in planning",
+      "outreach_priority_rank": "4",
+      "claim_posture": "gap-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Jonathan Loree, MD — CO.26 secondary analysis lead, BC Cancer",
+      "backup_contact": "AstraZeneca Oncology Medical Affairs (GI/CRC)",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "PD-L1",
+        "IO",
+        "MSS-CRC",
+        "liver-met",
+        "CO.26",
+        "gap-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/astrazeneca/**"
+      ]
+    },
+    "snapshot": "**Company:** AstraZeneca (Cambridge, UK / Gaithersburg, MD)\n**Lead drug:** Durvalumab (IMFINZI) — anti-PD-L1\n**Target:** PD-L1 immune checkpoint\n**Trial:** CO.26 (NCT02870920) — Phase 2 randomized trial; durvalumab + tremelimumab vs. BSC in pre-treated MSS mCRC\n**Phase:** Phase 2 (CO.26 complete); CRC expansion trials in planning\n**Status:** CO.26 published; liver-met secondary analysis published (PMID 38727700); AZ has active CRC IO development interest\n\n**Key efficacy data (public — CO.26 and secondary analysis):**\n- CO.26 primary analysis: no significant OS benefit in ITT MSS mCRC population\n- Liver-met secondary analysis (PMID 38727700): patients without liver metastases showed substantially improved outcomes vs. liver-met patients\n- Prospective validation of liver-met stratification not done in any AZ CRC expansion trial\n- The liver-met signal in CO.26 is the most directly relevant comparator for any MSS CRC IO trial design\n\n**Why this trial is in the CRC landscape sweep:**\nCO.26 is the most directly relevant historical comparator for MSS CRC IO trials, including BreAK CRC-001. The liver-met secondary analysis (PMID 38727700) is a published, peer-reviewed signal that has not been prospectively validated. AstraZeneca has active CRC IO development interest — the gap is pre-specified stratification in any AZ CRC expansion trial.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "4",
+          "rationale": "Liver-met stratification signal is published but not prospectively validated in any AZ CRC expansion trial"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "CO.26 is the most relevant historical comparator for MSS CRC IO; population-adjusted interpretation is non-trivial"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "3",
+          "rationale": "MSS mCRC is heterogeneous; liver-met vs. NLM is the critical stratification variable"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "4",
+          "rationale": "Any AZ CRC expansion trial risks an uninterpretable ITT result without pre-specified liver-met stratification"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "3.75",
+          "rationale": "Fourth-highest priority; expansion trial design window is live"
+        }
+      ],
+      "composite": "3.75",
+      "sharpest_hook": "CO.26 showed no significant OS benefit in the ITT MSS mCRC population, but the liver-met secondary analysis (PMID 38727700) identified a subgroup with substantially improved outcomes in patients without liver metastases. This signal has not been prospectively validated in any AZ CRC expansion trial. The question CrisPRO raises is: *if AstraZeneca pursues a CRC IO expansion trial, what is the pre-specified stratification design that gives the liver-met signal the best chance of prospective validation?*",
+      "crispro_can": [
+        "Provide a population-adjusted historical benchmark for NLM MSS mCRC outcomes in the CO.26 control arm — the liver-met signal needs context against what a prospective expansion trial control arm will look like",
+        "Index the MSS mCRC molecular landscape to identify co-occurring features that co-segregate with the liver-met stratification signal",
+        "Model which pre-specified stratification variables would give the liver-met signal the best statistical power in a prospective expansion trial"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the CO.26 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access AstraZeneca's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Jonathan Loree, MD",
+        "title": "GI Oncology Lead, BC Cancer (Vancouver, BC)",
+        "institution": "BC Cancer / University of British Columbia",
+        "linkedin": "linkedin.com/in/jonathan-loree-md (search: Jonathan Loree BC Cancer oncology)",
+        "public_email_verified": "NO",
+        "rationale": "Lead author on the CO.26 liver-met secondary analysis (PMID 38727700). Academic KOL with direct access to the CO.26 data and influence on AZ CRC expansion trial design."
+      },
+      "backup": {
+        "name": "AstraZeneca Oncology Medical Affairs (GI/CRC)",
+        "title": "Medical Affairs — GI Oncology",
+        "institution": "AstraZeneca",
+        "linkedin": "Search AstraZeneca Medical Affairs GI Oncology on LinkedIn",
+        "public_email_verified": "NO",
+        "rationale": "If academic PI entry point does not generate traction, AZ Medical Affairs is the appropriate escalation path for a company-level conversation."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. Loree — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following the CO.26 liver-met secondary analysis closely — the NLM signal is one of the most important unpublished questions in MSS CRC IO. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about prospective validation. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. Loree — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nThe CO.26 liver-met secondary analysis raises a question that I think is underappreciated in the field: the NLM subgroup signal is published and peer-reviewed, but it has not been prospectively validated in any AZ CRC expansion trial. If AstraZeneca pursues a CRC IO expansion, the pre-specified stratification design is the critical question — and the population-adjusted interpretation of the CO.26 control arm is not straightforward.\n\nCrisPRO has indexed the MSS mCRC molecular landscape in a way that may be relevant to that stratification design question. I'm not pitching a service — I'm raising a scientific question I think is worth 20 minutes. Would you be open to a brief conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. Loree — I'm Robin [Last Name], CMO at CrisPRO.ai. Your CO.26 liver-met secondary analysis (PMID 38727700) is one of the more important unpublished questions in MSS CRC IO — the NLM subgroup signal is real, but it has not been prospectively validated.\n\nThe question it raises for any AZ CRC expansion trial is: what is the pre-specified stratification design that gives the liver-met signal the best chance of prospective validation? The population-adjusted interpretation of the CO.26 control arm is not straightforward — and CrisPRO has indexed the MSS mCRC molecular landscape in a way that may be relevant to that question.\n\nI'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Loree or BC Cancer",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Loree is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for an academic KOL"
+        },
+        {
+          "scenario": "AZ Medical Affairs is the entry point (backup)",
+          "recommended_option": "Option B, addressed to AZ Medical Affairs — reference CO.26 and CRC expansion interest"
+        },
+        {
+          "scenario": "Fahad has met Loree at ASCO/ESMO",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "CO.26 showed no significant OS benefit in ITT MSS mCRC",
+          "source": "Published paper; NCT02870920",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Liver-met secondary analysis: NLM subgroup showed substantially improved outcomes",
+          "source": "PMID 38727700",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "Cite PMID explicitly"
+        },
+        {
+          "claim": "Prospective validation of liver-met stratification not done in any AZ CRC expansion trial",
+          "source": "Published literature review",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "CO.26 is the most relevant historical comparator for MSS CRC IO trials",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the CO.26 dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "AZ's CRC IO program will fail without prospective liver-met stratification",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "CO.26 \"failed\"",
+          "reason": "Pejorative framing — CO.26 was a negative trial in ITT; the liver-met signal is a secondary analysis"
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**CO.26 was a negative trial:** Do not frame CO.26 as a success. The ITT result was negative. The liver-met secondary analysis is a hypothesis-generating signal, not a positive trial result.",
+        "**PMID 38727700 citation:** Always cite the liver-met secondary analysis by PMID when referencing the NLM signal. Do not paraphrase without attribution.",
+        "**AZ CRC expansion trial:** No public announcement of a specific AZ CRC expansion trial has been confirmed. Do not claim knowledge of a specific trial design — frame as a general expansion interest.",
+        "**Daiichi Sankyo coordination:** AstraZeneca is also the co-development partner for T-DXd (MDC #3). If both Daiichi/AZ (T-DXd) and AstraZeneca (durvalumab) outreach are sent, coordinate timing to avoid two separate AZ contacts receiving CrisPRO messages in the same week."
+      ]
+    }
+  },
+  {
+    "slug": "biontech",
+    "front_matter": {
+      "title": "BioNTech/Roche — CrisPRO Outreach Strategy (Autogene Cevumeran / BNT122-01)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "BioNTech / Roche",
+      "lead_drug": "Autogene Cevumeran (RO7198457) — individualized neoantigen mRNA vaccine",
+      "target": "Individualized neoantigen-specific T cell response (mRNA vaccine platform)",
+      "trial": "BNT122-01 (NCT04486378) — Phase 2, adjuvant mRNA vaccine in resected CRC",
+      "phase": "Phase 2 (enrolling; futility boundary crossed November 2025 at first interim)",
+      "outreach_priority_rank": "10",
+      "claim_posture": "gap-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Heinz-Josef Lenz, MD — BNT122-01 PI, USC Norris Comprehensive Cancer Center",
+      "backup_contact": "Ugur Sahin, MD, PhD — CEO/Co-founder, BioNTech (escalation only, not cold outreach)",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "mRNA-vaccine",
+        "neoantigen",
+        "CRC",
+        "adjuvant",
+        "ctDNA",
+        "interpretability-gap",
+        "gap-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/biontech/**"
+      ]
+    },
+    "snapshot": "**Company:** BioNTech SE / Roche (co-development partnership)\n**Lead drug:** Autogene Cevumeran (RO7198457) — individualized neoantigen mRNA vaccine\n**Target:** Individualized neoantigen-specific T cell response\n**Trial:** BNT122-01 (NCT04486378) — Phase 2, adjuvant setting in resected CRC (ctDNA-positive patients)\n**Phase:** Phase 2 (enrolling; futility boundary crossed November 2025 at first interim analysis)\n**Status:** Trial continues blinded to final analysis; next update expected 2026–2027\n\n**Key data (public):**\n- Futility boundary crossed at first interim analysis, November 2025\n- Trial continues blinded to final analysis (pre-specified design)\n- ctDNA clearance is the primary surrogate endpoint\n- Final analysis expected 2027\n- The interpretability gap: what does ctDNA clearance predict in the adjuvant CRC setting, and which patient subpopulations are most likely to show durable benefit?\n\n**Why this trial is in the CRC landscape sweep:**\nBNT122-01 is the most advanced mRNA neoantigen vaccine trial in CRC. The futility boundary crossing at the first interim is a pre-specified event — the trial continues. The hook is the interpretability gap: ctDNA clearance as a surrogate endpoint in adjuvant CRC is not fully validated, and the patient subpopulations most likely to show durable benefit are not characterized. The competitive window for CrisPRO is real — the final analysis is 2027.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "4",
+          "rationale": "ctDNA clearance as surrogate endpoint is not fully validated; neoantigen load and TMB are not pre-specified as stratification variables"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "Adjuvant CRC historical benchmark is sparse; ctDNA-positive resected CRC population is ultra-selected"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "4",
+          "rationale": "ctDNA-positive resected CRC is heterogeneous; neoantigen landscape varies widely by tumor mutational burden"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "5",
+          "rationale": "Futility boundary crossed — the interpretability question is live; what does ctDNA clearance predict in this population?"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "4.25",
+          "rationale": "Tenth-highest priority; interpretability gap is the sharpest hook"
+        }
+      ],
+      "composite": "4.25",
+      "sharpest_hook": "BNT122-01 crossed the futility boundary at the first interim analysis in November 2025. The trial continues blinded to final analysis — this is a pre-specified event, not a trial failure. The interpretability gap is: *what does ctDNA clearance predict in the adjuvant CRC setting, and which patient subpopulations (by neoantigen load, TMB, MSI status, co-mutation landscape) are most likely to show durable benefit from individualized mRNA vaccination?* The final analysis is 2027 — the window to inform the interpretability design is open.",
+      "crispro_can": [
+        "Index the ctDNA-positive resected CRC molecular landscape to identify co-occurring features (neoantigen load, TMB, MSI status, co-mutation landscape) that correlate with durable ctDNA clearance",
+        "Provide a population-adjusted historical benchmark for adjuvant CRC outcomes in ctDNA-positive patients — the ultra-selected population needs context",
+        "Model which patient subpopulations are most likely to show durable benefit from individualized mRNA vaccination, informing the final analysis interpretation"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the BNT122-01 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access BioNTech's or Roche's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "CrisPRO makes no claim about whether autogene cevumeran will succeed or fail in the final analysis",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Heinz-Josef Lenz, MD",
+        "title": "GI Oncology Lead, USC Norris Comprehensive Cancer Center",
+        "institution": "University of Southern California (Los Angeles, CA)",
+        "linkedin": "linkedin.com/in/heinz-josef-lenz-md (search: Heinz-Josef Lenz USC oncology)",
+        "public_email_verified": "NO",
+        "rationale": "BNT122-01 lead PI. Academic KOL with direct trial access and influence on final analysis interpretation design. Appropriate entry point for a scientific conversation about ctDNA endpoint interpretability."
+      },
+      "backup": {
+        "name": "Ugur Sahin, MD, PhD",
+        "title": "CEO and Co-founder, BioNTech SE",
+        "institution": "BioNTech SE (Mainz, Germany)",
+        "linkedin": "linkedin.com/in/ugur-sahin (search: Ugur Sahin BioNTech)",
+        "public_email_verified": "NO",
+        "⚠️_escalation_only": "Ugur Sahin is the CEO of BioNTech. Do NOT send a cold LinkedIn message to Sahin as a first outreach. This contact is for escalation only — if Lenz responds and expresses interest, and the conversation escalates to a company-level discussion, Sahin may be an appropriate follow-up. Do not cold-approach the CEO of a major biotech as a first touch."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. Lenz — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following BNT122-01 closely — the ctDNA endpoint design raises a specific interpretability question I'd like to discuss. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a scientific question about the final analysis design. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. Lenz — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nBNT122-01 is one of the most scientifically interesting trials in the CRC space — the individualized neoantigen vaccine concept in ctDNA-positive resected CRC is a compelling design. The question I'd raise is about the ctDNA clearance endpoint: in the adjuvant CRC setting, the relationship between ctDNA clearance and durable disease-free survival is not fully characterized. The patient subpopulations most likely to show durable benefit — by neoantigen load, TMB, co-mutation landscape — are not pre-specified as stratification variables.\n\nWith the final analysis expected in 2027, the window to inform the interpretability design is open. CrisPRO has indexed the ctDNA-positive resected CRC molecular landscape in a way that may be relevant to that question. I'm not pitching a service — I'm raising a scientific question I think is worth 20 minutes. Would you be open to a brief conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. Lenz — I'm Robin [Last Name], CMO at CrisPRO.ai. BNT122-01 is one of the more scientifically interesting trials in the CRC space — the individualized neoantigen vaccine concept in ctDNA-positive resected CRC is a compelling design.\n\nOne question the trial design raises: ctDNA clearance as a surrogate endpoint in adjuvant CRC is not fully validated, and the patient subpopulations most likely to show durable benefit — by neoantigen load, TMB, co-mutation landscape — are not pre-specified as stratification variables. With the final analysis expected in 2027, the window to inform the interpretability design is open.\n\nCrisPRO has indexed the ctDNA-positive resected CRC molecular landscape in a way that may be relevant to that question. I'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Lenz or USC Norris",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Lenz is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for an academic KOL"
+        },
+        {
+          "scenario": "Do NOT cold-approach Ugur Sahin",
+          "recommended_option": "Escalation only — see Section 3"
+        },
+        {
+          "scenario": "Fahad has met Lenz at ASCO/AACR",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "BNT122-01 crossed the futility boundary at first interim analysis, November 2025",
+          "source": "Public reporting",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "This is a pre-specified event; trial continues"
+        },
+        {
+          "claim": "Trial continues blinded to final analysis",
+          "source": "Public reporting",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "ctDNA clearance is the primary surrogate endpoint",
+          "source": "NCT04486378 registry",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Final analysis expected 2026–2027",
+          "source": "Public reporting",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "ctDNA clearance as surrogate endpoint in adjuvant CRC is not fully validated",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "Autogene cevumeran \"failed\" or \"will fail\"",
+          "reason": "The futility boundary crossing is a pre-specified interim event; the trial continues; this claim is false and prohibited"
+        },
+        {
+          "claim": "CrisPRO has run a model on the BNT122-01 dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "The final analysis will be negative",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**CRITICAL — Futility boundary framing:** The futility boundary crossing in November 2025 is a pre-specified interim analysis event. The trial continues blinded to final analysis. Any message that implies the drug \"failed\" or \"will fail\" is factually incorrect and prohibited. The hook is the interpretability gap — not a claim about trial outcome.",
+        "**Ugur Sahin escalation-only:** Do not cold-approach Sahin. He is listed as backup/escalation only. See Section 3.",
+        "**Roche dual-entry:** Roche is also the co-development partner for atezolizumab (COMMIT, MDC #9). Coordinate outreach — do not approach Roche as two separate companies for two different programs in the same week.",
+        "**ctDNA endpoint specificity:** The hook is ctDNA clearance as a surrogate endpoint in the adjuvant CRC setting. Do not generalize to ctDNA in metastatic CRC — the adjuvant context is specific.",
+        "**Individualized vaccine framing:** Autogene cevumeran is an individualized neoantigen vaccine — each patient's vaccine is unique. Do not imply CrisPRO can model the individualized vaccine design. The hook is population-level stratification of which patients are most likely to benefit."
+      ]
+    }
+  },
+  {
+    "slug": "daiichi_sankyo",
+    "front_matter": {
+      "title": "Daiichi Sankyo / AstraZeneca — CrisPRO Outreach Strategy (T-DXd / ENHERTU)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Daiichi Sankyo / AstraZeneca",
+      "lead_drug": "Trastuzumab Deruxtecan (ENHERTU / T-DXd)",
+      "target": "HER2 (ERBB2) — ADC (antibody-drug conjugate)",
+      "trial": "DESTINY-CRC02 (NCT04744831) — Phase 2; DESTINY-CRC03 (Phase 3) in planning",
+      "phase": "Phase 2 (DESTINY-CRC02 complete); Phase 3 in planning",
+      "outreach_priority_rank": "3",
+      "claim_posture": "gap-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Salvatore Siena, MD — DESTINY-CRC02 PI, Niguarda Cancer Center Milan",
+      "backup_contact": "Yoshiaki Nakamura, MD — HER2 CRC KOL, National Cancer Center Japan",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "HER2",
+        "ADC",
+        "T-DXd",
+        "ENHERTU",
+        "CRC",
+        "co-mutation",
+        "gap-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/daiichi_sankyo/**"
+      ]
+    },
+    "snapshot": "**Company:** Daiichi Sankyo / AstraZeneca (co-development partnership)\n**Lead drug:** Trastuzumab Deruxtecan (ENHERTU / T-DXd) — HER2-directed ADC\n**Target:** HER2 (ERBB2) overexpression/amplification\n**Trial:** DESTINY-CRC02 (NCT04744831) — Phase 2, HER2+ mCRC\n**Phase:** Phase 2 (DESTINY-CRC02 complete); DESTINY-CRC03 (Phase 3) in planning\n**Status:** DESTINY-CRC02 data published; Phase 3 design under development\n\n**Key efficacy data (public — DESTINY-CRC02):**\n- IHC3+ cohort: ORR 37.8% (n=82)\n- IHC2+/ISH+ cohort: ORR 27.5% (n=40)\n- Median PFS: 6.9 months (IHC3+), 5.8 months (IHC2+/ISH+)\n- HER2 IHC score is necessary but not sufficient for response prediction\n- Co-mutation landscape (RAS, BRAF, PIK3CA) not pre-specified as stratification variable in DESTINY-CRC02\n\n**Why this trial is in the CRC landscape sweep:**\nT-DXd is the most advanced HER2-directed therapy in CRC. DESTINY-CRC02 established proof-of-concept but the co-mutation landscape — particularly RAS, BRAF, and PIK3CA co-mutations — was not pre-specified as a stratification variable. The Phase 3 design window is open. HER2 IHC score alone is insufficient to explain the ~60% non-response rate in IHC3+ patients.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "4",
+          "rationale": "HER2 IHC score is necessary but not sufficient; co-mutation landscape (RAS/BRAF/PIK3CA) not pre-specified"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "HER2+ mCRC historical benchmark is sparse; population-adjusted ORR interpretation is non-trivial"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "4",
+          "rationale": "HER2+ CRC is ~3% of mCRC; co-mutation landscape within this ultra-selected population is heterogeneous"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "4",
+          "rationale": "Phase 3 without co-mutation stratification risks an uninterpretable result in the ~60% non-responders"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "4.00",
+          "rationale": "Third-highest priority; Phase 3 design window is live"
+        }
+      ],
+      "composite": "4.00",
+      "sharpest_hook": "DESTINY-CRC02 showed 37.8% ORR in IHC3+ HER2+ mCRC — but ~62% of IHC3+ patients did not respond. The co-mutation landscape (RAS, BRAF, PIK3CA) was not pre-specified as a stratification variable. In a population that is already ultra-selected (HER2+ CRC is ~3% of mCRC), the question of which co-mutations drive resistance to T-DXd is the critical interpretability gap for the Phase 3 design.",
+      "crispro_can": [
+        "Index the HER2+ mCRC co-mutation landscape to identify which RAS/BRAF/PIK3CA co-mutation patterns correlate with T-DXd resistance in the DESTINY-CRC02 non-responder population",
+        "Provide a population-adjusted historical benchmark for HER2+ mCRC ORR — the 37.8% signal needs context against what the Phase 3 control arm will look like",
+        "Model which co-mutation profiles should be pre-specified as stratification variables in the Phase 3 design"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the DESTINY-CRC02 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access Daiichi Sankyo's or AstraZeneca's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Salvatore Siena, MD",
+        "title": "GI Oncology Lead, Niguarda Cancer Center (Milan, Italy)",
+        "institution": "Niguarda Cancer Center, Milan",
+        "linkedin": "linkedin.com/in/salvatore-siena-md (search: Salvatore Siena Niguarda oncology)",
+        "public_email_verified": "NO",
+        "rationale": "Lead PI for DESTINY-CRC02. Academic KOL with direct trial access and influence on Phase 3 design. European entry point."
+      },
+      "backup": {
+        "name": "Yoshiaki Nakamura, MD",
+        "title": "GI Oncology Lead, National Cancer Center Japan",
+        "institution": "National Cancer Center Japan (Tokyo)",
+        "linkedin": "linkedin.com/in/yoshiaki-nakamura-md (search: Yoshiaki Nakamura NCC Japan oncology)",
+        "public_email_verified": "NO",
+        "rationale": "HER2 CRC KOL; co-investigator on DESTINY-CRC02; Asian patient population data is relevant to co-mutation landscape differences."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Prof. Siena — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following DESTINY-CRC02 closely — the IHC3+ ORR is a landmark result for HER2+ CRC. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about the co-mutation landscape and Phase 3 design. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Prof. Siena — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nDESTINY-CRC02 established a clear proof-of-concept for T-DXd in HER2+ mCRC. The question the data raises for the Phase 3 design is the ~62% non-response rate in IHC3+ patients. HER2 IHC score is necessary but not sufficient — and the co-mutation landscape (RAS, BRAF, PIK3CA) was not pre-specified as a stratification variable in the Phase 2 design.\n\nCrisPRO has indexed the HER2+ mCRC co-mutation landscape in a way that may be relevant to the Phase 3 stratification design. I'm not pitching a service — I'm raising a scientific question about which co-mutation profiles should be pre-specified before the Phase 3 protocol is locked. Would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Prof. Siena — I'm Robin [Last Name], CMO at CrisPRO.ai. DESTINY-CRC02 is a landmark result for HER2+ mCRC — the 37.8% ORR in IHC3+ patients is a meaningful signal in a population that has historically had very limited options.\n\nOne question the data raises for the Phase 3 design: the ~62% non-response rate in IHC3+ patients is not explained by HER2 IHC score alone. The co-mutation landscape — RAS, BRAF, PIK3CA — was not pre-specified as a stratification variable in DESTINY-CRC02. In a population that is already ultra-selected (~3% of mCRC), the co-mutation question is the critical interpretability gap for the Phase 3.\n\nCrisPRO has indexed the HER2+ mCRC co-mutation landscape in a way that may be relevant to that question. I'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation before the Phase 3 protocol is locked?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Siena or Nakamura",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Siena is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for an academic KOL"
+        },
+        {
+          "scenario": "Yoshiaki Nakamura is the entry point (backup)",
+          "recommended_option": "Option B, addressed to Nakamura — reference DESTINY-CRC02 co-investigator role"
+        },
+        {
+          "scenario": "Fahad has met Siena at ESMO/ASCO",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "DESTINY-CRC02 IHC3+ ORR 37.8% (n=82)",
+          "source": "Published peer-reviewed paper; NCT04744831",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "DESTINY-CRC02 IHC2+/ISH+ ORR 27.5% (n=40)",
+          "source": "Same source",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Median PFS 6.9 months (IHC3+), 5.8 months (IHC2+/ISH+)",
+          "source": "Same source",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Co-mutation landscape (RAS/BRAF/PIK3CA) not pre-specified as stratification variable",
+          "source": "NCT04744831 registry; published protocol",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "Frame as open question, not design deficiency"
+        },
+        {
+          "claim": "HER2+ CRC is approximately 3% of mCRC",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Phase 3 (DESTINY-CRC03) in planning",
+          "source": "Company communications",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the DESTINY-CRC02 dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "The Phase 3 will fail without co-mutation stratification",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "T-DXd \"fails to address\" the co-mutation gap",
+          "reason": "Pejorative framing — use \"raises the question of\""
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**Dual-company coordination:** Daiichi Sankyo and AstraZeneca are co-development partners. Do not approach them as independent targets. Any follow-up after academic PI contact will involve both companies.",
+        "**IHC score specificity:** All efficacy claims must specify IHC3+ vs. IHC2+/ISH+ cohort. Do not aggregate ORR across cohorts.",
+        "**Phase 3 design:** DESTINY-CRC03 design is not yet public. Do not claim knowledge of the Phase 3 design — frame all statements as questions about what the design should address.",
+        "**Co-mutation framing:** The hook is co-mutation landscape as a stratification variable, not a claim that RAS/BRAF/PIK3CA mutations predict resistance. Frame as an open question."
+      ]
+    }
+  },
+  {
+    "slug": "inhibrx",
+    "front_matter": {
+      "title": "Inhibrx Biosciences — CrisPRO Outreach Strategy",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Inhibrx Biosciences",
+      "lead_drug": "Ozekibart (INBRX-109) + FOLFIRI",
+      "target": "DR5 (Death Receptor 5 / TRAIL-R2)",
+      "trial": "NCT03715933 (Phase 1/2); registrational Phase 3 planned H2 2026",
+      "phase": "Phase 1/2 → Phase 3 planned",
+      "outreach_priority_rank": "1",
+      "claim_posture": "gap-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Mark Chao, MD, PhD — CEO, Inhibrx Biosciences",
+      "backup_contact": "Sanjay Goel, MD — ozekibart CRC PI, Rutgers Cancer Institute",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "DR5",
+        "TRAIL",
+        "apoptosis",
+        "CRC",
+        "MSS",
+        "biomarker-gap",
+        "gap-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/inhibrx/**"
+      ]
+    },
+    "snapshot": "**Company:** Inhibrx Biosciences (formerly Inhibrx, Inc.; spun out 2024)\n**Lead drug:** Ozekibart (INBRX-109) — tetravalent DR5 agonist antibody\n**Target:** DR5 (Death Receptor 5 / TRAIL-R2) — apoptosis pathway\n**Trial:** NCT03715933 — Phase 1/2 dose-escalation and expansion\n**Phase:** Phase 1/2 (completed enrollment); registrational Phase 3 planned H2 2026\n**Status:** Phase 1/2 data published/presented; Phase 3 design in preparation\n\n**Key efficacy data (public):**\n- n = 45 evaluable patients (heavily pre-treated MSS mCRC)\n- ORR: 20% (9/45) — notable for 4L+ MSS CRC where SoC ORR is typically <5%\n- DCR: 87%\n- Median PFS: 5.5 months\n- 42% progression-free at 6 months\n- Responses observed irrespective of RAS/RAF mutation status\n\n**Why this trial is in the CRC landscape sweep:**\nOzekibart is the only DR5 agonist antibody with a confirmed Phase 1/2 signal in MSS mCRC. The 20% ORR in a population where IO is essentially inactive is a genuine outlier result. The company is planning a registrational Phase 3 in H2 2026 — the design window is open now. The absence of any pre-specified predictive biomarker panel is the single sharpest gap in the entire 33-company dataset.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "5",
+          "rationale": "20% ORR with no predictive biomarker — DR5 expression, TRAIL pathway activation, apoptosis priming not pre-specified"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "4L+ MSS CRC historical benchmark is sparse; population-adjusted ORR interpretation is non-trivial"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "4",
+          "rationale": "RAS/RAF-agnostic responses suggest a non-obvious responder population; heterogeneity is high"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "5",
+          "rationale": "Phase 3 without a biomarker hypothesis risks an uninterpretable null result even if the drug works in a subpopulation"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "4.50",
+          "rationale": "Highest-priority target in the dataset"
+        }
+      ],
+      "composite": "4.50",
+      "sharpest_hook": "Ozekibart produced a 20% ORR in 4L+ MSS mCRC — a population where IO is essentially inactive — with responses observed irrespective of RAS/RAF status. No pre-specified DR5 expression threshold, TRAIL pathway activation score, or apoptosis priming biomarker was used to select or stratify patients. The Phase 3 design window is open now. The question CrisPRO raises is: *which patients in that 20% were biologically primed for DR5-mediated apoptosis, and can that signal be prospectively identified before the registrational trial locks its design?*",
+      "crispro_can": [
+        "Index the Phase 1/2 responder population against the CRC molecular landscape to identify co-occurring features (co-mutations, expression patterns, TME signatures) that correlate with DR5 pathway activation",
+        "Provide a population-adjusted historical benchmark for 4L+ MSS mCRC ORR — the 20% signal needs context against what the comparator arm will look like",
+        "Model which patient subpopulations are most likely to benefit in the Phase 3 design, informing stratification variable selection before the protocol is locked"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the ozekibart Phase 1/2 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access Inhibrx's proprietary biomarker data",
+        "CrisPRO does not predict individual patient outcomes — it identifies population-level stratification signals",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Mark Chao, MD, PhD",
+        "title": "Chief Executive Officer, Inhibrx Biosciences",
+        "institution": "Inhibrx Biosciences (La Jolla, CA)",
+        "linkedin": "linkedin.com/in/mark-chao-md-phd (search: Mark Chao Inhibrx)",
+        "public_email_verified": "NO",
+        "rationale": "CEO of a ~50-person company with direct involvement in clinical strategy. Appropriate for a scientific positioning conversation at the Phase 3 design stage. Not a cold outreach to a large pharma gatekeeper."
+      },
+      "backup": {
+        "name": "Sanjay Goel, MD",
+        "title": "GI Oncology Lead, Rutgers Cancer Institute of New Jersey",
+        "institution": "Rutgers Cancer Institute",
+        "linkedin": "linkedin.com/in/sanjay-goel-md (search: Sanjay Goel Rutgers oncology)",
+        "public_email_verified": "NO",
+        "rationale": "Lead PI for ozekibart CRC cohort. Academic KOL with direct trial access. Use if Mark Chao does not respond within 2 weeks."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. Chao — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been tracking the ozekibart Phase 1/2 data closely — the 20% ORR in MSS CRC is a genuine outlier. I'd like to introduce you to our CMO, Dr. Robin [Last Name], who has a specific scientific question about the Phase 3 design. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. Chao — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nThe ozekibart Phase 1/2 result raises a question I haven't seen addressed in the public data: the 20% ORR appears RAS/RAF-agnostic, but there's no pre-specified DR5 expression threshold or apoptosis priming biomarker in the published design. In a 4L+ MSS population where the responder fraction is real but small, the Phase 3 risks enrolling a population where the signal is diluted — not because the drug doesn't work, but because the responder biology hasn't been prospectively defined.\n\nCrisPRO has indexed the CRC molecular landscape in a way that may be relevant to your Phase 3 stratification design. I'm not pitching a service — I'm raising a scientific question I think is worth 20 minutes. Would you be open to a brief call before the Phase 3 protocol is locked?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. Chao — I'm Robin [Last Name], CMO at CrisPRO.ai. I've been following the ozekibart program closely — the 20% ORR in 4L+ MSS mCRC is one of the more striking results in the CRC space right now.\n\nOne question the public data raises: responses appear RAS/RAF-agnostic, but there's no pre-specified DR5 expression threshold or apoptosis priming biomarker in the Phase 1/2 design. With a Phase 3 planned for H2 2026, the stratification design question is live. CrisPRO has indexed the CRC molecular landscape in a way that may be relevant to that question.\n\nI'm not asking for a partnership conversation — I'm raising a scientific question I think is worth 20 minutes before the protocol is locked. Would you be open to a brief exchange?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to anyone at Inhibrx or Rutgers",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Mark Chao is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for a CEO of a small company"
+        },
+        {
+          "scenario": "Sanjay Goel is the entry point (backup)",
+          "recommended_option": "Option B, addressed to Goel — reference the ozekibart CRC cohort specifically"
+        },
+        {
+          "scenario": "Fahad has met Mark Chao at ASCO/AACR",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "Ozekibart produced 20% ORR in 4L+ MSS mCRC",
+          "source": "NCT03715933; ASCO/AACR presentations",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "State with n=45 evaluable"
+        },
+        {
+          "claim": "DCR 87%, median PFS 5.5 months",
+          "source": "Same source",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Responses observed irrespective of RAS/RAF status",
+          "source": "Published Phase 1/2 data",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "No pre-specified DR5 expression threshold in Phase 1/2 design",
+          "source": "NCT03715933 registry; published protocol",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "Frame as an open question, not a design deficiency"
+        },
+        {
+          "claim": "Phase 3 registrational trial planned H2 2026",
+          "source": "Company communications",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "4L+ MSS CRC is a population where IO is essentially inactive",
+          "source": "Published literature (MSS CRC IO data)",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the ozekibart dataset",
+          "reason": "No model has been run — this would be a false claim"
+        },
+        {
+          "claim": "The Phase 3 will fail without a biomarker",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "Ozekibart \"fails to address\" the biomarker gap",
+          "reason": "Pejorative framing — use \"raises the question of\""
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        },
+        {
+          "claim": "DR5 expression predicts response to ozekibart",
+          "reason": "Not established — speculative claim"
+        }
+      ],
+      "company_specific_constraints": [
+        "**Sanjay Goel dual-contact:** Do not send two separate cold messages to Goel for Inhibrx and Oncolytics. Coordinate outreach sequence.",
+        "**Phase 3 design window:** The Phase 3 protocol is not yet public. Do not claim knowledge of the Phase 3 design — frame all statements as questions about what the design *should* address.",
+        "**DR5 biology:** Do not claim CrisPRO has a DR5-specific model. The hook is population-level stratification, not target-specific biology.",
+        "**Escalation timing:** If Mark Chao does not respond in 2 weeks, check LinkedIn for CMO/VP Clinical Development before escalating. Do not escalate to Sanjay Goel if Goel has already been contacted for Oncolytics."
+      ]
+    }
+  },
+  {
+    "slug": "merus",
+    "front_matter": {
+      "title": "Merus B.V. — CrisPRO Outreach Strategy (Petosemtamab / MCLA-158)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Merus B.V.",
+      "lead_drug": "Petosemtamab (MCLA-158)",
+      "target": "EGFR × LGR5 bispecific antibody",
+      "trial": "NCT03526835 (Phase 1/2); Phase 2/3 expansion in planning",
+      "phase": "Phase 1/2 (data published); Phase 2/3 in planning",
+      "outreach_priority_rank": "5",
+      "claim_posture": "gap-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Cecile Geuijen, PhD — CSO, Merus N.V.",
+      "backup_contact": "Guillem Argilés, MD — MCLA-158 CRC PI, Vall d'Hebron",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "EGFR",
+        "LGR5",
+        "bispecific",
+        "CRC",
+        "RAS-WT",
+        "biomarker-gap",
+        "gap-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/merus/**"
+      ]
+    },
+    "snapshot": "**Company:** Merus B.V. (Utrecht, Netherlands)\n**Lead drug:** Petosemtamab (MCLA-158) — EGFR × LGR5 bispecific antibody\n**Target:** EGFR (epidermal growth factor receptor) × LGR5 (leucine-rich repeat-containing G-protein coupled receptor 5, a cancer stem cell marker)\n**Trial:** NCT03526835 — Phase 1/2 dose-escalation and expansion in CRC and other solid tumors\n**Phase:** Phase 1/2 (data published); Phase 2/3 expansion in planning\n**Status:** Phase 1/2 data published; expansion trial design under development\n\n**Key efficacy data (public — NCT03526835 CRC cohort):**\n- Enrollment criteria: RAS/RAF/EGFR wild-type required (ultra-selected population)\n- LGR5 expression not pre-specified as a stratification variable\n- Phase 1/2 efficacy data published (ORR and PFS in RAS/RAF/EGFR WT CRC cohort)\n- The co-mutation landscape within the RAS/RAF/EGFR WT population is not characterized in the public data\n\n**Why this trial is in the CRC landscape sweep:**\nPetosemtamab has the highest composite CrisPRO fit score in the dataset (tied with Oncolytics at 4.75). The EGFR × LGR5 bispecific concept is scientifically compelling — LGR5 marks cancer stem cells, and the combination with EGFR targeting is mechanistically rational. But LGR5 expression was not pre-specified as a stratification variable, and the RAS/RAF/EGFR WT population is already ultra-selected (~10–15% of mCRC). The co-mutation landscape within this ultra-selected population is the critical interpretability gap.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "5",
+          "rationale": "LGR5 expression not pre-specified; co-mutation landscape in RAS/RAF/EGFR WT population not characterized"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "RAS/RAF/EGFR WT CRC historical benchmark is sparse; population-adjusted ORR interpretation is non-trivial"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "5",
+          "rationale": "Ultra-selected population (~10–15% of mCRC); co-mutation landscape within this population is highly heterogeneous"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "5",
+          "rationale": "Phase 2/3 without LGR5 stratification risks an uninterpretable result even if the drug works in a subpopulation"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "4.75",
+          "rationale": "Highest composite score in the dataset (tied with Oncolytics)"
+        }
+      ],
+      "composite": "4.75",
+      "sharpest_hook": "Petosemtamab targets EGFR × LGR5 — a bispecific designed to hit both the EGFR pathway and LGR5+ cancer stem cells. But LGR5 expression was not pre-specified as a stratification variable in the Phase 1/2 design. In a population that is already ultra-selected (RAS/RAF/EGFR WT, ~10–15% of mCRC), the question of which patients have meaningful LGR5 expression — and whether LGR5 expression co-segregates with response — is the critical interpretability gap for the Phase 2/3 design.",
+      "crispro_can": [
+        "Index the RAS/RAF/EGFR WT mCRC population against the LGR5 expression landscape to identify co-occurring molecular features that correlate with LGR5+ cancer stem cell enrichment",
+        "Provide a population-adjusted historical benchmark for RAS/RAF/EGFR WT mCRC ORR — the ultra-selected population needs context against what the Phase 2/3 control arm will look like",
+        "Model which LGR5 expression thresholds and co-mutation profiles should be pre-specified as stratification variables in the Phase 2/3 design"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the MCLA-158 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access Merus's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Cecile Geuijen, PhD",
+        "title": "Chief Scientific Officer, Merus N.V.",
+        "institution": "Merus N.V. (Utrecht, Netherlands)",
+        "linkedin": "linkedin.com/in/cecile-geuijen (search: Cecile Geuijen Merus CSO)",
+        "public_email_verified": "NO",
+        "rationale": "CSO with direct oversight of petosemtamab scientific strategy and Phase 2/3 design. Appropriate entry point for a scientific positioning conversation about LGR5 stratification."
+      },
+      "backup": {
+        "name": "Guillem Argilés, MD",
+        "title": "GI Oncology Lead, Vall d'Hebron Institute of Oncology (Barcelona)",
+        "institution": "Vall d'Hebron Institute of Oncology",
+        "linkedin": "linkedin.com/in/guillem-argiles-md (search: Guillem Argilés Vall d'Hebron oncology)",
+        "public_email_verified": "NO",
+        "rationale": "Lead PI for MCLA-158 CRC cohort. Academic KOL with direct trial access and influence on Phase 2/3 design."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. Geuijen — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following the petosemtamab program closely — the EGFR × LGR5 concept is scientifically compelling. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about LGR5 stratification in the Phase 2/3 design. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. Geuijen — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nThe petosemtamab concept is one of the more scientifically interesting designs in the CRC space — targeting both EGFR and LGR5+ cancer stem cells is mechanistically rational. The question the Phase 1/2 data raises for the Phase 2/3 design is: LGR5 expression was not pre-specified as a stratification variable. In a population that is already ultra-selected (RAS/RAF/EGFR WT, ~10–15% of mCRC), the co-mutation landscape and LGR5 expression distribution within that population are the critical interpretability questions.\n\nCrisPRO has indexed the RAS/RAF/EGFR WT mCRC molecular landscape in a way that may be relevant to the Phase 2/3 stratification design. I'm not pitching a service — I'm raising a scientific question I think is worth 20 minutes before the protocol is locked. Would you be open to a brief conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. Geuijen — I'm Robin [Last Name], CMO at CrisPRO.ai. The petosemtamab program is one of the more scientifically interesting designs in the CRC space — the EGFR × LGR5 bispecific concept is mechanistically rational.\n\nOne question the Phase 1/2 data raises for the Phase 2/3 design: LGR5 expression was not pre-specified as a stratification variable. In a population that is already ultra-selected (RAS/RAF/EGFR WT, ~10–15% of mCRC), the LGR5 expression distribution and co-mutation landscape within that population are the critical interpretability questions. CrisPRO has indexed that molecular landscape in a way that may be relevant to the Phase 2/3 stratification design.\n\nI'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation before the Phase 2/3 protocol is locked?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Geuijen or Argilés",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Geuijen is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for a CSO of a mid-size biotech"
+        },
+        {
+          "scenario": "Guillem Argilés is the entry point (backup)",
+          "recommended_option": "Option B, addressed to Argilés — reference MCLA-158 CRC cohort specifically"
+        },
+        {
+          "scenario": "Fahad has met Geuijen at ESMO/AACR",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "Petosemtamab targets EGFR × LGR5",
+          "source": "Published Phase 1/2 data; NCT03526835",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Enrollment criteria: RAS/RAF/EGFR WT required",
+          "source": "NCT03526835 registry",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "LGR5 expression not pre-specified as stratification variable",
+          "source": "NCT03526835 registry; published protocol",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "Frame as open question, not design deficiency"
+        },
+        {
+          "claim": "RAS/RAF/EGFR WT CRC is approximately 10–15% of mCRC",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Phase 2/3 expansion in planning",
+          "source": "Company communications",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the MCLA-158 dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "The Phase 2/3 will fail without LGR5 stratification",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "Petosemtamab \"fails to address\" the LGR5 gap",
+          "reason": "Pejorative framing — use \"raises the question of\""
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**LGR5 biology framing:** LGR5 is a cancer stem cell marker. Do not claim CrisPRO has a LGR5-specific model. The hook is population-level stratification, not target-specific biology.",
+        "**Ultra-selected population:** The RAS/RAF/EGFR WT population is already ultra-selected. All efficacy claims must be attributed to this specific population. Do not generalize to unselected mCRC.",
+        "**Phase 2/3 design:** The Phase 2/3 protocol is not yet public. Do not claim knowledge of the Phase 2/3 design — frame all statements as questions about what the design should address.",
+        "**LGR5 expression data:** No public data on LGR5 expression distribution in the MCLA-158 CRC cohort has been retrieved. Do not claim CrisPRO has LGR5 expression data for this specific cohort."
+      ]
+    }
+  },
+  {
+    "slug": "mirati_bms",
+    "front_matter": {
+      "title": "Mirati/BMS — CrisPRO Outreach Strategy (Adagrasib + Cetuximab / KRYSTAL-10)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Mirati Therapeutics / Bristol-Myers Squibb",
+      "lead_drug": "Adagrasib + Cetuximab (KRAZATI + ERBITUX)",
+      "target": "KRAS G12C (adagrasib) + EGFR (cetuximab)",
+      "trial": "KRYSTAL-10 (NCT04793958) — Phase 3",
+      "phase": "Phase 3 (enrolling)",
+      "outreach_priority_rank": "7",
+      "claim_posture": "benchmark-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Johanna Bendell, MD — VP Clinical Development GI, BMS",
+      "backup_contact": "Tanios Bekaii-Saab, MD — KRYSTAL-10 PI, Mayo Clinic",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "KRAS-G12C",
+        "EGFR",
+        "adagrasib",
+        "cetuximab",
+        "CRC",
+        "benchmark-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/mirati_bms/**"
+      ]
+    },
+    "snapshot": "**Company:** Mirati Therapeutics (acquired by BMS 2024) / Bristol-Myers Squibb\n**Lead drug:** Adagrasib (KRAZATI) + Cetuximab (ERBITUX)\n**Target:** KRAS G12C (adagrasib) + EGFR (cetuximab) — combination targeting\n**Trial:** KRYSTAL-10 (NCT04793958) — Phase 3 randomized trial\n**Phase:** Phase 3 (enrolling)\n**Status:** Active; adagrasib + cetuximab approved in NSCLC; CRC Phase 3 data maturing\n\n**Key efficacy data (public — KRYSTAL-1 CRC cohort, Phase 1/2):**\n- Adagrasib + cetuximab in KRAS G12C CRC: ORR ~46% (Phase 1/2 cohort)\n- KRAS G12C is present in ~3–4% of mCRC\n- KRYSTAL-10 is the Phase 3 registrational trial for this combination in CRC\n- Historical benchmark for KRAS G12C-specific CRC is sparse — most historical data includes mixed KRAS mutation populations\n\n**Why this trial is in the CRC landscape sweep:**\nKRYSTAL-10 is the Phase 3 registrational trial for adagrasib + cetuximab in KRAS G12C CRC. The benchmark-hook is the population-adjusted KRAS G12C-specific historical comparator — most historical CRC trial data includes mixed KRAS mutation populations, making the KRAS G12C-specific benchmark non-trivial.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "3",
+          "rationale": "KRAS G12C is the selection criterion; co-mutation landscape (STK11, KEAP1, co-occurring RAS) is the secondary gap"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "KRAS G12C-specific historical benchmark is sparse; population-adjusted ORR interpretation is non-trivial"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "3",
+          "rationale": "KRAS G12C CRC is ~3–4% of mCRC; population is selected but not ultra-selected"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "4",
+          "rationale": "Phase 3 needs a clean KRAS G12C-specific historical benchmark; mixed-mutation historical data is misleading"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "3.50",
+          "rationale": "Seventh-highest priority (tied with Amgen)"
+        }
+      ],
+      "composite": "3.50",
+      "sharpest_hook": "KRYSTAL-10 needs a population-adjusted KRAS G12C-specific historical benchmark for the control arm. Most historical CRC trial data includes mixed KRAS mutation populations — the KRAS G12C-specific benchmark is not straightforward. CrisPRO has indexed the KRAS G12C CRC molecular landscape in a way that may be relevant to the KRYSTAL-10 control arm interpretation.",
+      "crispro_can": [
+        "Provide a KRAS G12C-specific historical benchmark for CRC ORR/PFS/OS — separating KRAS G12C from other KRAS mutations in historical trial data",
+        "Index the KRAS G12C CRC co-mutation landscape (STK11, KEAP1, co-occurring RAS mutations) to identify resistance mechanism profiles",
+        "Model which co-mutation profiles are most likely to drive resistance to adagrasib + cetuximab in the KRYSTAL-10 population"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the KRYSTAL-10 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access BMS's or Mirati's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Johanna Bendell, MD",
+        "title": "VP Clinical Development, GI Oncology, Bristol-Myers Squibb",
+        "institution": "Bristol-Myers Squibb",
+        "linkedin": "linkedin.com/in/johanna-bendell-md (search: Johanna Bendell BMS oncology)",
+        "public_email_verified": "NO",
+        "rationale": "VP Clinical Development for GI Oncology at BMS — direct oversight of KRYSTAL-10 post-Mirati acquisition. Appropriate entry point for a benchmark-hook conversation."
+      },
+      "backup": {
+        "name": "Tanios Bekaii-Saab, MD",
+        "title": "GI Oncology Lead, Mayo Clinic (Phoenix, AZ)",
+        "institution": "Mayo Clinic",
+        "linkedin": "linkedin.com/in/tanios-bekaii-saab-md (search: Tanios Bekaii-Saab Mayo Clinic oncology)",
+        "public_email_verified": "NO",
+        "rationale": "KRYSTAL-10 lead PI. Academic KOL with direct trial access. Use if Bendell does not respond within 2 weeks."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. Bendell — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following KRYSTAL-10 closely — the KRAS G12C-specific historical benchmark question is one that I think is underappreciated. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about the control arm interpretation. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. Bendell — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nKRYSTAL-10 is well-designed for the KRAS G12C CRC population. The question I'd raise is about the control arm benchmark: most historical CRC trial data includes mixed KRAS mutation populations — the KRAS G12C-specific historical benchmark is not straightforward. The population-adjusted interpretation of the control arm ORR/PFS will matter for the regulatory submission.\n\nCrisPRO has indexed the KRAS G12C CRC molecular landscape in a way that may be relevant to that benchmark question. I'm not pitching a service — I'm raising a scientific point I think is worth 20 minutes. Would you be open to a brief conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. Bendell — I'm Robin [Last Name], CMO at CrisPRO.ai. KRYSTAL-10 is well-positioned for the KRAS G12C CRC population — the Phase 1/2 signal is compelling.\n\nOne question about the control arm benchmark: most historical CRC trial data includes mixed KRAS mutation populations. The KRAS G12C-specific historical benchmark is not straightforward — and the population-adjusted interpretation of the control arm will matter for the regulatory submission. CrisPRO has indexed the KRAS G12C CRC molecular landscape in a way that may be relevant to that question.\n\nI'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Bendell or Bekaii-Saab",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Bendell is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for a VP-level contact"
+        },
+        {
+          "scenario": "Tanios Bekaii-Saab is the entry point (backup)",
+          "recommended_option": "Option B, addressed to Bekaii-Saab — reference KRYSTAL-10 PI role"
+        },
+        {
+          "scenario": "Fahad has met Bendell at ASCO/AACR",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "Adagrasib + cetuximab Phase 1/2 ORR ~46% in KRAS G12C CRC",
+          "source": "Published KRYSTAL-1 data",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "KRAS G12C is present in ~3–4% of mCRC",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "KRYSTAL-10 is a Phase 3 randomized trial",
+          "source": "NCT04793958 registry",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Most historical CRC trial data includes mixed KRAS mutation populations",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Adagrasib + cetuximab approved in NSCLC",
+          "source": "FDA approval record",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the KRYSTAL-10 dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "KRYSTAL-10 will fail without a KRAS G12C-specific benchmark",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**Mirati acquisition:** Mirati was acquired by BMS in 2024. All outreach goes to BMS contacts, not Mirati. Do not reference Mirati as a separate company in external messages.",
+        "**Benchmark-hook posture:** This is a benchmark-hook, not a gap-hook. Do not imply KRYSTAL-10 has a design gap. Frame as additive intelligence about the control arm benchmark.",
+        "**KRAS G12C specificity:** All efficacy claims must specify KRAS G12C. Do not generalize to KRAS-mutant CRC broadly.",
+        "**Amgen coordination:** Amgen (CodeBreaK 301, sotorasib + panitumumab) is also a KRAS G12C CRC target (MDC #7b). Both are benchmark-hook posture. Coordinate timing — do not send both messages in the same week if Bendell and Hyman are in the same professional network."
+      ]
+    }
+  },
+  {
+    "slug": "oncolytics",
+    "front_matter": {
+      "title": "Oncolytics Biotech — CrisPRO Outreach Strategy (Pelareorep / REO-033)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Oncolytics Biotech Inc.",
+      "lead_drug": "Pelareorep + Bevacizumab + FOLFIRI",
+      "target": "Oncolytic reovirus (immunogenic cell death + TME remodeling)",
+      "trial": "REO-033 (NCT07446322) — Phase 2; REO-022 (completed Phase 2)",
+      "phase": "Phase 2 (REO-033 launched March 2026)",
+      "outreach_priority_rank": "5",
+      "claim_posture": "gap-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Sanjay Goel, MD — REO-033 Lead Investigator, Rutgers Cancer Institute",
+      "backup_contact": "Jared Kelly — CEO, Oncolytics Biotech",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "oncolytic-virus",
+        "reovirus",
+        "CRC",
+        "MSS",
+        "FOLFIRI",
+        "bev",
+        "biomarker-gap",
+        "gap-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/oncolytics/**"
+      ]
+    },
+    "snapshot": "**Company:** Oncolytics Biotech Inc. (Calgary, AB / San Diego, CA)\n**Lead drug:** Pelareorep — oncolytic reovirus (wild-type reovirus serotype 3 Dearing strain)\n**Target:** Oncolytic mechanism: immunogenic cell death, TME remodeling, innate + adaptive immune activation\n**Trial:** REO-033 (NCT07446322) — Phase 2, pelareorep + bevacizumab + FOLFIRI in MSS mCRC; launched March 2026\n**Phase:** Phase 2 (REO-033 enrolling); REO-022 (completed Phase 2, data published)\n**Status:** REO-033 active; FDA Fast Track designation February 2026\n\n**Key efficacy data (public — REO-022):**\n- ORR: 33% (in MSS mCRC, heavily pre-treated)\n- Median DOR: 19.5 months\n- Median PFS: 16.6 months\n- Median OS: 27 months vs. SoC 11.2 months\n- No predictive biomarker identified in REO-022\n- REO-033 control arm: FOLFIRI + bevacizumab (directly relevant to BreAK CRC-001 comparator)\n\n**Why this trial is in the CRC landscape sweep:**\nPelareorep has the highest composite CrisPRO fit score in the dataset (tied with Merus at 4.75). The REO-022 efficacy signal is striking — 33% ORR and 27-month median OS in MSS mCRC is a genuine outlier. REO-033 uses FOLFIRI + bevacizumab as the control arm, which is directly relevant to BreAK CRC-001 comparator benchmarking. The absence of any predictive biomarker in REO-022 is the sharpest gap.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "5",
+          "rationale": "33% ORR with no predictive biomarker — TME remodeling, innate immune activation, viral susceptibility not pre-specified"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "5",
+          "rationale": "FOLFIRI+bev control arm is directly relevant to BreAK CRC-001; population-adjusted benchmark is critical"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "5",
+          "rationale": "MSS mCRC is heterogeneous; responder biology for oncolytic virus is poorly understood"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "4",
+          "rationale": "REO-033 risks an uninterpretable null result if responder biology is not prospectively defined"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "4.75",
+          "rationale": "Highest composite score in the dataset (tied with Merus)"
+        }
+      ],
+      "composite": "4.75",
+      "sharpest_hook": "REO-022 produced a 33% ORR and 27-month median OS in MSS mCRC — a population where IO is essentially inactive. No predictive biomarker was identified. REO-033 is now enrolling with FOLFIRI + bevacizumab as the control arm. The question CrisPRO raises is: *which patients in the REO-022 33% were biologically primed for oncolytic virus-mediated immune activation, and can that signal be prospectively identified before REO-033 locks its design?*",
+      "crispro_can": [
+        "Index the MSS mCRC molecular landscape to identify co-occurring features (TME signatures, viral susceptibility markers, innate immune activation patterns) that correlate with the REO-022 responder population",
+        "Provide a population-adjusted historical benchmark for the FOLFIRI + bevacizumab control arm — directly relevant to both REO-033 and BreAK CRC-001",
+        "Model which patient subpopulations are most likely to benefit from pelareorep in the REO-033 design, informing stratification variable selection"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the REO-022 or REO-033 dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access Oncolytics's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Sanjay Goel, MD",
+        "title": "GI Oncology Lead, Rutgers Cancer Institute of New Jersey",
+        "institution": "Rutgers Cancer Institute",
+        "linkedin": "linkedin.com/in/sanjay-goel-md (search: Sanjay Goel Rutgers oncology)",
+        "public_email_verified": "NO",
+        "rationale": "Lead Investigator for REO-033. Academic KOL with direct trial access and influence on REO-033 design."
+      },
+      "backup": {
+        "name": "Jared Kelly",
+        "title": "Chief Executive Officer, Oncolytics Biotech Inc.",
+        "institution": "Oncolytics Biotech Inc. (Calgary, AB)",
+        "linkedin": "linkedin.com/in/jared-kelly-oncolytics (search: Jared Kelly Oncolytics CEO)",
+        "public_email_verified": "NO",
+        "rationale": "CEO of a small-cap biotech with direct involvement in clinical strategy. Appropriate escalation if Goel does not respond."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Mr. Kelly — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following the pelareorep program closely — the REO-022 OS signal is one of the more striking results in MSS CRC. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about the REO-033 design. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Mr. Kelly — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nThe REO-022 result is one of the more striking signals in MSS CRC — 33% ORR and 27-month median OS in a population where IO is essentially inactive. The question the data raises for REO-033 is: no predictive biomarker was identified in REO-022. With FOLFIRI + bevacizumab as the control arm, the REO-033 design is well-positioned — but the responder biology question is open.\n\nCrisPRO has indexed the MSS mCRC molecular landscape in a way that may be relevant to the REO-033 stratification design. I'm not pitching a service — I'm raising a scientific question about which patients in the REO-022 33% were biologically primed for oncolytic virus-mediated immune activation. Would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Mr. Kelly — I'm Robin [Last Name], CMO at CrisPRO.ai. The REO-022 result is one of the more striking signals in MSS CRC — 33% ORR and 27-month median OS in a population where IO is essentially inactive.\n\nOne question the data raises for REO-033: no predictive biomarker was identified in REO-022. With FOLFIRI + bevacizumab as the control arm, the design is well-positioned — but the responder biology question is open. CrisPRO has indexed the MSS mCRC molecular landscape in a way that may be relevant to the REO-033 stratification design.\n\nI'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Kelly or Goel",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Kelly is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for a CEO of a small-cap biotech"
+        },
+        {
+          "scenario": "Sanjay Goel is the entry point (only if Inhibrx outreach has not yet been sent to Goel)",
+          "recommended_option": "Option B, addressed to Goel — reference REO-033 specifically"
+        },
+        {
+          "scenario": "Fahad has met Kelly at ASCO/AACR",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "REO-022 ORR 33%, median DOR 19.5 months, median PFS 16.6 months, median OS 27 months vs. SoC 11.2 months",
+          "source": "Published REO-022 data",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "REO-033 control arm: FOLFIRI + bevacizumab",
+          "source": "NCT07446322 registry",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "FDA Fast Track designation February 2026",
+          "source": "Company communications",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "No predictive biomarker identified in REO-022",
+          "source": "Published REO-022 data",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": "Frame as open question, not design deficiency"
+        },
+        {
+          "claim": "REO-033 launched March 2026",
+          "source": "NCT07446322 registry",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the REO-022 or REO-033 dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "REO-033 will fail without a predictive biomarker",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "Pelareorep \"fails to address\" the biomarker gap",
+          "reason": "Pejorative framing — use \"raises the question of\""
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**Sanjay Goel dual-contact — CRITICAL:** Do not send two separate cold LinkedIn messages to Goel for Inhibrx and Oncolytics. See coordination protocol in Section 3.",
+        "**FOLFIRI+bev control arm:** The REO-033 control arm is directly relevant to BreAK CRC-001. Do not reference BreAK CRC-001 in any external message — this is internal context only.",
+        "**Oncolytic virus biology:** Do not claim CrisPRO has a reovirus-specific model. The hook is population-level stratification, not viral biology.",
+        "**REO-022 vs. REO-033:** REO-022 is the completed Phase 2 with published data. REO-033 is the active Phase 2. Distinguish clearly — do not conflate the two trials."
+      ]
+    }
+  },
+  {
+    "slug": "roche_genentech",
+    "front_matter": {
+      "title": "Roche/Genentech — CrisPRO Outreach Strategy (Atezolizumab / COMMIT)",
+      "date": "2026-05-26",
+      "status": "outreach-ready",
+      "company": "Roche / Genentech",
+      "lead_drug": "Atezolizumab + mFOLFOX6 (TECENTRIQ)",
+      "target": "PD-L1 — immune checkpoint blockade",
+      "trial": "COMMIT (NCT02997228) — Phase 3, atezolizumab + mFOLFOX6 ± bevacizumab in 1L MSS mCRC",
+      "phase": "Phase 3 (completed/data published)",
+      "outreach_priority_rank": "9",
+      "claim_posture": "benchmark-hook",
+      "evidence_sufficiency": "adequate",
+      "primary_contact": "Cathy Eng, MD — COMMIT PI, Vanderbilt-Ingram Cancer Center",
+      "backup_contact": "Roche/Genentech Oncology Medical Affairs (CRC)",
+      "preferred_channel": "linkedin-first",
+      "tags": [
+        "PD-L1",
+        "IO",
+        "MSS-CRC",
+        "mFOLFOX6",
+        "bev",
+        "COMMIT",
+        "benchmark-hook",
+        "stage-2"
+      ],
+      "globs": [
+        "engagements/roche_genentech/**"
+      ]
+    },
+    "snapshot": "**Company:** Roche / Genentech (Basel, Switzerland / South San Francisco, CA)\n**Lead drug:** Atezolizumab (TECENTRIQ) + mFOLFOX6 ± bevacizumab\n**Target:** PD-L1 immune checkpoint\n**Trial:** COMMIT (NCT02997228) — Phase 3 randomized trial; atezolizumab + mFOLFOX6 ± bevacizumab vs. mFOLFOX6 ± bevacizumab in 1L MSS mCRC\n**Phase:** Phase 3 (completed; data published)\n**Status:** COMMIT published; atezolizumab approved in other indications; CRC IO program status under review\n\n**Key efficacy data (public — COMMIT):**\n- COMMIT primary analysis: no significant OS benefit in ITT MSS mCRC population\n- mFOLFOX6 ± bevacizumab arm is the most relevant comparator for MSS CRC IO trials\n- Liver-met stratification gap: liver-met vs. NLM subgroup analysis is the critical secondary question\n- COMMIT is the most directly relevant comparator for BreAK CRC-001 (mFOLFOX6 + bev backbone)\n\n**Why this trial is in the CRC landscape sweep:**\nCOMMIT's mFOLFOX6 + bevacizumab arm is the most relevant historical comparator for MSS CRC IO trials, including BreAK CRC-001. The benchmark-hook is the population-adjusted interpretation of the COMMIT control arm — particularly the liver-met stratification gap. Roche/Genentech has active CRC IO development interest and the COMMIT data is the anchor for any MSS CRC IO benchmark.\n\n---",
+    "fit": {
+      "score_table": [
+        {
+          "dimension": "Biomarker Gap (BG)",
+          "score": "3",
+          "rationale": "Liver-met stratification is the key secondary gap; COMMIT did not pre-specify liver-met as a stratification variable"
+        },
+        {
+          "dimension": "Comparator Need (CN)",
+          "score": "4",
+          "rationale": "COMMIT mFOLFOX6+bev arm is the most relevant comparator for MSS CRC IO; population-adjusted interpretation is non-trivial"
+        },
+        {
+          "dimension": "Population Complexity (PC)",
+          "score": "3",
+          "rationale": "MSS mCRC is heterogeneous; liver-met vs. NLM is the critical stratification variable"
+        },
+        {
+          "dimension": "Translational Interpretability (TI)",
+          "score": "3",
+          "rationale": "COMMIT is complete; the benchmark-hook is about future CRC IO expansion trials"
+        },
+        {
+          "dimension": "Composite CrisPRO Fit",
+          "score": "3.25",
+          "rationale": "Ninth-highest priority"
+        }
+      ],
+      "composite": "3.25",
+      "sharpest_hook": "COMMIT's mFOLFOX6 + bevacizumab arm is the most relevant historical comparator for MSS CRC IO trials. The population-adjusted interpretation of the COMMIT control arm — particularly the liver-met vs. NLM subgroup — is not straightforward. CrisPRO has indexed the MSS mCRC molecular landscape in a way that may be relevant to any Roche/Genentech CRC IO expansion trial design.",
+      "crispro_can": [
+        "Provide a population-adjusted historical benchmark for the COMMIT mFOLFOX6 + bevacizumab control arm — separating liver-met from NLM patients in the historical data",
+        "Index the MSS mCRC molecular landscape to identify co-occurring features that co-segregate with the liver-met stratification signal in COMMIT",
+        "Model which pre-specified stratification variables would give the liver-met signal the best statistical power in a prospective CRC IO expansion trial"
+      ],
+      "crispro_cannot": [
+        "CrisPRO has not run a model on the COMMIT dataset — no claim is made that a model has been run",
+        "CrisPRO cannot access Roche/Genentech's proprietary data",
+        "CrisPRO does not predict individual patient outcomes",
+        "--"
+      ]
+    },
+    "contacts": {
+      "primary": {
+        "name": "Cathy Eng, MD",
+        "title": "GI Oncology Lead, Vanderbilt-Ingram Cancer Center",
+        "institution": "Vanderbilt University Medical Center (Nashville, TN)",
+        "linkedin": "linkedin.com/in/cathy-eng-md (search: Cathy Eng Vanderbilt oncology)",
+        "public_email_verified": "NO",
+        "rationale": "COMMIT lead PI. Academic KOL with direct trial access and influence on Roche/Genentech CRC IO expansion strategy."
+      },
+      "backup": {
+        "name": "Roche/Genentech Oncology Medical Affairs (CRC)",
+        "title": "Medical Affairs — GI/CRC Oncology",
+        "institution": "Roche/Genentech",
+        "linkedin": "Search Roche Genentech Medical Affairs GI Oncology on LinkedIn",
+        "public_email_verified": "NO",
+        "rationale": "If academic PI entry point does not generate traction, Roche/Genentech Medical Affairs is the appropriate escalation path for a company-level conversation."
+      },
+      "preferred_channel": "LinkedIn-first (no verified public email for either contact)"
+    },
+    "message_options": {
+      "option_a": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Fahad",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request note, ≤300 characters",
+            "body": "Dr. Eng — I'm Fahad Kiani, co-founder of CrisPRO.ai. We've been following COMMIT closely — the mFOLFOX6 + bevacizumab arm is the most relevant historical comparator for MSS CRC IO trials. I'd like to introduce our CMO, Dr. Robin [Last Name], who has a specific scientific question about the control arm benchmark. Would you be open to a brief exchange?"
+          },
+          {
+            "step_number": 2,
+            "sender": "Robin",
+            "delay_days": 3,
+            "channel_note": "LinkedIn message after connection accepted, sent 2–3 days after Fahad's intro",
+            "body": "Dr. Eng — Fahad introduced us. I'm Robin [Last Name], CMO at CrisPRO.ai.\n\nCOMMIT is the most directly relevant historical comparator for MSS CRC IO trials. The question I'd raise is about the population-adjusted interpretation of the mFOLFOX6 + bevacizumab control arm — particularly the liver-met vs. NLM subgroup. The liver-met stratification signal in MSS CRC IO is increasingly recognized, but the population-adjusted benchmark for the NLM subgroup specifically is not straightforward.\n\nCrisPRO has indexed the MSS mCRC molecular landscape in a way that may be relevant to any Roche/Genentech CRC IO expansion trial design. I'm not pitching a service — I'm raising a scientific point I think is worth 20 minutes. Would you be open to a brief conversation?"
+          }
+        ]
+      },
+      "option_b": {
+        "steps": [
+          {
+            "step_number": 1,
+            "sender": "Robin",
+            "delay_days": 0,
+            "channel_note": "LinkedIn connection request + message, no prior Fahad intro",
+            "body": "Dr. Eng — I'm Robin [Last Name], CMO at CrisPRO.ai. COMMIT is the most directly relevant historical comparator for MSS CRC IO trials — the mFOLFOX6 + bevacizumab arm is the anchor for any MSS CRC IO benchmark.\n\nOne question about the control arm interpretation: the liver-met vs. NLM subgroup analysis is the critical secondary question, and the population-adjusted benchmark for the NLM subgroup specifically is not straightforward. CrisPRO has indexed the MSS mCRC molecular landscape in a way that may be relevant to any Roche/Genentech CRC IO expansion trial design.\n\nI'm raising a scientific point, not pitching a service — would you be open to a 20-minute conversation?"
+          }
+        ]
+      },
+      "which_option": [
+        {
+          "scenario": "Fahad has a prior connection to Eng or Roche Medical Affairs",
+          "recommended_option": "Option A — warm intro is always stronger"
+        },
+        {
+          "scenario": "No prior connection; Eng is active on LinkedIn",
+          "recommended_option": "Option B — direct is appropriate for an academic KOL"
+        },
+        {
+          "scenario": "Roche Medical Affairs is the entry point (backup)",
+          "recommended_option": "Option B, addressed to Roche Medical Affairs — reference COMMIT and CRC IO expansion interest"
+        },
+        {
+          "scenario": "Fahad has met Eng at ASCO/ESMO",
+          "recommended_option": "Option A — Fahad's message should reference the specific meeting"
+        }
+      ]
+    },
+    "governance": {
+      "safe_to_say": [
+        {
+          "claim": "COMMIT showed no significant OS benefit in ITT MSS mCRC",
+          "source": "Published paper; NCT02997228",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "COMMIT mFOLFOX6 + bevacizumab arm is the most relevant comparator for MSS CRC IO trials",
+          "source": "Published literature",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        },
+        {
+          "claim": "Liver-met vs. NLM stratification is the critical secondary question in MSS CRC IO",
+          "source": "Published literature (CO.26, COMMIT secondary analyses)",
+          "evidence_status": "VERIFIED-PUBLIC",
+          "notes": ""
+        }
+      ],
+      "not_safe_to_say": [
+        {
+          "claim": "CrisPRO has run a model on the COMMIT dataset",
+          "reason": "No model has been run — false claim"
+        },
+        {
+          "claim": "Roche/Genentech's CRC IO program will fail without liver-met stratification",
+          "reason": "Predictive claim about trial outcome — prohibited"
+        },
+        {
+          "claim": "COMMIT \"failed\"",
+          "reason": "Pejorative framing — COMMIT was a negative trial in ITT; frame as a completed trial with important secondary signals"
+        },
+        {
+          "claim": "Any CrisPRO fit score, formula, or ranking architecture",
+          "reason": "Internal triage only — never in external messages"
+        },
+        {
+          "claim": "Any QUARANTINED 8D statistics",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "\"Provisional patent filed\" or priority date",
+          "reason": "Governance constraint — universal"
+        },
+        {
+          "claim": "AACR 2026 Brenus data",
+          "reason": "BLOCKED B-003 — universal"
+        }
+      ],
+      "company_specific_constraints": [
+        "**COMMIT was a negative trial:** Do not frame COMMIT as a success. The ITT result was negative. The liver-met secondary analysis is a hypothesis-generating signal, not a positive trial result.",
+        "**AstraZeneca coordination:** AstraZeneca (CO.26, durvalumab) is also a MSS CRC IO target with a liver-met signal (MDC #4). Both are benchmark-hook posture. Coordinate timing — do not send both messages in the same week if Eng and Loree are in the same professional network.",
+        "**BreAK CRC-001 internal context:** The COMMIT mFOLFOX6 + bev arm is directly relevant to BreAK CRC-001. Do not reference BreAK CRC-001 in any external message — this is internal context only.",
+        "**Roche dual-entry:** Roche/Genentech is also the co-development partner for BioNTech's autogene cevumeran (MDC #10). Coordinate outreach — do not approach Roche as two separate companies for two different programs in the same week."
+      ]
+    }
+  }
+]
