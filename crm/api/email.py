@@ -221,13 +221,15 @@ def _notify_on_draft(reference_doctype: str, reference_name: str, communication_
 
 
 @frappe.whitelist()
-def get_inbox(doctype: str | None = None, docname: str | None = None, status: str | None = None, limit: int = 20):
+def get_inbox(doctype: str | None = None, docname: str | None = None, status: str | None = None, direction: str | None = None, limit: int = 20):
 	"""Return recent Communications linked to a doc or globally for CRM entities.
 
 	Args:
 		doctype: Optional filter for linked doctype
 		docname: Optional filter for linked docname
-		status: Optional Communication status filter
+		status: Optional Communication status filter (e.g. "Draft", "Sent")
+		direction: Optional inbound/outbound filter -> maps to sent_or_received
+			("inbound"/"received" -> Received, "outbound"/"sent" -> Sent)
 		limit: Max records to return
 	"""
 	filters = {"communication_type": ["in", ["Communication", "Comment"]]}
@@ -237,6 +239,12 @@ def get_inbox(doctype: str | None = None, docname: str | None = None, status: st
 		filters.update({"reference_doctype": ["in", ["CRM Lead", "Contact", "CRM Organization"]]})
 	if status:
 		filters["status"] = status
+	if direction:
+		d = str(direction).strip().lower()
+		if d in ("inbound", "received", "in"):
+			filters["sent_or_received"] = "Received"
+		elif d in ("outbound", "sent", "out"):
+			filters["sent_or_received"] = "Sent"
 
 	rows = frappe.get_all(
 		"Communication",
@@ -246,6 +254,7 @@ def get_inbox(doctype: str | None = None, docname: str | None = None, status: st
 			"subject",
 			"sender",
 			"recipients",
+			"sent_or_received",
 			"communication_medium",
 			"communication_type",
 			"status",
@@ -290,6 +299,7 @@ def thread_context(communication: str | None = None, doctype: str | None = None,
 			"subject",
 			"sender",
 			"recipients",
+			"sent_or_received",
 			"communication_medium",
 			"communication_type",
 			"status",
