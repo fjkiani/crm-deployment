@@ -8,6 +8,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AacrTalkDetail: typeof import('./src/components/aacr/AacrTalkDetail.vue')['default']
     AboutModal: typeof import('./src/components/Modals/AboutModal.vue')['default']
     Activities: typeof import('./src/components/Activities/Activities.vue')['default']
     ActivityHeader: typeof import('./src/components/Activities/ActivityHeader.vue')['default']
@@ -187,9 +188,11 @@ declare module 'vue' {
     LucideCalendar: typeof import('~icons/lucide/calendar')['default']
     LucideCheck: typeof import('~icons/lucide/check')['default']
     LucideChevronLeft: typeof import('~icons/lucide/chevron-left')['default']
+    LucideFileText: typeof import('~icons/lucide/file-text')['default']
     LucidePresentation: typeof import('~icons/lucide/presentation')['default']
     LucideSearch: typeof import('~icons/lucide/search')['default']
     LucideUsers: typeof import('~icons/lucide/users')['default']
+    LucideX: typeof import('~icons/lucide/x')['default']
     MarkAsDoneIcon: typeof import('./src/components/Icons/MarkAsDoneIcon.vue')['default']
     MaximizeIcon: typeof import('./src/components/Icons/MaximizeIcon.vue')['default']
     MenuIcon: typeof import('./src/components/Icons/MenuIcon.vue')['default']

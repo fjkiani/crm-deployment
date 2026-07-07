@@ -275,6 +275,11 @@ const links = [
     to: 'Lead Generation',
   },
   {
+    label: 'AACR Intel',
+    icon: LucideLayoutDashboard,
+    to: 'AACR Intelligence',
+  },
+  {
     label: 'AACR Sessions',
     icon: LucideLayoutDashboard,
     to: 'AACR Sessions',
