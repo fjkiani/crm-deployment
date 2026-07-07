@@ -27,7 +27,11 @@
         <tbody>
           <tr v-for="talk in talks" :key="talk.talk_id" class="border-b border-surface-gray-2 hover:bg-surface-gray-1">
             <td class="py-2 pr-3">
-              <div class="max-w-md truncate text-ink-gray-8" :title="talk.talk_title">{{ talk.talk_title || talk.talk_id }}</div>
+              <button class="flex max-w-md items-center gap-1 truncate text-left text-ink-gray-8 hover:text-ink-blue-6"
+                      :title="talk.talk_title" @click="openTalk(talk)">
+                <LucideFileText class="h-3.5 w-3.5 shrink-0 text-ink-gray-4" />
+                <span class="truncate">{{ talk.talk_title || talk.talk_id }}</span>
+              </button>
             </td>
             <td class="py-2 pr-3 text-ink-gray-7">{{ talk.speaker_name || '—' }}</td>
             <td class="py-2 pr-3">
@@ -53,16 +57,21 @@
       </table>
       <div v-else class="py-10 text-center text-ink-gray-5">{{ __('No talks in this session.') }}</div>
     </div>
+
+    <!-- abstract detail drawer -->
+    <AacrTalkDetail v-if="openTalkName" :talk-name="openTalkName" @close="openTalkName = null" @open-lead="openLead" />
   </div>
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { createResource } from 'frappe-ui'
 import { useRouter } from 'vue-router'
+import AacrTalkDetail from '@/components/aacr/AacrTalkDetail.vue'
 
 const props = defineProps({ sessionSlug: { type: String, required: true } })
 const router = useRouter()
+const openTalkName = ref(null)
 
 const talksResource = createResource({
   url: 'crm.api.session_nav.list_talks_by_session',
@@ -88,5 +97,8 @@ function back() {
 }
 function openLead(leadName) {
   router.push({ name: 'Lead', params: { leadId: leadName } })
+}
+function openTalk(talk) {
+  openTalkName.value = talk.talk_id
 }
 </script>

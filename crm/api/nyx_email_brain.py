@@ -256,6 +256,131 @@ def _frappe_triage_and_draft(lead_name: str, incoming: str | None, force: bool) 
             "subject": subject, "to": to, "triage": action}
 
 
+def _norm_name(s: str) -> str:
+    """Normalize a person name for fuzzy matching (lower, strip titles/punct)."""
+    import re
+    s = (s or "").lower().strip()
+    s = re.sub(r"^(dr|prof|professor|mr|ms|mrs)\.?\s+", "", s)
+    s = re.sub(r"[^a-z0-9\s]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+_KOL_INDEX_CACHE = None
+
+
+def _kol_index() -> dict:
+    """Load kol_targets.json (bundled in crm/aacr_data) indexed by normalized name.
+
+    Each value carries the human-authored angle: hook, crispro_angle,
+    open_questions, primary_axis, email_subject. Returns {} if unavailable.
+    """
+    global _KOL_INDEX_CACHE
+    if _KOL_INDEX_CACHE is not None:
+        return _KOL_INDEX_CACHE
+    idx = {}
+    try:
+        import os as _os
+        path = _os.path.join(frappe.get_app_path("crm"), "aacr_data", "kol_targets.json")
+        with open(path, "r") as fh:
+            for t in (json.load(fh) or []):
+                nm = _norm_name(t.get("name", ""))
+                if nm:
+                    idx[nm] = t
+    except Exception:
+        idx = {}
+    _KOL_INDEX_CACHE = idx
+    return idx
+
+
+def _aacr_talk_for_lead(lead, ad: dict):
+    """Resolve the AACR Talk linked to an AACR-sourced lead.
+
+    Two link paths (either may be present):
+      * AACR Talk.crm_lead == lead.name         (forward link)
+      * lead.additional_data.nyx_facets.source_ref_id == AACR Talk.name  (facet)
+    Returns the AACR Talk doc or None.
+    """
+    talk_name = None
+    facets = ad.get("nyx_facets") or {}
+    if isinstance(facets, dict):
+        talk_name = facets.get("source_ref_id")
+    try:
+        if talk_name and frappe.db.exists("AACR Talk", talk_name):
+            return frappe.get_doc("AACR Talk", talk_name)
+        # fall back to reverse link
+        rev = frappe.get_all("AACR Talk", filters={"crm_lead": lead.name},
+                             pluck="name", limit=1)
+        if rev:
+            return frappe.get_doc("AACR Talk", rev[0])
+    except Exception:
+        return None
+    return None
+
+
+def _aacr_scientific_context(lead, ad: dict) -> list[str]:
+    """Build the AACR-specific scientific context block for an outreach draft.
+
+    Pulls the linked AACR Talk's MOA / targets / stage / novelty, and — when the
+    speaker matches a curated KOL target — the human-authored hook + CrisPRO angle.
+    Returns a list of context lines (possibly empty for non-AACR leads).
+    """
+    lines: list[str] = []
+    talk = _aacr_talk_for_lead(lead, ad)
+    if talk:
+        lines.append("\n--- AACR 2026 SCIENTIFIC CONTEXT (source of this lead) ---")
+        if talk.get("talk_title"):
+            lines.append(f"Talk: {talk.talk_title}")
+        if talk.get("session_title"):
+            lines.append(f"Session: {talk.session_title}")
+        meta = []
+        if talk.get("clinical_stage"):
+            meta.append(f"stage={talk.clinical_stage}")
+        if talk.get("novelty_flag"):
+            meta.append(f"novelty={talk.novelty_flag}")
+        if meta:
+            lines.append("Classification: " + ", ".join(meta))
+        if talk.get("moa_summary"):
+            lines.append(f"Mechanism / finding: {talk.moa_summary}")
+        # top targets (gene + modality/alteration)
+        tgts = []
+        for t in (talk.get("targets") or [])[:6]:
+            g = (t.get("gene_or_protein") or "").strip()
+            if not g:
+                continue
+            extra = t.get("alteration") or t.get("modality") or t.get("pathway")
+            tgts.append(f"{g} ({extra})" if extra else g)
+        if tgts:
+            lines.append("Targets: " + ", ".join(tgts))
+        # biomarker names — skip opaque row-hash tokens (e.g. "f4965toj69") that
+        # some live child rows carry instead of a human-readable name.
+        import re as _re
+        def _real_bm(n):
+            n = (n or "").strip()
+            if not n:
+                return False
+            return not (bool(_re.fullmatch(r"[a-z0-9]{6,12}", n)) and any(c.isdigit() for c in n))
+        bms = [b.get("name") for b in (talk.get("biomarkers") or []) if _real_bm(b.get("name"))]
+        if bms:
+            lines.append("Biomarkers: " + ", ".join(bms[:6]))
+
+    # curated KOL angle (human-authored hook + CrisPRO positioning)
+    kol = _kol_index().get(_norm_name(lead.lead_name or ""))
+    if kol:
+        lines.append("\n--- CURATED OUTREACH ANGLE (use this framing) ---")
+        if kol.get("primary_axis"):
+            lines.append(f"Primary axis: {kol.get('primary_axis')}")
+        if kol.get("opportunity_type"):
+            lines.append(f"Opportunity type: {kol.get('opportunity_type')}")
+        if kol.get("hook"):
+            lines.append(f"Hook (their own words): {kol.get('hook')}")
+        if kol.get("crispro_angle"):
+            lines.append(f"CrisPRO angle: {kol.get('crispro_angle')}")
+        oq = kol.get("open_questions") or []
+        if oq:
+            lines.append("Open questions to raise: " + "; ".join(oq[:3]))
+    return lines
+
+
 def _lead_context(lead, incoming: str | None) -> str:
     ad = {}
     try:
@@ -274,6 +399,12 @@ def _lead_context(lead, incoming: str | None) -> str:
     if sig:
         parts.append("Signals: " + json.dumps({k: sig.get(k) for k in
                      ("specific_number", "recent_event", "strategic_detail") if sig.get(k)}))
+    # AACR-sourced leads: enrich with the linked talk's science + curated angle.
+    # Backward-compatible — yields nothing for non-AACR leads.
+    try:
+        parts.extend(_aacr_scientific_context(lead, ad))
+    except Exception:
+        pass
     if incoming:
         parts.append(f"\nINBOUND MESSAGE:\n{incoming}")
     return "\n".join(parts)

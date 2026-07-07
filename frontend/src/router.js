@@ -146,6 +146,17 @@ const routes = [
     props: true,
   },
   {
+    path: '/aacr-intel',
+    name: 'AACR Intelligence',
+    component: () => import('@/pages/AacrDashboard.vue'),
+  },
+  {
+    path: '/aacr-intel/axis/:axis',
+    name: 'AACR Axis',
+    component: () => import('@/pages/AacrAxis.vue'),
+    props: true,
+  },
+  {
     path: '/lead-search',
     name: 'Lead Search',
     component: () => import('@/pages/LeadSearch.vue'),

@@ -238,7 +238,20 @@ def get_inbox(doctype: str | None = None, docname: str | None = None, status: st
 	else:
 		filters.update({"reference_doctype": ["in", ["CRM Lead", "Contact", "CRM Organization"]]})
 	if status:
-		filters["status"] = status
+		# The Communication `status` Select cannot hold "Draft"/"Sent" (only
+		# Open/Replied/Closed/Linked; reference-linked comms become "Linked").
+		# Map the UI's draft/sent intent onto the doctype-legal `delivery_status`
+		# field (its Select includes "Sent"; drafts have it empty). Other status
+		# values fall through to a literal match for backward compatibility.
+		s = str(status).strip().lower()
+		if s == "draft":
+			# outbound + not yet dispatched
+			filters["sent_or_received"] = "Sent"
+			filters["delivery_status"] = ["in", ["", None]]
+		elif s == "sent":
+			filters["delivery_status"] = "Sent"
+		else:
+			filters["status"] = status
 	if direction:
 		d = str(direction).strip().lower()
 		if d in ("inbound", "received", "in"):
@@ -441,7 +454,13 @@ def send(communication_name: str):
 		reference_name=comm.reference_name,
 	)
 
+	# The Communication doctype's `status` Select does NOT allow "Draft"/"Sent"
+	# (only Open/Replied/Closed/Linked), and reference-linked comms are auto-set to
+	# "Linked". The reliable, doctype-legal send marker is `delivery_status`, whose
+	# Select DOES include "Sent". Set both: status for legacy readers, delivery_status
+	# as the authoritative sent/draft discriminator used by get_inbox().
 	comm.db_set("status", "Sent")
+	comm.db_set("delivery_status", "Sent")
 	return {"ok": True}
 
 
