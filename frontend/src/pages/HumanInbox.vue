@@ -200,8 +200,12 @@ export default {
           limit: 10,
           only_with_email: 1,
         })
-        const n = res?.processed ?? res?.count ?? 0
-        toast.success(`Batch triage complete (${n} processed).`)
+        // batch_triage_and_draft returns { ok, queued_count, queued, skipped_existing_draft }
+        const queued = res?.queued_count ?? 0
+        const skipped = res?.skipped_existing_draft ?? 0
+        toast.success(
+          `Batch triage: ${queued} queued` + (skipped ? `, ${skipped} skipped (already drafted)` : '') + '.',
+        )
         loadInbox()
       } catch (e) {
         toast.error('Batch triage failed: ' + (e.messages?.[0] || e.message || 'error'))
