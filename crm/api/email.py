@@ -317,13 +317,40 @@ def thread_context(communication: str | None = None, doctype: str | None = None,
 
 
 @frappe.whitelist()
-def save_draft(reference_doctype: str, reference_name: str, to: str, subject: str, html: str, cc: str | None = None, bcc: str | None = None, provider_thread_id: str | None = None):
-	"""Create a draft Communication linked to a CRM entity.
+def save_draft(reference_doctype: str, reference_name: str, to: str, subject: str, html: str, cc: str | None = None, bcc: str | None = None, provider_thread_id: str | None = None, communication_name: str | None = None):
+	"""Create or update a draft Communication linked to a CRM entity.
+
+	Upsert semantics: when ``communication_name`` is supplied and that
+	Communication still exists and has NOT been sent, its editable fields
+	(recipients/subject/content/cc/bcc) are updated in place. This is what makes
+	"edit an AI/saved draft then send it" faithful — the persisted draft always
+	reflects the latest editor contents instead of being replaced by a new doc
+	or, worse, sent as its original version. Otherwise a new draft is inserted.
 
 	Returns the Communication name.
 	"""
 	if not to or not subject or not html:
 		raise_frappe("to, subject and html are required")
+
+	# --- Update path: persist edits onto an existing, not-yet-sent draft ------
+	if communication_name and frappe.db.exists("Communication", communication_name):
+		comm = frappe.get_doc("Communication", communication_name)
+		if (comm.status or "") == "Sent" or (comm.delivery_status or "") == "Sent":
+			# Never mutate something already sent; fall through to insert a new draft.
+			pass
+		else:
+			updates = {
+				"recipients": to,
+				"subject": subject,
+				"content": html,
+				"cc": cc,
+				"bcc": bcc,
+			}
+			meta = frappe.get_meta("Communication")
+			if provider_thread_id and meta.has_field("provider_thread_id"):
+				updates["provider_thread_id"] = provider_thread_id
+			comm.db_set(updates)
+			return comm.name
 
 	fields = {
 		"doctype": "Communication",

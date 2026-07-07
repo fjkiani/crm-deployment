@@ -197,12 +197,15 @@ export default {
       }
       savingDraft.value = true
       try {
+        // Upsert: pass the existing draft name so re-saving updates the same doc
+        // (no orphan duplicates) and persists the current editor contents.
         const name = await call('crm.api.email.save_draft', {
           ..._refDoc(),
           to: reply.to,
           subject: reply.subject,
           html: reply.html,
           provider_thread_id: props.communication.provider_thread_id || null,
+          communication_name: reply.draftName || null,
         })
         reply.draftName = name
         toast.success('Draft saved.')
@@ -220,17 +223,19 @@ export default {
       }
       sending.value = true
       try {
-        // Ensure a Communication exists to send (save_draft returns its name).
-        let commName = reply.draftName
-        if (!commName) {
-          commName = await call('crm.api.email.save_draft', {
-            ..._refDoc(),
-            to: reply.to,
-            subject: reply.subject,
-            html: reply.html,
-            provider_thread_id: props.communication.provider_thread_id || null,
-          })
-        }
+        // Always persist the CURRENT editor contents before sending. Upsert onto
+        // the existing draft (reply.draftName) when present so edits made to an
+        // AI-populated or previously-saved draft are the ones that get sent —
+        // otherwise Send would transmit the stale original draft.
+        const commName = await call('crm.api.email.save_draft', {
+          ..._refDoc(),
+          to: reply.to,
+          subject: reply.subject,
+          html: reply.html,
+          provider_thread_id: props.communication.provider_thread_id || null,
+          communication_name: reply.draftName || null,
+        })
+        reply.draftName = commName
         const res = await call('crm.api.email.send', { communication_name: commName })
         if (res?.ok) {
           toast.success('Email sent.')
