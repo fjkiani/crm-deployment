@@ -1,547 +1,377 @@
 <template>
-  <div class="nyx-cockpit">
+  <div class="nyx-hub">
     <!-- Header -->
-    <div class="cockpit-header">
-      <div class="header-left">
-        <div class="nyx-logo">🔱</div>
-        <div>
-          <h1 class="header-title">Nyx Command Center</h1>
-          <p class="header-subtitle">Revenue Orchestration System</p>
-        </div>
+    <div class="mb-5 flex items-start justify-between gap-4 border-b border-ink-gray-2 pb-4">
+      <div>
+        <h1 class="text-xl font-semibold text-ink-gray-9">{{ __('Nyx Intelligence') }}</h1>
+        <p class="mt-1 max-w-2xl text-sm text-ink-gray-5">
+          {{ __('Pipeline analytics, prospect worklist, CRM knowledge search, and outreach actions — one command surface.') }}
+        </p>
       </div>
-      <div class="header-right">
-        <span class="status-pill" :class="eaiaConnected ? 'status-live' : 'status-offline'">
-          {{ eaiaConnected ? '● EAIA Live' : '○ EAIA Offline' }}
+      <div class="flex shrink-0 items-center gap-2">
+        <span
+          class="rounded-full px-2.5 py-1 text-xs font-medium"
+          :class="brainOk ? 'bg-surface-green-2 text-ink-green-3' : 'bg-surface-gray-2 text-ink-gray-6'"
+        >
+          {{ brainOk ? '● ' + __('Brain') + ': ' + brainProvider : '○ ' + __('Brain offline') }}
         </span>
-        <span class="status-pill" :class="farfalleConnected ? 'status-live' : 'status-offline'">
-          {{ farfalleConnected ? '● Farfalle Live' : '○ Farfalle Offline' }}
-        </span>
+        <Button variant="subtle" @click="reloadAll" :loading="dash.loading || pipeline.loading">
+          <template #prefix><LucideRefreshCw class="h-4 w-4" /></template>
+          {{ __('Refresh') }}
+        </Button>
       </div>
     </div>
 
-    <!-- Quick Stats Bar -->
-    <div class="stats-bar" v-if="stats">
-      <div class="stat-item">
-        <div class="stat-value">{{ stats.total_leads }}</div>
-        <div class="stat-label">Total Leads</div>
-      </div>
-      <div class="stat-item stat-enriched">
-        <div class="stat-value">{{ stats.enriched }}</div>
-        <div class="stat-label">Enriched</div>
-      </div>
-      <div class="stat-item stat-coverage">
-        <div class="stat-value">{{ stats.coverage }}%</div>
-        <div class="stat-label">Coverage</div>
-      </div>
-      <div class="stat-item stat-sent">
-        <div class="stat-value">{{ stats.emails_sent }}</div>
-        <div class="stat-label">Emails Sent</div>
-      </div>
-      <div class="stat-item stat-replies">
-        <div class="stat-value">{{ stats.replies }}</div>
-        <div class="stat-label">Replies</div>
+    <!-- Stats Bar -->
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div v-for="s in statCards" :key="s.label" class="rounded-lg border border-ink-gray-2 bg-surface-white p-3">
+        <div class="text-lg font-semibold" :class="s.color || 'text-ink-gray-9'">{{ s.value }}</div>
+        <div class="mt-0.5 text-[11px] uppercase tracking-wide text-ink-gray-4">{{ s.label }}</div>
       </div>
     </div>
 
-    <!-- Command Cards Grid -->
-    <div class="command-grid">
-      <!-- Pipeline Dashboard -->
-      <router-link to="/crm/nyx-dashboard" class="command-card card-pipeline">
-        <div class="card-icon">📊</div>
-        <div class="card-content">
-          <h3>Pipeline Dashboard</h3>
-          <p>Conversion funnel, A/B testing, KPIs, enrichment coverage</p>
-        </div>
-        <div class="card-arrow">→</div>
-      </router-link>
-
-      <!-- Lead Generation -->
-      <router-link to="/crm/leadgen" class="command-card card-leadgen">
-        <div class="card-icon">🎯</div>
-        <div class="card-content">
-          <h3>Lead Generation</h3>
-          <p>ClinicalTrials.gov collection, tier scoring, bulk promote</p>
-        </div>
-        <div class="card-arrow">→</div>
-      </router-link>
-
-      <!-- AI Copilot -->
-      <router-link to="/crm/ai" class="command-card card-copilot">
-        <div class="card-icon">🧠</div>
-        <div class="card-content">
-          <h3>AI Copilot</h3>
-          <p>Farfalle intelligence — company analysis, decision-makers, chat</p>
-        </div>
-        <div class="card-arrow">→</div>
-      </router-link>
-
-      <!-- Voice Operations -->
-      <router-link to="/crm/voice" class="command-card card-voice">
-        <div class="card-icon">📞</div>
-        <div class="card-content">
-          <h3>Voice Operations</h3>
-          <p>Twilio + Vapi calls, AI agent Morgan, call analytics</p>
-        </div>
-        <div class="card-arrow">→</div>
-      </router-link>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="quick-actions">
-      <h2 class="section-title">Quick Actions</h2>
-      <div class="actions-grid">
-        <button @click="quickEnrich" class="action-btn" :disabled="actionLoading === 'enrich'">
-          <span class="action-icon">⚡</span>
-          <span>{{ actionLoading === 'enrich' ? 'Enriching...' : 'Enrich Next Lead' }}</span>
-        </button>
-        <button @click="quickVulture" class="action-btn" :disabled="actionLoading === 'vulture'">
-          <span class="action-icon">🦅</span>
-          <span>{{ actionLoading === 'vulture' ? 'Scanning...' : 'Vulture Scan' }}</span>
-        </button>
-        <button @click="quickHealth" class="action-btn" :disabled="actionLoading === 'health'">
-          <span class="action-icon">🩺</span>
-          <span>{{ actionLoading === 'health' ? 'Checking...' : 'Health Check' }}</span>
-        </button>
-        <button @click="openBulkImport" class="action-btn">
-          <span class="action-icon">📁</span>
-          <span>CSV Import</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- System Status -->
-    <div class="system-status">
-      <h2 class="section-title">System Status</h2>
-      <div class="status-grid">
-        <div class="status-card" v-for="svc in services" :key="svc.name">
-          <div class="svc-indicator" :class="svc.ok ? 'svc-ok' : 'svc-down'"></div>
-          <div class="svc-info">
-            <div class="svc-name">{{ svc.name }}</div>
-            <div class="svc-detail">{{ svc.detail }}</div>
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <!-- LEFT: Pipeline + Frameworks -->
+      <div class="space-y-6 lg:col-span-1">
+        <!-- Pipeline funnel -->
+        <div class="rounded-lg border border-ink-gray-2 bg-surface-white p-4">
+          <h2 class="mb-3 text-sm font-semibold text-ink-gray-8">{{ __('Pipeline funnel') }}</h2>
+          <div v-if="pipeline.loading" class="py-6 text-center text-sm text-ink-gray-5">{{ __('Loading…') }}</div>
+          <div v-else-if="funnelRows.length" class="space-y-2">
+            <div v-for="row in funnelRows" :key="row.label" class="flex items-center gap-2">
+              <div class="w-28 shrink-0 truncate text-xs text-ink-gray-6" :title="row.label">{{ row.label }}</div>
+              <div class="h-4 flex-1 overflow-hidden rounded bg-surface-gray-2">
+                <div class="h-full rounded bg-ink-blue-4" :style="{ width: row.pct + '%' }"></div>
+              </div>
+              <div class="w-10 shrink-0 text-right text-xs font-medium text-ink-gray-8">{{ row.count }}</div>
+            </div>
           </div>
+          <div v-else class="py-6 text-center text-sm text-ink-gray-4">{{ __('No pipeline data') }}</div>
+        </div>
+
+        <!-- Messaging frameworks -->
+        <div class="rounded-lg border border-ink-gray-2 bg-surface-white p-4">
+          <h2 class="mb-3 text-sm font-semibold text-ink-gray-8">{{ __('Messaging frameworks') }}</h2>
+          <div v-if="frameworkRows.length" class="space-y-2">
+            <div v-for="row in frameworkRows" :key="row.label" class="flex items-center justify-between text-xs">
+              <span class="capitalize text-ink-gray-6">{{ row.label }}</span>
+              <span class="font-medium text-ink-gray-8">{{ row.count }}</span>
+            </div>
+          </div>
+          <div v-else class="py-4 text-center text-sm text-ink-gray-4">{{ __('No framework tags yet') }}</div>
+          <div class="mt-3 border-t border-ink-gray-2 pt-3 text-xs text-ink-gray-5">
+            <div class="flex justify-between"><span>{{ __('Enrichment coverage') }}</span><span class="font-medium text-ink-gray-8">{{ enrichCoverage }}%</span></div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="rounded-lg border border-ink-gray-2 bg-surface-white p-4">
+          <h2 class="mb-3 text-sm font-semibold text-ink-gray-8">{{ __('Actions') }}</h2>
+          <div class="space-y-2">
+            <Button class="w-full justify-start" variant="subtle" @click="runBatchTriage" :loading="batchTriage.loading">
+              <template #prefix><LucideMailPlus class="h-4 w-4" /></template>
+              {{ __('Draft top') }} {{ triageLimit }} {{ __('outreach emails') }}
+            </Button>
+            <router-link to="/industry" class="block">
+              <Button class="w-full justify-start" variant="subtle">
+                <template #prefix><LucideBuilding2 class="h-4 w-4" /></template>
+                {{ __('Industry engagements') }}
+              </Button>
+            </router-link>
+            <router-link to="/imports" class="block">
+              <Button class="w-full justify-start" variant="subtle">
+                <template #prefix><LucideUpload class="h-4 w-4" /></template>
+                {{ __('Import prospects (CSV)') }}
+              </Button>
+            </router-link>
+          </div>
+        </div>
+
+        <!-- Intelligence Core (honest disabled state) -->
+        <div class="rounded-lg border border-dashed border-ink-gray-3 bg-surface-gray-1 p-4">
+          <div class="flex items-center gap-2">
+            <LucideMessageSquare class="h-4 w-4 text-ink-gray-5" />
+            <h2 class="text-sm font-semibold text-ink-gray-7">{{ __('Intelligence Core (chat)') }}</h2>
+          </div>
+          <p class="mt-2 text-xs leading-relaxed text-ink-gray-5">
+            {{ __('Conversational Nyx (ask_nyx) requires an external EAIA host. Set the EAIA_URL environment variable on the CRM server to enable live chat. Dossiers, drafting and enrichment below run natively without it.') }}
+          </p>
+        </div>
+      </div>
+
+      <!-- CENTER: Prospect worklist -->
+      <div class="lg:col-span-1">
+        <div class="rounded-lg border border-ink-gray-2 bg-surface-white p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-ink-gray-8">{{ __('Prospect worklist') }}</h2>
+            <router-link to="/contacts/view" class="text-xs text-ink-blue-6 hover:underline">{{ __('View all') }} →</router-link>
+          </div>
+          <div v-if="prospects.loading" class="py-8 text-center text-sm text-ink-gray-5">{{ __('Loading prospects…') }}</div>
+          <div v-else-if="prospectList.length" class="space-y-1.5">
+            <button
+              v-for="p in prospectList"
+              :key="p.prospect"
+              class="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left hover:border-ink-gray-2 hover:bg-surface-gray-1"
+              @click="openDossier(p)"
+            >
+              <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-gray-3 text-[11px] font-semibold text-ink-gray-7">
+                {{ initials(p.name) }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="truncate text-sm font-medium text-ink-gray-8">{{ p.name || p.prospect }}</span>
+                  <span v-if="p.engagement_slug" class="shrink-0 rounded bg-surface-blue-2 px-1 py-px text-[9px] font-medium text-ink-blue-6" :title="__('Linked to industry engagement')">◆</span>
+                  <span v-if="p.needs_backfill" class="shrink-0 rounded bg-surface-amber-2 px-1 py-px text-[9px] font-medium text-ink-amber-3" :title="__('Missing/invalid email')">!</span>
+                </div>
+                <div class="truncate text-xs text-ink-gray-4">{{ p.institution || '—' }}</div>
+              </div>
+              <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium" :class="tierClass(p.tier)">{{ p.tier || '—' }}</span>
+              <span class="w-8 shrink-0 text-right text-xs font-semibold text-ink-gray-7">{{ fmtScore(p.lead_score) }}</span>
+            </button>
+          </div>
+          <div v-else class="py-8 text-center text-sm text-ink-gray-4">{{ __('No prospects') }}</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Knowledge search -->
+      <div class="lg:col-span-1">
+        <div class="rounded-lg border border-ink-gray-2 bg-surface-white p-4">
+          <h2 class="mb-3 text-sm font-semibold text-ink-gray-8">{{ __('CRM knowledge search') }}</h2>
+          <div class="flex gap-2">
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="__('Search leads & notes…')"
+              class="flex-1 rounded-md border border-ink-gray-3 bg-surface-white px-3 py-1.5 text-sm focus:border-ink-blue-4 focus:outline-none"
+              @keyup.enter="runSearch"
+            />
+            <Button variant="solid" @click="runSearch" :loading="search.loading">{{ __('Go') }}</Button>
+          </div>
+
+          <div v-if="search.loading" class="py-8 text-center text-sm text-ink-gray-5">{{ __('Searching…') }}</div>
+          <div v-else-if="searchRan" class="mt-4 space-y-4">
+            <div>
+              <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-gray-4">{{ __('Leads') }} ({{ searchLeads.length }})</div>
+              <div v-if="searchLeads.length" class="space-y-1">
+                <button
+                  v-for="l in searchLeads"
+                  :key="l.name"
+                  class="block w-full truncate rounded px-2 py-1 text-left text-sm text-ink-gray-7 hover:bg-surface-gray-1"
+                  @click="openDossierById(l.name, l.lead_name || l.title)"
+                >
+                  {{ l.lead_name || l.title || l.name }}
+                  <span v-if="l.organization" class="text-ink-gray-4">— {{ l.organization }}</span>
+                </button>
+              </div>
+              <div v-else class="text-xs text-ink-gray-4">{{ __('No matching leads') }}</div>
+            </div>
+            <div>
+              <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-gray-4">{{ __('Notes') }} ({{ searchNotes.length }})</div>
+              <div v-if="searchNotes.length" class="space-y-1">
+                <div v-for="(n, i) in searchNotes" :key="i" class="rounded bg-surface-gray-1 px-2 py-1.5 text-xs text-ink-gray-6">
+                  <div class="line-clamp-2" v-html="n.snippet || n.content || n.title"></div>
+                </div>
+              </div>
+              <div v-else class="text-xs text-ink-gray-4">{{ __('No matching notes') }}</div>
+            </div>
+          </div>
+          <div v-else class="py-8 text-center text-sm text-ink-gray-4">{{ __('Enter a query to search the CRM knowledge base.') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dossier drawer -->
+    <div v-if="dossierOpen" class="fixed inset-0 z-40 flex justify-end" @click.self="dossierOpen = false">
+      <div class="absolute inset-0 bg-black/30"></div>
+      <div class="relative z-10 flex h-full w-full max-w-md flex-col bg-surface-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-ink-gray-2 px-4 py-3">
+          <div class="min-w-0">
+            <h3 class="truncate text-sm font-semibold text-ink-gray-9">{{ dossierTitle }}</h3>
+            <p class="text-xs text-ink-gray-4">{{ __('Intelligence dossier') }}</p>
+          </div>
+          <button class="text-ink-gray-5 hover:text-ink-gray-8" @click="dossierOpen = false"><LucideX class="h-5 w-5" /></button>
+        </div>
+        <div class="flex-1 overflow-y-auto px-4 py-3">
+          <div v-if="dossier.loading" class="py-8 text-center text-sm text-ink-gray-5">{{ __('Loading dossier…') }}</div>
+          <pre v-else-if="dossierText" class="whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-ink-gray-7">{{ dossierText }}</pre>
+          <div v-else class="py-8 text-center text-sm text-ink-gray-4">{{ __('No dossier available') }}</div>
+        </div>
+        <div class="flex flex-wrap gap-2 border-t border-ink-gray-2 px-4 py-3">
+          <router-link v-if="dossierEngagement" :to="`/industry/${dossierEngagement}`" class="flex-1">
+            <Button variant="subtle" class="w-full">{{ __('Engagement') }}</Button>
+          </router-link>
+          <Button v-if="dossierLeadId" variant="solid" class="flex-1" @click="goToLead(dossierLeadId)">{{ __('Open lead') }}</Button>
+          <span v-if="!dossierLeadId && !dossierEngagement" class="flex-1 py-1.5 text-center text-xs text-ink-gray-4">{{ __('No linked CRM lead') }}</span>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-export default {
-  name: 'NyxCockpit',
-  data() {
-    return {
-      eaiaConnected: false,
-      farfalleConnected: false,
-      actionLoading: null,
-      stats: null,
-      services: [
-        { name: 'Frappe CRM', ok: true, detail: 'Connected' },
-        { name: 'EAIA Backend', ok: false, detail: 'Checking...' },
-        { name: 'Farfalle Intel', ok: false, detail: 'Checking...' },
-        { name: 'Twilio Voice', ok: false, detail: 'Checking...' },
-      ],
-    }
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { createResource, Button, toast } from 'frappe-ui'
+import { useRouter } from 'vue-router'
+import LucideRefreshCw from '~icons/lucide/refresh-cw'
+import LucideMailPlus from '~icons/lucide/mail-plus'
+import LucideBuilding2 from '~icons/lucide/building-2'
+import LucideUpload from '~icons/lucide/upload'
+import LucideMessageSquare from '~icons/lucide/message-square'
+import LucideX from '~icons/lucide/x'
+
+const router = useRouter()
+const triageLimit = 10
+
+// ---- Brain status ----
+const brainOk = ref(false)
+const brainProvider = ref('')
+const brain = createResource({
+  url: 'crm.api.nyx_email_brain.brain_status',
+  auto: true,
+  onSuccess(d) {
+    brainOk.value = !!d?.ok
+    brainProvider.value = d?.llm_provider || d?.backend || 'unknown'
   },
-  mounted() {
-    this.checkConnections()
-    this.loadStats()
-  },
-  methods: {
-    async checkConnections() {
-      // Check EAIA
-      const eaiaUrl = this.getEaiaUrl()
-      try {
-        const resp = await fetch(`${eaiaUrl}/health`, { method: 'GET', signal: AbortSignal.timeout(5000) })
-        this.eaiaConnected = resp.ok
-        this.services[1] = { name: 'EAIA Backend', ok: resp.ok, detail: resp.ok ? `${eaiaUrl}` : 'Unreachable' }
-      } catch {
-        this.eaiaConnected = false
-        this.services[1] = { name: 'EAIA Backend', ok: false, detail: 'Unreachable' }
-      }
+  onError() { brainOk.value = false },
+})
 
-      // Check Farfalle
-      const farfalleUrl = this.getFarfalleUrl()
-      try {
-        const resp = await fetch(`${farfalleUrl}/health`, { method: 'GET', signal: AbortSignal.timeout(5000) })
-        this.farfalleConnected = resp.ok
-        this.services[2] = { name: 'Farfalle Intel', ok: resp.ok, detail: resp.ok ? `${farfalleUrl}` : 'Not running' }
-      } catch {
-        this.farfalleConnected = false
-        this.services[2] = { name: 'Farfalle Intel', ok: false, detail: 'Not running' }
-      }
+// ---- Dashboard metrics (prospect totals + tiers) ----
+const dash = createResource({ url: 'crm.api.leadgen.get_dashboard_metrics', auto: true })
 
-      // Check Twilio via Frappe
-      try {
-        const resp = await frappe.call({ method: 'crm.integrations.twilio.api.is_enabled' })
-        const ok = !!resp
-        this.services[3] = { name: 'Twilio Voice', ok, detail: ok ? 'Configured' : 'Not configured' }
-      } catch {
-        this.services[3] = { name: 'Twilio Voice', ok: false, detail: 'Not configured' }
-      }
-    },
+// ---- Pipeline analytics (funnel + frameworks) ----
+const pipeline = createResource({ url: 'crm.api.ai.get_pipeline_analytics', auto: true })
 
-    async loadStats() {
-      const eaiaUrl = this.getEaiaUrl()
-      try {
-        const resp = await fetch(`${eaiaUrl}/analytics/health`)
-        if (resp.ok) {
-          this.stats = await resp.json()
-          return
-        }
-      } catch { /* fallback */ }
+// ---- Activity counts ----
+const counts = createResource({
+  url: 'crm.api.ai.get_counts',
+  auto: true,
+  makeParams: () => ({ days: 7 }),
+})
 
-      // Fallback: load from Frappe
-      try {
-        const resp = await frappe.call({
-          method: 'crm.api.mcp_server.get_pipeline_analytics'
-        })
-        if (resp.message) {
-          const d = resp.message
-          this.stats = {
-            total_leads: d.funnel?.total || 0,
-            enriched: d.funnel?.enriched || 0,
-            coverage: d.enrichment_coverage || 0,
-            emails_sent: d.funnel?.sent || 0,
-            replies: d.funnel?.replied || 0,
-          }
-        }
-      } catch {
-        this.stats = { total_leads: 0, enriched: 0, coverage: 0, emails_sent: 0, replies: 0 }
-      }
-    },
+const statCards = computed(() => {
+  const m = dash.data || {}
+  const c = counts.data || {}
+  const met = pipeline.data?.metrics || {}
+  return [
+    { label: __('Prospects'), value: m.total_prospects ?? '—' },
+    { label: __('Tier 1'), value: m.tier_counts?.['Tier 1'] ?? m.tier_counts?.Tier1 ?? '—', color: 'text-ink-blue-6' },
+    { label: __('Leads'), value: met.total_leads ?? '—' },
+    { label: __('Drafts'), value: c.drafts ?? '—', color: 'text-ink-amber-3' },
+    { label: __('Sent today'), value: c.sent_today ?? '—', color: 'text-ink-green-3' },
+    { label: __('Activity 7d'), value: c.recent_total ?? '—' },
+  ]
+})
 
-    async quickEnrich() {
-      this.actionLoading = 'enrich'
-      try {
-        const leads = await frappe.call({
-          method: 'crm.api.doc.get_data',
-          args: { doctype: 'CRM Lead', filters: { nyx_enriched: 0 }, order_by: 'creation desc', page_length: 1 }
-        })
-        const lead = leads?.data?.[0]
-        if (lead) {
-          this.$router.push(`/crm/leads/${lead.name}#nyx`)
-        } else {
-          alert('No unenriched leads found!')
-        }
-      } catch (e) {
-        alert('Error: ' + (e.message || e))
-      } finally {
-        this.actionLoading = null
-      }
-    },
+const funnelRows = computed(() => {
+  const f = pipeline.data?.funnel
+  if (!f || typeof f !== 'object') return []
+  const entries = Object.entries(f).filter(([k]) => k !== 'total')
+  const max = Math.max(1, ...entries.map(([, v]) => Number(v) || 0))
+  return entries
+    .map(([label, count]) => ({ label, count: Number(count) || 0, pct: Math.round(((Number(count) || 0) / max) * 100) }))
+    .sort((a, b) => b.count - a.count)
+})
 
-    async quickVulture() {
-      this.actionLoading = 'vulture'
-      const eaiaUrl = this.getEaiaUrl()
-      try {
-        const resp = await fetch(`${eaiaUrl}/cron/vulture-scan`, { method: 'POST' })
-        const data = await resp.json()
-        alert(`Vulture scan: ${data.scanned || 0} orgs scanned, ${data.alerts || 0} alerts`)
-      } catch (e) {
-        alert('Vulture scan failed — EAIA may be offline')
-      } finally {
-        this.actionLoading = null
-      }
-    },
+const frameworkRows = computed(() => {
+  const fr = pipeline.data?.frameworks
+  if (!fr || typeof fr !== 'object') return []
+  return Object.entries(fr).map(([label, count]) => ({ label, count: Number(count) || 0 })).sort((a, b) => b.count - a.count)
+})
 
-    async quickHealth() {
-      this.actionLoading = 'health'
-      await this.checkConnections()
-      await this.loadStats()
-      this.actionLoading = null
-    },
+const enrichCoverage = computed(() => {
+  const m = pipeline.data?.metrics || {}
+  return m.enrichment_coverage ?? m.coverage ?? 0
+})
 
-    openBulkImport() {
-      this.$router.push('/crm/nyx-dashboard')
-    },
+// ---- Prospect worklist (directory.list_contacts: has email + engagement links) ----
+const prospects = createResource({
+  url: 'crm.api.directory.list_contacts',
+  auto: true,
+  makeParams: () => ({ page_length: 15 }),
+})
+const prospectList = computed(() => prospects.data?.rows || [])
 
-    getEaiaUrl() {
-      return window.EAIA_URL || localStorage.getItem('eaia_url') || 'http://localhost:8001'
-    },
-
-    getFarfalleUrl() {
-      if (window.FARFALLE_BASE) return String(window.FARFALLE_BASE)
-      // EAIA backend has Farfalle-compatible endpoints
-      return 'http://localhost:8001'
-    },
-  }
+// ---- Knowledge search ----
+const searchQuery = ref('')
+const searchRan = ref(false)
+const search = createResource({
+  url: 'crm.api.intelligence.search_crm_knowledge',
+  makeParams: () => ({ query: searchQuery.value, limit: 10 }),
+  onSuccess() { searchRan.value = true },
+  onError(err) { toast.error(__('Search failed') + ': ' + (err?.messages?.[0] || err)) },
+})
+function runSearch() {
+  if (!searchQuery.value.trim()) return
+  search.submit()
 }
+const searchLeads = computed(() => search.data?.leads || [])
+const searchNotes = computed(() => search.data?.notes || [])
+
+// ---- Dossier drawer ----
+const dossierOpen = ref(false)
+const dossierTitle = ref('')
+const dossierLeadId = ref('')
+const dossierEngagement = ref('')
+const dossier = createResource({ url: 'crm.api.intelligence.get_dossier' })
+const dossierText = computed(() => {
+  const d = dossier.data
+  if (!d) return ''
+  return d.formatted || (typeof d === 'string' ? d : JSON.stringify(d.data || d, null, 2))
+})
+function openDossier(p) {
+  dossierTitle.value = p.name || p.prospect
+  dossierLeadId.value = ''
+  dossierEngagement.value = p.engagement_slug || ''
+  dossierOpen.value = true
+  const email = p.email && !p.email.endsWith('.invalid') ? p.email : ''
+  if (!email) {
+    // No resolvable email -> dossier keys off CRM Lead; nothing to look up
+    dossier.data = { formatted: __('No email on file for this prospect. Dossiers resolve against CRM Leads by email — backfill the email to enable a full dossier.'), data: {} }
+    return
+  }
+  dossier.submit({ email }).then(() => {
+    dossierLeadId.value = dossier.data?.data?.name || ''
+  })
+}
+function openDossierById(leadId, title) {
+  dossierTitle.value = title || leadId
+  dossierLeadId.value = leadId
+  dossierOpen.value = true
+  dossier.submit({ lead_id: leadId })
+}
+function goToLead(id) { router.push(`/leads/${id}`) }
+
+// ---- Batch triage ----
+const batchTriage = createResource({
+  url: 'crm.api.nyx_email_brain.batch_triage_and_draft',
+  onSuccess(d) { toast.success(__('Queued') + ' ' + (d?.queued_count ?? '') + ' ' + __('drafts')); counts.reload() },
+  onError(err) { toast.error(__('Batch failed') + ': ' + (err?.messages?.[0] || err)) },
+})
+function runBatchTriage() {
+  if (!window.confirm(__('Draft outreach emails for the top') + ' ' + triageLimit + ' ' + __('prospects with valid emails?'))) return
+  batchTriage.submit({ limit: triageLimit, only_with_email: 1 })
+}
+
+// ---- Helpers ----
+function reloadAll() { dash.reload(); pipeline.reload(); counts.reload(); prospects.reload(); brain.reload() }
+function initials(name) {
+  if (!name) return '?'
+  const parts = String(name).trim().split(/\s+/)
+  return ((parts[0]?.[0] || '') + (parts[parts.length - 1]?.[0] || '')).toUpperCase() || '?'
+}
+function fmtScore(s) { return s == null ? '—' : Number(s).toFixed(1) }
+function tierClass(t) {
+  if (t === 'Tier1' || t === 'Tier 1') return 'bg-surface-blue-2 text-ink-blue-6'
+  if (t === 'Tier2' || t === 'Tier 2') return 'bg-surface-amber-2 text-ink-amber-3'
+  return 'bg-surface-gray-2 text-ink-gray-6'
+}
+onMounted(() => {})
 </script>
 
 <style scoped>
-.nyx-cockpit {
+.nyx-hub {
   padding: 24px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  font-family: 'Inter', -apple-system, sans-serif;
-}
-
-.cockpit-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.nyx-logo {
-  font-size: 2.5rem;
-  filter: drop-shadow(0 0 12px rgba(139, 92, 246, 0.4));
-}
-
-.header-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1a1a2e;
-  margin: 0;
-}
-
-.header-subtitle {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin: 2px 0 0 0;
-}
-
-.header-right {
-  display: flex;
-  gap: 8px;
-}
-
-.status-pill {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-}
-
-.status-live {
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
-}
-
-.status-offline {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-}
-
-/* Stats Bar */
-.stats-bar {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
-.stat-item {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px;
-  text-align: center;
-  transition: all 0.2s;
-}
-
-.stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-.stat-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-
-.stat-enriched .stat-value { color: #8b5cf6; }
-.stat-coverage .stat-value { color: #059669; }
-.stat-sent .stat-value { color: #2563eb; }
-.stat-replies .stat-value { color: #d97706; }
-
-.stat-label {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* Command Cards */
-.command-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
-.command-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  border-radius: 12px;
-  text-decoration: none;
-  transition: all 0.25s ease;
-  border: 1px solid transparent;
-}
-
-.command-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-}
-
-.card-pipeline {
-  background: linear-gradient(135deg, #ede9fe, #f5f3ff);
-  border-color: #c4b5fd;
-}
-.card-pipeline:hover { border-color: #8b5cf6; }
-
-.card-leadgen {
-  background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
-  border-color: #86efac;
-}
-.card-leadgen:hover { border-color: #22c55e; }
-
-.card-copilot {
-  background: linear-gradient(135deg, #eff6ff, #f0f9ff);
-  border-color: #93c5fd;
-}
-.card-copilot:hover { border-color: #3b82f6; }
-
-.card-voice {
-  background: linear-gradient(135deg, #fff7ed, #fffbeb);
-  border-color: #fdba74;
-}
-.card-voice:hover { border-color: #f97316; }
-
-.card-icon {
-  font-size: 2rem;
-  flex-shrink: 0;
-}
-
-.card-content h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1a1a2e;
-}
-
-.card-content p {
-  margin: 4px 0 0 0;
-  font-size: 0.8rem;
-  color: #6b7280;
-  line-height: 1.4;
-}
-
-.card-arrow {
-  margin-left: auto;
-  font-size: 1.2rem;
-  color: #9ca3af;
-  transition: transform 0.2s;
-}
-
-.command-card:hover .card-arrow {
-  transform: translateX(4px);
-  color: #6b7280;
-}
-
-/* Quick Actions */
-.section-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 12px 0;
-}
-
-.actions-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 28px;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #374151;
-  transition: all 0.2s;
-}
-
-.action-btn:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #8b5cf6;
-  color: #8b5cf6;
-}
-
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.action-icon {
-  font-size: 1.1rem;
-}
-
-/* System Status */
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.status-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-}
-
-.svc-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.svc-ok { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.5); }
-.svc-down { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.3); }
-
-.svc-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #374151;
-}
-
-.svc-detail {
-  font-size: 0.7rem;
-  color: #9ca3af;
-}
-
-@media (max-width: 768px) {
-  .stats-bar { grid-template-columns: repeat(3, 1fr); }
-  .command-grid { grid-template-columns: 1fr; }
-  .actions-grid { grid-template-columns: repeat(2, 1fr); }
-  .status-grid { grid-template-columns: repeat(2, 1fr); }
-  .header-right { flex-direction: column; }
 }
 </style>

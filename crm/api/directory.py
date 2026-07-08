@@ -44,6 +44,85 @@ def _norm(s):
 	return s
 
 
+# Corporate stopwords stripped before token matching so "Amgen" == "Amgen Inc.".
+_CORP_STOP = {
+	"inc", "llc", "ltd", "co", "corp", "corporation", "company", "the",
+	"biosciences", "therapeutics", "pharmaceuticals", "pharma", "bio", "b", "v",
+	"n", "sa", "ag", "plc", "holdings", "group", "labs", "laboratories",
+}
+
+
+def _tokens(s):
+	return [t for t in _norm(s).split() if t and t not in _CORP_STOP]
+
+
+_ENG_MATCH_CACHE = None
+
+
+def _engagement_matchers():
+	"""Precompute engagement matching structures once.
+
+	Returns (full, parts, rank_by_slug) where:
+	  full  = [(slug, company, token_set, is_compound), ...]
+	  parts = [(slug, sub_brand, token_set), ...]  (compound companies only)
+	  rank_by_slug = {slug: outreach_priority_rank}
+	"""
+	global _ENG_MATCH_CACHE
+	if _ENG_MATCH_CACHE is not None:
+		return _ENG_MATCH_CACHE
+	full, parts, rank_by_slug = [], [], {}
+	for e in _load_engagements():
+		fm = e.get("front_matter", {})
+		slug = e.get("slug")
+		company = fm.get("company")
+		if not slug or not company:
+			continue
+		try:
+			rank_by_slug[slug] = int(fm.get("outreach_priority_rank"))
+		except (TypeError, ValueError):
+			rank_by_slug[slug] = 999
+		is_compound = bool(re.search(r"[/&]", company))
+		full.append((slug, company, set(_tokens(company)), is_compound))
+		if is_compound:
+			for p in re.split(r"[/&]", company):
+				tk = set(_tokens(p))
+				if tk:
+					parts.append((slug, p.strip(), tk))
+	_ENG_MATCH_CACHE = (full, parts, rank_by_slug)
+	return _ENG_MATCH_CACHE
+
+
+def _engagement_slug_for(institution):
+	"""Map a prospect institution to an engagement slug via scored matching.
+
+	Prefers exact/standalone-company matches over compound sub-brand matches so
+	that e.g. "AstraZeneca" links to the astrazeneca engagement, not the
+	"Daiichi Sankyo/AstraZeneca" compound. Ties break on best (lowest) rank.
+	"""
+	itk = set(_tokens(institution))
+	if not itk:
+		return None
+	full, parts, rank_by_slug = _engagement_matchers()
+	cands = []  # (tier, -specificity, rank, slug)
+	inst_norm = _norm(institution)
+	for slug, company, ftk, is_compound in full:
+		if _norm(company) == inst_norm:
+			cands.append((1, -len(ftk), rank_by_slug.get(slug, 999), slug))
+	for slug, company, ftk, is_compound in full:
+		if not is_compound and ftk and ftk <= itk:
+			cands.append((2, -len(ftk), rank_by_slug.get(slug, 999), slug))
+	for slug, company, ftk, is_compound in full:
+		if not is_compound and ftk and itk <= ftk:
+			cands.append((3, -len(ftk), rank_by_slug.get(slug, 999), slug))
+	for slug, sub_brand, tk in parts:
+		if tk and (tk <= itk or itk <= tk):
+			cands.append((4, -len(tk), rank_by_slug.get(slug, 999), slug))
+	if not cands:
+		return None
+	cands.sort()
+	return cands[0][3]
+
+
 # ---------------------------------------------------------------------------
 # Contacts: derived from Lead Prospect (pi_name / pi_email / institution)
 # ---------------------------------------------------------------------------
@@ -97,18 +176,12 @@ def list_contacts(search=None, tier=None, outreach_status=None, start=0, page_le
 		page_length=page_length,
 	)
 
-	# map engagement companies to slugs for deep-linking contacts to an engagement
-	eng_by_norm = {
-		_norm(e.get("front_matter", {}).get("company")): e.get("slug")
-		for e in _load_engagements()
-	}
-
+	# deep-link contacts to an engagement via scored institution<->company matching
 	out = []
 	for r in rows:
 		email = (r.get("pi_email") or "").strip()
 		needs_backfill = (not email) or email.endswith(".invalid")
-		inst_norm = _norm(r.get("institution"))
-		eng_slug = eng_by_norm.get(inst_norm)
+		eng_slug = _engagement_slug_for(r.get("institution"))
 		out.append(
 			{
 				"prospect": r["name"],

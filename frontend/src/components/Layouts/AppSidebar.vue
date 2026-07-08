@@ -261,14 +261,9 @@ const links = [
   },
   // ── Nyx Section ──────────────────────
   {
-    label: 'Nyx Command',
+    label: 'Nyx Intelligence',
     icon: SquareAsterisk,
     to: 'Nyx',
-  },
-  {
-    label: 'Pipeline',
-    icon: LucideLayoutDashboard,
-    to: 'Nyx Dashboard',
   },
   {
     label: 'Lead Gen',
@@ -294,11 +289,6 @@ const links = [
     label: 'Lead Search',
     icon: LucideSearch,
     to: 'Lead Search',
-  },
-  {
-    label: 'AI Copilot',
-    icon: SquareAsterisk,
-    to: 'AI Copilot',
   },
   {
     label: 'Voice Ops',
