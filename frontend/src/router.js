@@ -19,9 +19,9 @@ const routes = [
     component: () => import('@/pages/Dashboard.vue'),
   },
   {
+    // Consolidated into the Nyx Intelligence hub (/nyx)
     path: '/ai',
-    name: 'AI Copilot',
-    component: () => import('@/pages/AiCopilot.vue'),
+    redirect: { name: 'Nyx' },
   },
   {
     path: '/voice',
@@ -130,9 +130,9 @@ const routes = [
     component: () => import('@/pages/EmailSetup.vue'),
   },
   {
+    // Consolidated into the Nyx Intelligence hub (/nyx)
     path: '/nyx-dashboard',
-    name: 'Nyx Dashboard',
-    component: () => import('@/pages/NyxDashboard.vue'),
+    redirect: { name: 'Nyx' },
   },
   {
     path: '/sessions',
