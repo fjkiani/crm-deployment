@@ -118,7 +118,11 @@
           <router-link v-if="dossierEngagement" :to="`/industry/${dossierEngagement}`" class="flex-1">
             <Button variant="subtle" class="w-full">{{ __('Engagement') }}</Button>
           </router-link>
-          <Button v-if="dossierLeadId" variant="solid" class="flex-1" @click="goToLead(dossierLeadId)">{{ __('Open lead') }}</Button>
+          <Button v-if="dossierLeadId" variant="subtle" class="flex-1" @click="goToLead(dossierLeadId)">{{ __('Open lead') }}</Button>
+          <Button v-if="dossierLeadId" variant="solid" class="flex-1" @click="openOutreach(dossierLeadId)">
+            <template #prefix><EmailAtIcon class="h-4 w-4" /></template>
+            {{ __('Outreach') }}
+          </Button>
           <span v-if="!dossierLeadId && !dossierEngagement" class="flex-1 py-1.5 text-center text-xs text-ink-gray-4">{{ __('No linked CRM lead') }}</span>
         </div>
       </div>
@@ -132,6 +136,7 @@ import { createResource, Button, toast } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 import LucideSearch from '~icons/lucide/search'
 import LucideX from '~icons/lucide/x'
+import EmailAtIcon from '@/components/Icons/EmailAtIcon.vue'
 
 const router = useRouter()
 
@@ -203,6 +208,10 @@ function openDossier(c) {
   dossier.submit({ email }).then(() => { dossierLeadId.value = dossier.data?.data?.name || '' })
 }
 function goToLead(id) { router.push(`/leads/${id}`) }
+function openOutreach(id) {
+  // Deep-link straight to the lead's Nyx outreach tab (hash-driven tab manager).
+  router.push({ name: 'Lead', params: { leadId: id }, hash: '#nyx' })
+}
 
 // ---- Helpers ----
 function initials(name) {

@@ -48,6 +48,7 @@
           v-if="tabs[tabIndex]?.name === 'Nyx'"
           :doc="doc"
           :leadId="leadId"
+          @open-model-settings="showModelSettings = true"
         />
         <TrackerIntel
           v-else-if="tabs[tabIndex]?.name === 'GTM'"
@@ -224,6 +225,7 @@
     :docname="leadId"
     name="Leads"
   />
+  <NyxModelSettingsModal v-model="showModelSettings" />
 </template>
 <script setup>
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
@@ -254,6 +256,7 @@ import NyxTab from '@/components/NyxTab.vue'
 import NyxIcon from '@/components/Icons/NyxIcon.vue'
 import TrackerIntel from '@/components/TrackerIntel.vue'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
+import NyxModelSettingsModal from '@/components/Modals/NyxModelSettingsModal.vue'
 import {
   openWebsite,
   setupCustomizations,
@@ -305,6 +308,7 @@ const errorMessage = ref('')
 const showDeleteLinkedDocModal = ref(false)
 const showConvertToDealModal = ref(false)
 const showFilesUploader = ref(false)
+const showModelSettings = ref(false)
 
 const { triggerOnChange, assignees, document, scripts, error } = useDocument(
   'CRM Lead',
@@ -453,6 +457,18 @@ const tabs = computed(() => {
 })
 
 const { tabIndex, changeTabTo } = useActiveTabManager(tabs, 'lastLeadTab')
+
+// Deep-link support: allow ?tab=<name> (e.g. from the Leads list "Outreach"
+// action) to open a specific tab. The tab manager already honors the #hash
+// form natively; this covers the query-param form additively.
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (!tab) return
+    nextTick(() => changeTabTo(String(tab).toLowerCase()))
+  },
+  { immediate: true },
+)
 
 const sections = createResource({
   url: 'crm.fcrm.doctype.crm_fields_layout.crm_fields_layout.get_sidepanel_sections',
