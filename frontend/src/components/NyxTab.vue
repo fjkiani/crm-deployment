@@ -32,6 +32,40 @@
       </div>
     </div>
 
+    <!-- Active model chip: shows which LLM will run before you click Draft -->
+    <div v-if="brainStatus" class="mx-4 -mt-1 mb-2 flex items-center gap-2 sm:mx-10">
+      <span class="text-xs text-ink-gray-5">{{ __('Outreach model:') }}</span>
+      <span
+        class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+        :class="brainStatus.ok ? 'bg-surface-green-2 text-ink-green-3' : 'bg-surface-gray-2 text-ink-gray-6'"
+      >
+        <span class="h-1.5 w-1.5 rounded-full" :class="brainStatus.ok ? 'bg-green-500' : 'bg-gray-400'"></span>
+        {{ modelChipLabel }}
+      </span>
+      <button
+        type="button"
+        class="text-xs text-ink-gray-5 underline underline-offset-2 hover:text-ink-gray-7"
+        @click="openModelSettings"
+      >
+        {{ __('Change') }}
+      </button>
+    </div>
+
+    <!-- Honest blocked banner: no credits / no provider. Never fakes a draft. -->
+    <div
+      v-if="brainBlocked"
+      class="mx-4 mb-3 flex items-start gap-3 rounded-lg border border-ink-gray-2 bg-surface-amber-2 p-3 sm:mx-10"
+    >
+      <div class="mt-0.5 text-ink-amber-3">⚠</div>
+      <div class="flex flex-1 flex-col gap-1">
+        <span class="text-sm font-medium text-ink-gray-8">{{ __('Drafting is currently unavailable') }}</span>
+        <span class="text-xs text-ink-gray-6">{{ brainBlockReason }}</span>
+        <div class="mt-1 flex gap-2">
+          <Button variant="subtle" size="sm" :label="__('Configure model')" @click="openModelSettings" />
+        </div>
+      </div>
+    </div>
+
     <!-- Score Badge -->
     <div v-if="score !== null" class="mx-4 sm:mx-10">
       <div class="flex items-center gap-4 rounded-xl p-4" :class="scoreBgClass">
@@ -322,10 +356,21 @@ const props = defineProps({
   leadId: { type: String, required: true },
 })
 
+const emit = defineEmits(['open-model-settings'])
+
+function openModelSettings() {
+  emit('open-model-settings')
+}
+
 const enriching = ref(false)
 const approving = ref(false)
 const triaging = ref(false)
 const draftCommName = ref(null)  // Communication name of the last brain-produced draft
+
+// ── LLM brain status (drives the active-model chip + honest 402/no-provider state) ──
+const brainStatus = ref(null)      // { ok, llm_provider, backend, detail }
+const brainBlocked = ref(false)    // true after a 402 / no-provider draft attempt
+const brainBlockReason = ref('')   // human-readable reason shown in the blocked banner
 
 // ── NYX Tasks (typed lead/deal links + configurable conversion) ──────────────
 const tasks = ref([])
@@ -512,11 +557,41 @@ function formatKey(key) {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
-const EAIA_URL = window.nyx_config?.eaia_url || 'http://localhost:8002'
-
 const enrichResource = createResource({
   url: 'crm.api.enrichment.enrich_lead_email',
   makeParams: () => ({ lead_name: props.leadId, write: true }),
+})
+
+// Truthful brain/provider status so the user sees which model will run (and
+// whether one is configured at all) before clicking Triage & Draft.
+const brainStatusResource = createResource({
+  url: 'crm.api.nyx_email_brain.brain_status',
+  onSuccess: (data) => {
+    brainStatus.value = data || null
+    // If the brain reports no working provider, pre-arm the blocked state so the
+    // user is warned before spending a click.
+    if (data && data.ok === false) {
+      brainBlocked.value = true
+      brainBlockReason.value =
+        data.detail || 'No LLM provider is configured for the outreach brain.'
+    } else {
+      brainBlocked.value = false
+      brainBlockReason.value = ''
+    }
+  },
+  onError: () => {
+    // Non-fatal: the chip just won't show. Do not block the tab.
+    brainStatus.value = null
+  },
+})
+
+// Short label for the active-model chip, e.g. "OpenRouter" or "Gemini".
+const modelChipLabel = computed(() => {
+  const p = brainStatus.value?.llm_provider
+  if (!p || p === 'none') return __('No model')
+  if (p === 'openrouter') return 'OpenRouter'
+  if (p === 'gemini') return 'Gemini'
+  return p
 })
 
 // NYX Email Brain (runtime-swappable): on-demand triage -> draft into Human Inbox.
@@ -637,6 +712,7 @@ function isOverdue(task) {
 
 onMounted(() => {
   loadTasks()
+  brainStatusResource.reload()
   convertDefaultResource.submit().then((r) => {
     if (r && r.default_target) convertDefault.value = r.default_target
   }).catch(() => {})
@@ -704,6 +780,10 @@ async function triageAndDraft() {
         text: result.reason || 'No draft was created.',
       })
     } else if (decision === 'no_llm') {
+      // Honest blocked state (persistent banner), not just a transient toast.
+      brainBlocked.value = true
+      brainBlockReason.value =
+        result.error || 'No LLM provider is configured for the outreach brain.'
       toast({ variant: 'error', title: 'No LLM provider configured for the email brain.' })
     } else if (decision === 'draft_failed') {
       toast({ variant: 'error', title: 'Draft generation failed', text: result.error || '' })
@@ -713,9 +793,35 @@ async function triageAndDraft() {
       toast({ variant: 'info', title: `Triage result: ${decision || 'unknown'}` })
     }
   } catch (err) {
-    toast({ variant: 'error', title: `Triage error: ${err.message || err}` })
+    // A 402 from the LLM provider (no credits) or a provider outage lands here.
+    // Show a persistent, honest blocked banner instead of a vanishing toast.
+    // frappe-ui errors expose { exc_type, messages: [...] }; there is no HTTP
+    // status field, so we scan the server messages + exc_type + message text.
+    const parts = [
+      err?.exc_type || '',
+      ...(Array.isArray(err?.messages) ? err.messages : []),
+      err?.message || '',
+      String(err || ''),
+    ]
+    const blob = parts.join(' ')
+    const isPayment = /402|payment required|insufficient|credit|quota|billing/i.test(blob)
+    const msg = (Array.isArray(err?.messages) && err.messages[0]) || err?.message || String(err)
+    if (isPayment) {
+      brainBlocked.value = true
+      brainBlockReason.value =
+        'The configured model has no credits (HTTP 402). Drafting is unavailable until a provider with credits is set.'
+      toast({
+        variant: 'error',
+        title: 'Model has no credits',
+        text: 'Configure a provider/model with credits to draft outreach.',
+      })
+    } else {
+      toast({ variant: 'error', title: `Triage error: ${msg}` })
+    }
   } finally {
     triaging.value = false
+    // Refresh status so the chip reflects reality after an attempt.
+    brainStatusResource.reload()
   }
 }
 

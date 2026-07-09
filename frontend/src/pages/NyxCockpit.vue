@@ -15,6 +15,10 @@
         >
           {{ brainOk ? '● ' + __('Brain') + ': ' + brainProvider : '○ ' + __('Brain offline') }}
         </span>
+        <Button variant="subtle" @click="showModelSettings = true">
+          <template #prefix><LucideSettings2 class="h-4 w-4" /></template>
+          {{ __('Model') }}
+        </Button>
         <Button variant="subtle" @click="reloadAll" :loading="dash.loading || pipeline.loading">
           <template #prefix><LucideRefreshCw class="h-4 w-4" /></template>
           {{ __('Refresh') }}
@@ -205,6 +209,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Model settings modal -->
+    <NyxModelSettingsModal v-model="showModelSettings" @saved="onModelSaved" />
   </div>
 </template>
 
@@ -217,10 +224,16 @@ import LucideMailPlus from '~icons/lucide/mail-plus'
 import LucideBuilding2 from '~icons/lucide/building-2'
 import LucideUpload from '~icons/lucide/upload'
 import LucideMessageSquare from '~icons/lucide/message-square'
+import LucideSettings2 from '~icons/lucide/settings-2'
 import LucideX from '~icons/lucide/x'
+import NyxModelSettingsModal from '@/components/Modals/NyxModelSettingsModal.vue'
 
 const router = useRouter()
 const triageLimit = 10
+
+// Model settings modal
+const showModelSettings = ref(false)
+function onModelSaved() { brain.reload() }
 
 // ---- Brain status ----
 const brainOk = ref(false)
@@ -344,11 +357,29 @@ function goToLead(id) { router.push(`/leads/${id}`) }
 // ---- Batch triage ----
 const batchTriage = createResource({
   url: 'crm.api.nyx_email_brain.batch_triage_and_draft',
-  onSuccess(d) { toast.success(__('Queued') + ' ' + (d?.queued_count ?? '') + ' ' + __('drafts')); counts.reload() },
+  onSuccess(d) {
+    const queued = d?.queued_count ?? 0
+    const skipped = d?.skipped_existing_draft ?? 0
+    // Honest: batch_triage_and_draft ENQUEUES background LLM jobs — it does not
+    // create drafts synchronously. If no working model, those jobs will fail.
+    if (!brainOk.value) {
+      toast.warning(
+        __('Queued {0} draft job(s) — but no working model is configured; these will fail until a provider with credits is set (Configure model).', [queued]),
+      )
+    } else {
+      toast.success(
+        __('Queued {0} draft job(s). Drafts appear in the Human Inbox as they finish ({1} skipped, already had a draft).', [queued, skipped]),
+      )
+    }
+    counts.reload()
+  },
   onError(err) { toast.error(__('Batch failed') + ': ' + (err?.messages?.[0] || err)) },
 })
 function runBatchTriage() {
-  if (!window.confirm(__('Draft outreach emails for the top') + ' ' + triageLimit + ' ' + __('prospects with valid emails?'))) return
+  const warn = brainOk.value
+    ? __('Queue background draft jobs for the top {0} prospects with valid emails?', [triageLimit])
+    : __('No working model is configured, so these jobs will fail. Queue them anyway for the top {0} prospects?', [triageLimit])
+  if (!window.confirm(warn)) return
   batchTriage.submit({ limit: triageLimit, only_with_email: 1 })
 }
 

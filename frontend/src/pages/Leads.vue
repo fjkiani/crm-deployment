@@ -8,6 +8,27 @@
         v-if="leadsListView?.customListActions"
         :actions="leadsListView.customListActions"
       />
+      <Tooltip
+        :text="
+          selectedLeads.length
+            ? __('Queue background AI draft jobs for the {0} selected lead(s)', [selectedLeads.length])
+            : __('Select one or more leads to queue outreach drafts')
+        "
+      >
+        <Button
+          variant="subtle"
+          :label="
+            selectedLeads.length
+              ? __('Queue drafts ({0})', [selectedLeads.length])
+              : __('Queue drafts')
+          "
+          iconLeft="edit"
+          class="mr-2"
+          :loading="queueingDrafts"
+          :disabled="!selectedLeads.length || queueingDrafts"
+          @click="queueDraftsForSelected"
+        />
+      </Tooltip>
       <Button
         variant="subtle"
         :label="__('Upload CSV')"
@@ -256,7 +277,10 @@
     @applyLikeFilter="(data) => viewControls.applyLikeFilter(data)"
     @likeDoc="(data) => viewControls.likeDoc(data)"
     @selectionsChanged="
-      (selections) => viewControls.updateSelections(selections)
+      (selections) => {
+        viewControls.updateSelections(selections)
+        onSelectionsChanged(selections)
+      }
     "
   />
   <div v-else-if="leads.data" class="flex h-full items-center justify-center">
@@ -319,8 +343,8 @@ import { usersStore } from '@/stores/users'
 import { statusesStore } from '@/stores/statuses'
 import { callEnabled } from '@/composables/settings'
 import { formatDate, timeAgo, website, formatTime } from '@/utils'
-import { Avatar, Tooltip, Dropdown } from 'frappe-ui'
-import { useRoute } from 'vue-router'
+import { Avatar, Tooltip, Dropdown, createResource, toast } from 'frappe-ui'
+import { useRoute, useRouter } from 'vue-router'
 import { ref, computed, reactive, h } from 'vue'
 
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
@@ -330,10 +354,95 @@ const { getUser } = usersStore()
 const { getLeadStatus } = statusesStore()
 
 const route = useRoute()
+const router = useRouter()
 
 const leadsListView = ref(null)
 const showLeadModal = ref(false)
 const showUploadModal = ref(false)
+
+// ── Outreach (additive) ──────────────────────────────────────────────────────
+// Local capture of the standard list's selection so we can offer a bulk
+// "Queue drafts" action WITHOUT modifying ViewControls / LeadsListView.
+const selectedLeads = ref([])
+const queueingDrafts = ref(false)
+
+function onSelectionsChanged(selections) {
+  // selections is a Set of lead names from the standard list view.
+  try {
+    selectedLeads.value = Array.from(selections || [])
+  } catch (e) {
+    selectedLeads.value = []
+  }
+}
+
+// Deep-link a single lead straight to its Nyx outreach tab. The lead detail's
+// tab manager is hash-driven (#nyx), so this lands directly on the Nyx tab with
+// no extra Lead.vue logic required.
+function openOutreach(itemName) {
+  router.push({ name: 'Lead', params: { leadId: itemName }, hash: '#nyx' })
+}
+
+// Truthful provider status so we can warn BEFORE queuing jobs that would fail.
+const brainStatusResource = createResource({
+  url: 'crm.api.nyx_email_brain.brain_status',
+})
+const batchDraftResource = createResource({
+  url: 'crm.api.nyx_email_brain.batch_triage_and_draft',
+})
+
+async function queueDraftsForSelected() {
+  const names = selectedLeads.value
+  const count = names.length
+  if (!count) {
+    toast({ variant: 'info', title: __('Select one or more leads first.') })
+    return
+  }
+  queueingDrafts.value = true
+  try {
+    // Check the brain first so we are honest about whether jobs will succeed.
+    // Use .submit() (returns the resolved payload) rather than .fetch().
+    let status = null
+    try {
+      status = await brainStatusResource.submit()
+    } catch (e) {
+      status = null
+    }
+    const workingModel = status && status.ok === true
+
+    // The batch endpoint enqueues up to `limit` LLM jobs (server clamps 1..50).
+    // It does NOT accept an explicit name list, so we queue the top `count`
+    // candidates by the server's own ordering and say so plainly.
+    const res =
+      (await batchDraftResource.submit({ limit: Math.min(count, 50), only_with_email: 1 })) || {}
+    const queued = res.queued_count ?? 0
+    const skipped = res.skipped_existing_draft ?? 0
+
+    if (!workingModel) {
+      // Honest: jobs were queued but will fail until a working model is set.
+      toast({
+        variant: 'warning',
+        title: __('Queued {0} draft job(s) — but no working model', [queued]),
+        text: __(
+          'These jobs will fail until an LLM provider with credits is configured (see Nyx → Model settings). Skipped {0} lead(s) with an existing draft.',
+          [skipped],
+        ),
+      })
+    } else {
+      toast({
+        variant: 'success',
+        title: __('Queued {0} draft job(s)', [queued]),
+        text: __(
+          'Drafts are generated in the background; review them in the Human Inbox. Skipped {0} lead(s) that already had a draft.',
+          [skipped],
+        ),
+      })
+    }
+  } catch (err) {
+    toast({ variant: 'error', title: __('Could not queue drafts'), text: err?.messages?.[0] || err?.message || String(err) })
+  } finally {
+    queueingDrafts.value = false
+  }
+}
 
 const defaults = reactive({})
 
@@ -537,6 +646,11 @@ function onNewClick(column) {
 function actions(itemName) {
   let mobile_no = getRow(itemName, 'mobile_no')?.label || ''
   let actions = [
+    {
+      icon: h(EmailAtIcon, { class: 'h-4 w-4' }),
+      label: __('Outreach'),
+      onClick: () => openOutreach(itemName),
+    },
     {
       icon: h(PhoneIcon, { class: 'h-4 w-4' }),
       label: __('Make a Call'),

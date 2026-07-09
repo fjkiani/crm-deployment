@@ -1,0 +1,141 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-09 00:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_provider",
+  "llm_provider",
+  "column_break_prov",
+  "openrouter_model",
+  "section_keys",
+  "openrouter_api_key",
+  "column_break_keys",
+  "google_api_key",
+  "section_advanced",
+  "eaia_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_provider",
+   "fieldtype": "Section Break",
+   "label": "Active LLM Provider"
+  },
+  {
+   "default": "openrouter",
+   "description": "Which LLM backend the Nyx outreach brain uses for drafting.",
+   "fieldname": "llm_provider",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Provider",
+   "options": "openrouter\ngemini"
+  },
+  {
+   "fieldname": "column_break_prov",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "google/gemma-3-27b-it",
+   "depends_on": "eval: doc.llm_provider == 'openrouter'",
+   "description": "OpenRouter model id, e.g. google/gemma-3-27b-it (reliable), nvidia/llama-3.1-nemotron-70b-instruct, openai/gpt-oss-20b, meta-llama/llama-3.3-70b-instruct.",
+   "fieldname": "openrouter_model",
+   "fieldtype": "Data",
+   "label": "OpenRouter Model"
+  },
+  {
+   "fieldname": "section_keys",
+   "fieldtype": "Section Break",
+   "label": "API Keys"
+  },
+  {
+   "depends_on": "eval: doc.llm_provider == 'openrouter'",
+   "description": "OpenRouter API key (sk-or-...). Stored encrypted; never returned to the browser.",
+   "fieldname": "openrouter_api_key",
+   "fieldtype": "Password",
+   "label": "OpenRouter API Key",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "column_break_keys",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.llm_provider == 'gemini'",
+   "description": "Google/Gemini API key. Stored encrypted; never returned to the browser.",
+   "fieldname": "google_api_key",
+   "fieldtype": "Password",
+   "label": "Google / Gemini API Key",
+   "permlevel": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_advanced",
+   "fieldtype": "Section Break",
+   "label": "Advanced"
+  },
+  {
+   "description": "Optional. URL of an external EAIA LangGraph service. Leave blank to use the Frappe-native brain.",
+   "fieldname": "eaia_url",
+   "fieldtype": "Data",
+   "label": "EAIA URL"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Nyx Brain Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "email": 1,
+   "permlevel": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "email": 1,
+   "permlevel": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

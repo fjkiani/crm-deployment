@@ -36,21 +36,62 @@ from frappe import _
 DEFAULT_BACKEND = "frappe"
 
 
-def _get_conf(*names, default=None):
-    """Resolve a config value from site_config, env, or CRM Global Settings.
+# Password-type fields on Nyx Brain Settings that must be read via get_password()
+# (stored encrypted). Any other field is read as a plain attribute.
+_NBS_PASSWORD_FIELDS = {"openrouter_api_key", "google_api_key"}
 
-    Site config wins over env so Frappe Cloud Site Config edits take effect even
-    when the bench carries a stale OPENROUTER_API_KEY (or similar) in env.
+
+def _nyx_brain_settings_value(name: str):
+    """Read a single value from the Nyx Brain Settings single doctype, or None.
+
+    This is the highest-priority config source so a change made from the CRM UI
+    (crm.api.nyx_email_brain.set_brain_settings) wins over stale env / site_config
+    and persists in the DB across Frappe Cloud redeploys.
     """
+    try:
+        if not frappe.db.exists("DocType", "Nyx Brain Settings"):
+            return None
+        doc = frappe.get_single("Nyx Brain Settings")
+        if not hasattr(doc, name):
+            return None
+        if name in _NBS_PASSWORD_FIELDS:
+            # get_password decrypts; returns None/"" when unset.
+            try:
+                v = doc.get_password(name, raise_exception=False)
+            except Exception:
+                v = None
+            return v or None
+        v = getattr(doc, name)
+        return v or None
+    except Exception:
+        return None
+
+
+def _get_conf(*names, default=None):
+    """Resolve a config value from Nyx Brain Settings, site_config, env, or CRM
+    Global Settings — in that priority order.
+
+    Nyx Brain Settings (DB, UI-editable) wins so provider/model/key changes made
+    in the CRM take effect immediately and survive redeploys. Site config then
+    wins over env so Frappe Cloud Site Config edits take effect even when the
+    bench carries a stale OPENROUTER_API_KEY (or similar) in env.
+    """
+    # 1) Nyx Brain Settings single doctype (UI-editable, DB-persisted).
+    for n in names:
+        v = _nyx_brain_settings_value(n.lower())
+        if v:
+            return v
+    # 2) site_config.json
     for n in names:
         v = frappe.conf.get(n.lower())
         if v:
             return v
+    # 3) environment
     for n in names:
         v = os.getenv(n.upper())
         if v:
             return v
-    # CRM Global Settings single doctype (native, editable from /app)
+    # 4) CRM Global Settings single doctype (native, editable from /app)
     try:
         if frappe.db.exists("DocType", "CRM Global Settings"):
             gs = frappe.get_single("CRM Global Settings")
@@ -91,6 +132,124 @@ def brain_status() -> dict:
     out["detail"] = "Frappe-native brain ready." if llm else \
         "No LLM provider configured (set openrouter_api_key or google_api_key)."
     out["llm_provider"] = _active_llm_provider()
+    return out
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# LLM provider/model settings (UI-editable, DB-persisted via Nyx Brain Settings)
+# ────────────────────────────────────────────────────────────────────────────
+
+# Static catalog surfaced to the settings UI. OpenRouter ids are free-text too,
+# but these are the vetted defaults. gemma-3-27b-it is the reliable default;
+# gpt-oss-20b:free hits the free-model daily rate limit (429) on shared keys.
+_PROVIDER_CATALOG = {
+    "openrouter": {
+        "label": "OpenRouter",
+        "key_field": "openrouter_api_key",
+        "key_hint": "sk-or-...",
+        "models": [
+            {"id": "google/gemma-3-27b-it", "label": "Gemma 3 27B (recommended, reliable)"},
+            {"id": "nvidia/llama-3.1-nemotron-70b-instruct", "label": "Nemotron 70B (NVIDIA)"},
+            {"id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B"},
+            {"id": "meta-llama/llama-3.3-70b-instruct", "label": "Llama 3.3 70B"},
+        ],
+    },
+    "gemini": {
+        "label": "Google Gemini",
+        "key_field": "google_api_key",
+        "key_hint": "AIza...",
+        "models": [
+            {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash"},
+            {"id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro"},
+        ],
+    },
+    # Documented follow-up seam — not yet wired in the backend.
+    "grok": {
+        "label": "xAI Grok (coming soon)",
+        "key_field": "grok_api_key",
+        "key_hint": "xai-...",
+        "models": [],
+        "disabled": True,
+        "note": "Requires a backend provider seam (not yet implemented).",
+    },
+}
+
+_ALLOWED_WRITE_PROVIDERS = {"openrouter", "gemini"}
+
+
+def _require_brain_settings_perm():
+    """Only managers may read/write LLM provider settings (keys are sensitive)."""
+    roles = set(frappe.get_roles())
+    if not ({"System Manager", "Sales Manager"} & roles):
+        frappe.throw(
+            _("You do not have permission to view or change Nyx model settings."),
+            frappe.PermissionError,
+        )
+
+
+@frappe.whitelist()
+def get_brain_settings() -> dict:
+    """Return the current provider/model + whether keys are set (never the keys
+    themselves) plus the provider catalog for the settings UI. Manager-gated."""
+    _require_brain_settings_perm()
+    provider = _active_llm_provider()  # what will actually run right now
+    configured_provider = (_get_conf("llm_provider", default="") or "").strip().lower()
+    model = _get_conf("openrouter_enrichment_model", "openrouter_model",
+                      default="google/gemma-3-27b-it")
+    return {
+        "ok": True,
+        "active_provider": provider,               # resolved (by key presence)
+        "configured_provider": configured_provider,  # explicit setting, if any
+        "openrouter_model": model,
+        "has_openrouter_key": bool(_get_conf("openrouter_api_key")),
+        "has_google_key": bool(_get_conf("google_api_key", "gemini_api_key")),
+        "eaia_url": _get_conf("eaia_url", default="") or "",
+        "backend": get_backend(),
+        "provider_catalog": _PROVIDER_CATALOG,
+    }
+
+
+@frappe.whitelist()
+def set_brain_settings(llm_provider: str | None = None,
+                       openrouter_model: str | None = None,
+                       openrouter_api_key: str | None = None,
+                       google_api_key: str | None = None,
+                       eaia_url: str | None = None) -> dict:
+    """Write LLM provider settings into the Nyx Brain Settings single doctype.
+
+    Blank/omitted values are LEFT UNCHANGED (so editing only the model does not
+    wipe an existing key). Keys are stored encrypted (Password fieldtype) and are
+    never echoed back. Manager-gated. Returns the same shape as get_brain_settings.
+    """
+    _require_brain_settings_perm()
+
+    doc = frappe.get_single("Nyx Brain Settings")
+
+    if llm_provider is not None:
+        p = (llm_provider or "").strip().lower()
+        if p and p not in _ALLOWED_WRITE_PROVIDERS:
+            frappe.throw(_("Unsupported provider: {0}").format(p))
+        if p:
+            doc.llm_provider = p
+
+    # Plain (non-secret) fields: empty string means "clear", None means "leave".
+    if openrouter_model is not None and openrouter_model.strip():
+        doc.openrouter_model = openrouter_model.strip()
+    if eaia_url is not None:
+        doc.eaia_url = eaia_url.strip()
+
+    # Secret fields: only overwrite when a non-empty value is provided.
+    if openrouter_api_key is not None and openrouter_api_key.strip():
+        doc.openrouter_api_key = openrouter_api_key.strip()
+    if google_api_key is not None and google_api_key.strip():
+        doc.google_api_key = google_api_key.strip()
+
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    # Return fresh status (also re-reads via _get_conf so caller sees the effect).
+    out = get_brain_settings()
+    out["saved"] = True
     return out
 
 
@@ -415,6 +574,14 @@ def _lead_context(lead, incoming: str | None) -> str:
 # ────────────────────────────────────────────────────────────────────────────
 
 def _active_llm_provider() -> str:
+    # An explicit UI setting wins IF its key is actually present (so the user's
+    # provider choice is authoritative even when both keys exist).
+    explicit = (_get_conf("llm_provider", default="") or "").strip().lower()
+    if explicit == "openrouter" and _get_conf("openrouter_api_key"):
+        return "openrouter"
+    if explicit == "gemini" and _get_conf("google_api_key", "gemini_api_key"):
+        return "gemini"
+    # Backward-compatible fallback: resolve by key presence (no explicit setting).
     if _get_conf("openrouter_api_key"):
         return "openrouter"
     if _get_conf("google_api_key", "gemini_api_key"):
