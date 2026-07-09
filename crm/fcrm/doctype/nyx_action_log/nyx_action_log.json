@@ -1,0 +1,152 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-07-09 00:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "actor",
+  "subject_type",
+  "subject_key",
+  "tool",
+  "status",
+  "column_break_main",
+  "dry_run",
+  "writes",
+  "reversible",
+  "timestamp",
+  "section_break_detail",
+  "rationale",
+  "params_json",
+  "result_json",
+  "undo_data_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "actor",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Actor"
+  },
+  {
+   "fieldname": "subject_type",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Subject Type"
+  },
+  {
+   "fieldname": "subject_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Subject Key"
+  },
+  {
+   "fieldname": "tool",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tool"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "proposed\ndry_run\nexecuted\nundone\nblocked\nerror"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "dry_run",
+   "fieldtype": "Check",
+   "label": "Dry Run"
+  },
+  {
+   "default": "0",
+   "fieldname": "writes",
+   "fieldtype": "Check",
+   "label": "Writes"
+  },
+  {
+   "default": "0",
+   "fieldname": "reversible",
+   "fieldtype": "Check",
+   "label": "Reversible"
+  },
+  {
+   "fieldname": "timestamp",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Timestamp"
+  },
+  {
+   "fieldname": "section_break_detail",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "rationale",
+   "fieldtype": "Small Text",
+   "label": "Rationale"
+  },
+  {
+   "fieldname": "params_json",
+   "fieldtype": "Long Text",
+   "label": "Params JSON"
+  },
+  {
+   "fieldname": "result_json",
+   "fieldtype": "Long Text",
+   "label": "Result JSON"
+  },
+  {
+   "description": "Pre-execution state captured for undo of reversible actions",
+   "fieldname": "undo_data_json",
+   "fieldtype": "Long Text",
+   "label": "Undo Data JSON"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Nyx Action Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "timestamp",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

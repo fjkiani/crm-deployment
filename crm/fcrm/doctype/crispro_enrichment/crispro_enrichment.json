@@ -1,0 +1,149 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-09 00:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "subject_type",
+  "subject_key",
+  "company",
+  "person_name",
+  "status",
+  "column_break_main",
+  "fetched_at",
+  "expires_at",
+  "cost_note",
+  "section_break_payload",
+  "signals_json",
+  "fit_json",
+  "sources_json",
+  "payload"
+ ],
+ "fields": [
+  {
+   "fieldname": "subject_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Subject Type",
+   "options": "Company\nPerson",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subject_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Subject Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Company"
+  },
+  {
+   "fieldname": "person_name",
+   "fieldtype": "Data",
+   "label": "Person Name"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "ok\npartial\nquarantine\nerror"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "fetched_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Fetched At"
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At"
+  },
+  {
+   "fieldname": "cost_note",
+   "fieldtype": "Data",
+   "label": "Cost Note"
+  },
+  {
+   "fieldname": "section_break_payload",
+   "fieldtype": "Section Break",
+   "label": "Payload"
+  },
+  {
+   "description": "Distilled oncology signals (JSON array)",
+   "fieldname": "signals_json",
+   "fieldtype": "Long Text",
+   "label": "Signals JSON"
+  },
+  {
+   "description": "CrisPRO fit mapping (JSON)",
+   "fieldname": "fit_json",
+   "fieldtype": "Long Text",
+   "label": "Fit JSON"
+  },
+  {
+   "description": "Source URLs (JSON array)",
+   "fieldname": "sources_json",
+   "fieldtype": "Long Text",
+   "label": "Sources JSON"
+  },
+  {
+   "description": "Full raw source envelopes (JSON)",
+   "fieldname": "payload",
+   "fieldtype": "Long Text",
+   "label": "Payload"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "CrisPRO Enrichment",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

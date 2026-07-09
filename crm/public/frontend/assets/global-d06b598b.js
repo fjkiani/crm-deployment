@@ -1,1 +1,0 @@
-import{ap as c,au as s}from"./index-06c8fc27.js";const g=c("crm-global",()=>{const e=s(),{$dialog:a,$socket:l}=e.appContext.config.globalProperties;let o=()=>{};function n(t){o=t}function r(t){o(t)}return{$dialog:a,$socket:l,makeCall:r,setMakeCall:n}});export{g};

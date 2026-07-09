@@ -76,7 +76,13 @@
                 <div class="min-w-0">
                   <div class="flex items-center gap-1.5">
                     <span class="truncate font-medium text-ink-gray-8">{{ c.name || c.prospect }}</span>
-                    <span v-if="c.engagement_slug" class="shrink-0 rounded bg-surface-blue-2 px-1 py-px text-[9px] font-medium text-ink-blue-6" :title="__('Linked to industry engagement')">◆</span>
+                    <router-link
+                      v-if="c.engagement_slug"
+                      :to="`/industry/${c.engagement_slug}`"
+                      class="shrink-0 rounded bg-surface-blue-2 px-1 py-px text-[9px] font-medium text-ink-blue-6 hover:bg-surface-blue-3"
+                      :title="__('Open industry engagement')"
+                      @click.stop
+                    >◆ {{ __('engagement') }}</router-link>
                     <span v-if="c.needs_backfill" class="shrink-0 rounded bg-surface-amber-2 px-1 py-px text-[9px] font-medium text-ink-amber-3" :title="__('Email missing or placeholder — needs backfill')">! {{ __('backfill') }}</span>
                   </div>
                   <div class="truncate text-xs text-ink-gray-4">{{ c.email || __('no email') }}</div>

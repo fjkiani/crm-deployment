@@ -29,6 +29,11 @@
         <LucideChevronDown class="h-3.5 w-3.5 transition-transform" :class="nyxOpen ? 'rotate-180' : ''" />
       </button>
       <div v-if="nyxOpen" class="flex items-center gap-1.5">
+        <span
+          v-if="!nyxEnabled"
+          class="rounded-full bg-surface-red-2 px-2 py-0.5 text-[10px] font-medium text-ink-red-7"
+          :title="__('NYX execution is halted (kill switch on). You can still create tasks manually.')"
+        >○ {{ __('NYX halted') }}</span>
         <button
           v-for="m in moods"
           :key="m.value"
@@ -286,6 +291,10 @@ const suggestRes = createResource({
 })
 const suggestions = computed(() => suggestRes.data?.suggestions || [])
 function setMood(v) { mood.value = v; suggestRes.reload() }
+
+// NYX execution (kill switch) state — surfaced so the suggestions strip reflects it.
+const nyxStatus = createResource({ url: 'crm.api.nyx_agent.nyx_execution_status', auto: true })
+const nyxEnabled = computed(() => nyxStatus.data?.enabled ?? true)
 
 const makingIndex = ref(-1)
 const createTaskRes = createResource({ url: 'crm.api.tasks.create_task' })

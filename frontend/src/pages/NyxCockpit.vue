@@ -15,6 +15,13 @@
         >
           {{ brainOk ? '● ' + __('Brain') + ': ' + brainProvider : '○ ' + __('Brain offline') }}
         </span>
+        <span
+          class="rounded-full px-2.5 py-1 text-xs font-medium"
+          :class="nyxEnabled ? 'bg-surface-green-2 text-ink-green-3' : 'bg-surface-red-2 text-ink-red-7'"
+          :title="nyxEnabled ? __('NYX may execute human-gated actions') : __('NYX execution halted (kill switch on)')"
+        >
+          {{ nyxEnabled ? '● ' + __('NYX live') : '○ ' + __('NYX halted') }}
+        </span>
         <Button variant="subtle" @click="showModelSettings = true">
           <template #prefix><LucideSettings2 class="h-4 w-4" /></template>
           {{ __('Model') }}
@@ -260,6 +267,10 @@ const brain = createResource({
   },
   onError() { brainOk.value = false },
 })
+
+// ---- NYX execution (kill switch) state ----
+const nyxStatus = createResource({ url: 'crm.api.nyx_agent.nyx_execution_status', auto: true })
+const nyxEnabled = computed(() => nyxStatus.data?.enabled ?? true)
 
 // ---- Dashboard metrics (prospect totals + tiers) ----
 const dash = createResource({ url: 'crm.api.leadgen.get_dashboard_metrics', auto: true })
