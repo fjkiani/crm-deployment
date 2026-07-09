@@ -16,6 +16,56 @@
       />
     </template>
   </LayoutHeader>
+
+  <!-- Nyx suggestions strip: next-best actions from live pipeline state.
+       Additive — sits above the stock CRM Task list/kanban and touches none of
+       it. Recommendations WRITE NOTHING until the human clicks "Make a task". -->
+  <div class="border-b border-ink-gray-2 bg-surface-gray-1 px-3 py-2 sm:px-5">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <button class="flex items-center gap-1.5 text-sm font-medium text-ink-gray-8" @click="nyxOpen = !nyxOpen">
+        <LucideSparkles class="h-4 w-4 text-ink-blue-5" />
+        {{ __('Nyx suggestions') }}
+        <span v-if="suggestions.length" class="rounded-full bg-surface-blue-2 px-1.5 text-[10px] font-semibold text-ink-blue-6">{{ suggestions.length }}</span>
+        <LucideChevronDown class="h-3.5 w-3.5 transition-transform" :class="nyxOpen ? 'rotate-180' : ''" />
+      </button>
+      <div v-if="nyxOpen" class="flex items-center gap-1.5">
+        <button
+          v-for="m in moods"
+          :key="m.value"
+          class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+          :class="mood === m.value ? 'bg-ink-gray-9 text-surface-white' : 'bg-surface-gray-3 text-ink-gray-7 hover:bg-surface-gray-4'"
+          @click="setMood(m.value)"
+        >{{ m.label }}</button>
+        <Button variant="ghost" :loading="suggestRes.loading" @click="suggestRes.reload()">
+          <template #prefix><LucideRefreshCw class="h-3.5 w-3.5" /></template>
+        </Button>
+      </div>
+    </div>
+
+    <div v-if="nyxOpen" class="mt-2">
+      <div v-if="suggestRes.loading && !suggestions.length" class="py-2 text-xs text-ink-gray-5">{{ __('Nyx is reviewing your pipeline…') }}</div>
+      <div v-else-if="!suggestions.length" class="py-2 text-xs text-ink-gray-4">{{ __('Nothing pressing right now — pipeline looks handled.') }}</div>
+      <div v-else class="flex gap-2 overflow-x-auto pb-1">
+        <div
+          v-for="(s, i) in suggestions"
+          :key="i"
+          class="min-w-[260px] max-w-[320px] shrink-0 rounded-lg border border-ink-gray-2 bg-surface-white p-2.5"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold" :class="prioClass(s.priority)">{{ s.priority }}</span>
+            <span class="text-[10px] text-ink-gray-4">{{ kindLabel(s.kind) }}</span>
+          </div>
+          <div class="mt-1 text-xs font-medium text-ink-gray-9">{{ s.title }}</div>
+          <div class="mt-0.5 line-clamp-2 text-[11px] text-ink-gray-5">{{ s.detail }}</div>
+          <div class="mt-2 flex gap-1.5">
+            <Button variant="solid" size="sm" :loading="makingIndex === i" @click="makeTask(s, i)">{{ __('Make a task') }}</Button>
+            <Button variant="subtle" size="sm" @click="runSuggestion(s)">{{ actionVerb(s.action) }}</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <ViewControls
     ref="viewControls"
     v-model="tasks"
@@ -127,11 +177,7 @@
             class="-ml-2"
             variant="ghost"
             size="sm"
-            :label="
-              getRow(itemName, 'reference_doctype').label == 'CRM Deal'
-                ? __('Deal')
-                : __('Lead')
-            "
+            :label="refLabel(getRow(itemName, 'reference_doctype').label)"
             :iconRight="ArrowUpRightIcon"
             @click.stop="
               redirect(
@@ -212,15 +258,93 @@ import TaskModal from '@/components/Modals/TaskModal.vue'
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
-import { Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
+import { Tooltip, Avatar, TextEditor, Dropdown, call, toast, createResource } from 'frappe-ui'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import LucideSparkles from '~icons/lucide/sparkles'
+import LucideRefreshCw from '~icons/lucide/refresh-cw'
+import LucideChevronDown from '~icons/lucide/chevron-down'
 
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
   getMeta('CRM Task')
 const { getUser } = usersStore()
 
 const router = useRouter()
+
+// ---- Nyx suggestions strip -------------------------------------------------
+const nyxOpen = ref(true)
+const mood = ref('')
+const moods = [
+  { value: '', label: __('Balanced') },
+  { value: 'aggressive', label: __('Hunt') },
+  { value: 'cleanup', label: __('Cleanup') },
+]
+const suggestRes = createResource({
+  url: 'crm.api.nyx_campaigns.suggest_tasks',
+  auto: true,
+  makeParams: () => ({ mood: mood.value || undefined, limit: 6 }),
+})
+const suggestions = computed(() => suggestRes.data?.suggestions || [])
+function setMood(v) { mood.value = v; suggestRes.reload() }
+
+const makingIndex = ref(-1)
+const createTaskRes = createResource({ url: 'crm.api.tasks.create_task' })
+function makeTask(s, i) {
+  // Turn a suggestion into a real CRM Task. If it references a campaign
+  // (Outreach Sequence), link the task to it so it deep-links from the list.
+  makingIndex.value = i
+  const seq = s.action === 'open_campaign' ? s.action_params?.sequence : null
+  createTaskRes.submit(
+    {
+      title: s.title,
+      priority: s.priority || 'Medium',
+      description: s.detail || '',
+      reference_doctype: seq ? 'Outreach Sequence' : undefined,
+      reference_docname: seq || undefined,
+    },
+    {
+      onSuccess() {
+        toast.success(__('Task created from Nyx suggestion.'))
+        makingIndex.value = -1
+        // Refresh the list so the new task appears. ViewControls binds its list
+        // resource into the `tasks` model, so reloading it re-fetches the list.
+        tasks.value?.reload?.()
+      },
+      onError() { makingIndex.value = -1; toast.error(__('Could not create the task.')) },
+    },
+  )
+}
+function runSuggestion(s) {
+  // Secondary action: jump to the relevant surface instead of making a task.
+  if (s.action === 'plan_campaign') {
+    router.push({ name: 'Nyx', query: { plan_tier: s.action_params?.segment_tier || 'Tier 1' } })
+  } else if (s.action === 'open_inbox') {
+    router.push('/human-inbox').catch(() => router.push('/crm/human-inbox'))
+  } else if (s.action === 'open_campaign') {
+    router.push({ name: 'Nyx', query: { sequence: s.action_params?.sequence } })
+  } else {
+    router.push({ name: 'Nyx' })
+  }
+}
+function actionVerb(a) {
+  return {
+    plan_campaign: __('Plan campaign'),
+    open_inbox: __('Open inbox'),
+    open_campaign: __('View campaign'),
+  }[a] || __('Open Nyx')
+}
+function kindLabel(k) {
+  return {
+    outreach_hightier: __('Outreach'),
+    approve_drafts: __('Drafts'),
+    revive_campaign: __('Stalled'),
+  }[k] || k
+}
+function prioClass(p) {
+  if (p === 'High') return 'bg-surface-red-2 text-ink-red-4'
+  if (p === 'Medium') return 'bg-surface-amber-2 text-ink-amber-3'
+  return 'bg-surface-gray-2 text-ink-gray-6'
+}
 
 const tasksListView = ref(null)
 
@@ -385,14 +509,32 @@ async function deletetask(name) {
   })
 }
 
+function refLabel(doctype) {
+  if (doctype === 'CRM Deal') return __('Deal')
+  if (doctype === 'Outreach Sequence') return __('Campaign')
+  return __('Lead')
+}
 function redirect(doctype, docname) {
   if (!docname) return
-  let name = doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: docname }
-  if (name == 'Deal') {
-    params = { dealId: docname }
+  // Tasks can reference more than Leads/Deals (e.g. Outreach Sequence campaign
+  // tasks are named OS-YYYY-NNNNN). Route by the ACTUAL reference doctype instead
+  // of assuming everything non-Deal is a Lead — that produced "CRM Lead ... not
+  // found" for campaign tasks.
+  if (doctype === 'CRM Deal') {
+    router.push({ name: 'Deal', params: { dealId: docname } })
+  } else if (doctype === 'CRM Lead') {
+    router.push({ name: 'Lead', params: { leadId: docname } })
+  } else if (doctype === 'Outreach Sequence') {
+    // Campaign tasks: open the Nyx hub focused on this sequence.
+    router.push({ name: 'Nyx', query: { sequence: docname } })
+  } else {
+    toast.error(
+      __('This task is linked to a {0} ({1}), which has no dedicated page.', [
+        doctype || __('record'),
+        docname,
+      ]),
+    )
   }
-  router.push({ name: name, params: params })
 }
 
 const openTaskFromURL = () => {
