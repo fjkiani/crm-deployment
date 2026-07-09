@@ -34,6 +34,10 @@
         <option value="">{{ __('All statuses') }}</option>
         <option v-for="s in facetStatuses" :key="s" :value="s">{{ s }}</option>
       </select>
+      <label class="flex cursor-pointer select-none items-center gap-1.5 rounded-md border border-ink-gray-3 bg-surface-white px-2.5 py-1.5 text-sm text-ink-gray-7" :title="__('Show only contacts whose email is missing or a placeholder')">
+        <input v-model="backfillOnly" type="checkbox" class="h-3.5 w-3.5 accent-ink-amber-3" />
+        {{ __('Needs backfill') }}
+      </label>
       <Button variant="solid" @click="applyFilters" :loading="list.loading">{{ __('Apply') }}</Button>
       <Button v-if="hasFilters" variant="subtle" @click="clearFilters">{{ __('Clear') }}</Button>
     </div>
@@ -56,7 +60,9 @@
             <td colspan="6" class="px-3 py-10 text-center text-ink-gray-5">{{ __('Loading contacts…') }}</td>
           </tr>
           <tr v-else-if="!rows.length">
-            <td colspan="6" class="px-3 py-10 text-center text-ink-gray-4">{{ __('No contacts match these filters.') }}</td>
+            <td colspan="6" class="px-3 py-10 text-center text-ink-gray-4">
+              {{ backfillOnly && (list.data?.rows || []).length ? __('No contacts on this page need backfill. Clear the filter or page through more.') : __('No contacts match these filters.') }}
+            </td>
           </tr>
           <tr
             v-for="c in rows"
@@ -99,7 +105,7 @@
     </div>
 
     <!-- Dossier drawer -->
-    <div v-if="dossierOpen" class="fixed inset-0 z-40 flex justify-end" @click.self="dossierOpen = false">
+    <div v-if="dossierOpen" class="fixed inset-0 z-40 flex justify-end" @click.self="closeDossier">
       <div class="absolute inset-0 bg-black/30"></div>
       <div class="relative z-10 flex h-full w-full max-w-md flex-col bg-surface-white shadow-xl">
         <div class="flex items-center justify-between border-b border-ink-gray-2 px-4 py-3">
@@ -107,7 +113,7 @@
             <h3 class="truncate text-sm font-semibold text-ink-gray-9">{{ dossierTitle }}</h3>
             <p class="text-xs text-ink-gray-4">{{ dossierInstitution }}</p>
           </div>
-          <button class="text-ink-gray-5 hover:text-ink-gray-8" @click="dossierOpen = false"><LucideX class="h-5 w-5" /></button>
+          <button class="text-ink-gray-5 hover:text-ink-gray-8" @click="closeDossier"><LucideX class="h-5 w-5" /></button>
         </div>
         <div class="flex-1 overflow-y-auto px-4 py-3">
           <div v-if="dossier.loading" class="py-8 text-center text-sm text-ink-gray-5">{{ __('Loading dossier…') }}</div>
@@ -131,23 +137,25 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { createResource, Button, toast } from 'frappe-ui'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import LucideSearch from '~icons/lucide/search'
 import LucideX from '~icons/lucide/x'
 import EmailAtIcon from '@/components/Icons/EmailAtIcon.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 // ---- Filters / paging state ----
 const searchTerm = ref('')
 const tier = ref('')
 const outreachStatus = ref('')
+const backfillOnly = ref(false)
 const start = ref(0)
 const pageLength = 50
 
-const hasFilters = computed(() => !!(searchTerm.value || tier.value || outreachStatus.value))
+const hasFilters = computed(() => !!(searchTerm.value || tier.value || outreachStatus.value || backfillOnly.value))
 
 // ---- List resource ----
 const list = createResource({
@@ -161,14 +169,17 @@ const list = createResource({
     page_length: pageLength,
   }),
 })
-const rows = computed(() => list.data?.rows || [])
+const rows = computed(() => {
+  const all = list.data?.rows || []
+  return backfillOnly.value ? all.filter((r) => r.needs_backfill) : all
+})
 
 const rangeStart = computed(() => (list.data?.total ? start.value + 1 : 0))
 const rangeEnd = computed(() => start.value + (list.data?.returned ?? 0))
 
 function applyFilters() { start.value = 0; list.reload() }
 function clearFilters() {
-  searchTerm.value = ''; tier.value = ''; outreachStatus.value = ''; start.value = 0; list.reload()
+  searchTerm.value = ''; tier.value = ''; outreachStatus.value = ''; backfillOnly.value = false; start.value = 0; list.reload()
 }
 function nextPage() { start.value += pageLength; list.reload() }
 function prevPage() { start.value = Math.max(0, start.value - pageLength); list.reload() }
@@ -194,7 +205,25 @@ const dossierText = computed(() => {
   if (!d) return ''
   return d.formatted || (typeof d === 'string' ? d : JSON.stringify(d.data || d, null, 2))
 })
+// Row click routes via ?prospect=<id> so the drawer is URL-driven:
+// the address bar changes (it "routes"), the back button closes it, and the
+// view is shareable/deep-linkable. Prospects have no standalone detail page,
+// so a query param is the correct routing primitive here (no 404 target).
 function openDossier(c) {
+  const id = c?.prospect
+  if (!id) return
+  if (route.query.prospect === id) { loadDossier(c); return }
+  router.push({ query: { ...route.query, prospect: id } })
+}
+function closeDossier() {
+  dossierOpen.value = false
+  if (route.query.prospect) {
+    const q = { ...route.query }
+    delete q.prospect
+    router.replace({ query: q })
+  }
+}
+function loadDossier(c) {
   dossierTitle.value = c.name || c.prospect
   dossierInstitution.value = c.institution || ''
   dossierLeadId.value = ''
@@ -207,6 +236,26 @@ function openDossier(c) {
   }
   dossier.submit({ email }).then(() => { dossierLeadId.value = dossier.data?.data?.name || '' })
 }
+// Resolve the ?prospect= id against the currently loaded rows and open the drawer.
+function syncDossierFromRoute() {
+  const id = route.query.prospect
+  if (!id) { dossierOpen.value = false; return }
+  const c = (list.data?.rows || []).find((r) => r.prospect === id)
+  if (c) { loadDossier(c); return }
+  // Deep-linked to a prospect not on the current page. get_dossier resolves by
+  // email/lead_id only (no prospect lookup), so show a graceful prompt instead
+  // of firing an unsupported call.
+  dossierTitle.value = id
+  dossierInstitution.value = ''
+  dossierLeadId.value = ''
+  dossierEngagement.value = ''
+  dossierOpen.value = true
+  dossier.data = { formatted: __('This contact is not on the current page. Use the filters to locate it, then open it from the list to load its dossier.'), data: {} }
+}
+watch(() => route.query.prospect, () => syncDossierFromRoute())
+// When the list finishes loading (e.g. on a deep-link refresh), resolve the drawer.
+watch(() => list.data, () => { if (route.query.prospect && !dossierOpen.value) syncDossierFromRoute() })
+onMounted(() => { if (route.query.prospect) syncDossierFromRoute() })
 function goToLead(id) { router.push(`/leads/${id}`) }
 function openOutreach(id) {
   // Deep-link straight to the lead's Nyx outreach tab (hash-driven tab manager).

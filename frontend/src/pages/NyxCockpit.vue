@@ -184,6 +184,11 @@
       </div>
     </div>
 
+    <!-- ================= Campaign Studio (plan → review → launch + suggestions) ================= -->
+    <div class="mt-6">
+      <NyxCampaignStudio ref="studioRef" :brain-ok="brainOk" :focus-name="focusSequence" :focus-tier="focusTier" @changed="onStudioChanged" />
+    </div>
+
     <!-- Dossier drawer -->
     <div v-if="dossierOpen" class="fixed inset-0 z-40 flex justify-end" @click.self="dossierOpen = false">
       <div class="absolute inset-0 bg-black/30"></div>
@@ -218,7 +223,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { createResource, Button, toast } from 'frappe-ui'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import LucideRefreshCw from '~icons/lucide/refresh-cw'
 import LucideMailPlus from '~icons/lucide/mail-plus'
 import LucideBuilding2 from '~icons/lucide/building-2'
@@ -227,9 +232,17 @@ import LucideMessageSquare from '~icons/lucide/message-square'
 import LucideSettings2 from '~icons/lucide/settings-2'
 import LucideX from '~icons/lucide/x'
 import NyxModelSettingsModal from '@/components/Modals/NyxModelSettingsModal.vue'
+import NyxCampaignStudio from '@/components/NyxCampaignStudio.vue'
 
 const router = useRouter()
+const route = useRoute()
 const triageLimit = 10
+
+// Campaign Studio: ?sequence= deep-link focus (e.g. from a campaign task redirect).
+const studioRef = ref(null)
+const focusSequence = computed(() => route.query.sequence || '')
+const focusTier = computed(() => route.query.plan_tier || '')
+function onStudioChanged() { counts.reload() }
 
 // Model settings modal
 const showModelSettings = ref(false)
