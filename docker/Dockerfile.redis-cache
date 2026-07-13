@@ -1,4 +1,0 @@
-# Render private services expose port 10000 on the private network.
-FROM redis:7-alpine
-EXPOSE 10000
-CMD ["redis-server", "--port", "10000", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
