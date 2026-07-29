@@ -329,12 +329,17 @@ def _seed_one(engagement: dict, option: str = "A") -> Dict[str, Any]:
             prospect_name = existing[0]["name"]
         else:
             email = _placeholder_email(contact_clean)
+            # cancer_type: the 10 curated engagements are all MSS CRC by design and
+            # carry no explicit cancer_type key -> default to Colorectal Cancer for
+            # backward compatibility. A GENERATED card (any indication) sets
+            # front_matter.cancer_type explicitly so a non-CRC lead is never
+            # silently mislabeled as colorectal.
             prospect = frappe.get_doc({
                 "doctype": "Lead Prospect",
                 "pi_name": contact_clean,
                 "pi_email": email,
                 "institution": primary.get("institution", ""),
-                "cancer_type": "Colorectal Cancer",
+                "cancer_type": fm.get("cancer_type") or "Colorectal Cancer",
                 "tier": _rank_to_tier(fm.get("outreach_priority_rank")),
                 "source": "Manual Entry",
                 "source_ref_id": f"engagement::{slug}",

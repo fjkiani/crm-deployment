@@ -108,6 +108,27 @@ def _first_nonempty(*vals) -> str:
     return ""
 
 
+# Neutral placeholder for a generated card whose indication cannot be reliably
+# derived. The 10 curated engagements are all MSS CRC; a generated lead may be
+# ANY indication (ovarian, Ewing sarcoma, myeloma, ...), and the AACR/KOL data
+# carries the indication only as free text (talk titles, opportunity descriptions),
+# not a clean field. Rather than mislabel a non-CRC lead as "Colorectal Cancer"
+# (the seeder's legacy default) OR guess an indication from free text, we emit an
+# explicit "Unspecified" sentinel that _seed_one honors verbatim.
+_UNSPECIFIED_INDICATION = "Unspecified (auto-generated — verify indication)"
+
+
+def _lead_indication(lead) -> str:
+    """Best-effort, HONEST indication for a generated lead's front_matter.cancer_type.
+    Uses a real stored indication field if the CRM Lead carries one; otherwise
+    returns the neutral sentinel. Never assumes colorectal for a generated lead."""
+    for field in ("cancer_type", "indication", "disease", "primary_indication"):
+        val = getattr(lead, field, None)
+        if val and str(val).strip():
+            return str(val).strip()
+    return _UNSPECIFIED_INDICATION
+
+
 # --------------------------------------------------------------------------- #
 # KOL match lookup (kol_targets_v2, ingested in Phase 2)
 # --------------------------------------------------------------------------- #
@@ -382,6 +403,9 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
             "target": _first_nonempty((kol or {}).get("primary_axis"), "—"),
             "trial": "—",
             "phase": "—",
+            # explicit indication so _seed_one does NOT default a non-CRC lead to
+            # "Colorectal Cancer"; honest sentinel when it cannot be derived.
+            "cancer_type": _lead_indication(lead),
             "outreach_priority_rank": rank,
             "claim_posture": "conservative (auto-generated; human review required)",
             "evidence_sufficiency": (
@@ -466,7 +490,8 @@ def _build_card_for_company(slug_or_name: str, enrich: dict, use_enrich: bool) -
             "title": f"{company} — CrisPRO Engagement (generated)",
             "date": frappe.utils.today(), "status": "GENERATED",
             "company": company, "lead_drug": lead_drug, "target": "—",
-            "trial": "—", "phase": "—", "outreach_priority_rank": 8,
+            "trial": "—", "phase": "—", "cancer_type": _UNSPECIFIED_INDICATION,
+            "outreach_priority_rank": 8,
             "claim_posture": "conservative (auto-generated; human review required)",
             "evidence_sufficiency": "live-intel" if signals else "thin",
             "primary_contact": "", "backup_contact": "", "preferred_channel": "LinkedIn",
