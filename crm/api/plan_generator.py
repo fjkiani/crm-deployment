@@ -42,11 +42,14 @@ from __future__ import annotations
 
 import json
 import re
+import logging
 from typing import Any, Dict, List, Optional
 
 import frappe
 from frappe import _
 
+
+logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 # constants
 # --------------------------------------------------------------------------- #
@@ -98,6 +101,7 @@ def _safe_json_loads(raw, default):
         v = json.loads(raw) if raw else default
         return v if v is not None else default
     except Exception:
+        logger.debug("plan_generator._safe_json_loads: bad JSON, using default", exc_info=True)
         return default
 
 
@@ -218,10 +222,20 @@ def _score_table_from_signals(fit_dimensions: dict, gtm: dict | None,
             score = "4"
             rationale = f"Live intel corroborates {label}: matched signals {matched}."
         else:
-            score = "2"
-            rationale = f"No direct signal for {label} yet; default nurture weight."
+            score, why = _signal_floor(kol, _n_signals_hint(corr))
+            rationale = why.replace("this dimension", label)
         table.append({"dimension": label, "score": score, "rationale": rationale})
     return table
+
+
+def _n_signals_hint(corr: dict) -> int:
+    """How many dimensions carry live evidence — a cheap proxy for overall signal depth."""
+    try:
+        return sum(1 for d in (corr or {}).values()
+                   if isinstance(d, dict) and d.get("live_evidence"))
+    except Exception:
+        logger.debug("plan_generator._n_signals_hint failed", exc_info=True)
+        return 0
 
 
 def _composite(score_table: List[dict], kol: dict | None) -> str:
@@ -230,12 +244,202 @@ def _composite(score_table: List[dict], kol: dict | None) -> str:
         try:
             vals.append(float(r.get("score", 0)))
         except (TypeError, ValueError):
-            pass
+            logger.warning("plan_generator._composite: non-numeric score %r in dimension %r",
+                           r.get("score"), r.get("dimension"))
     base = round(sum(vals) / len(vals), 2) if vals else 0.0
     # if a KOL fit_score exists, blend it onto the 1-5 scale (fit_score is 0-1)
     if kol and isinstance(kol.get("fit_score"), (int, float)):
         base = round((base + kol["fit_score"] * 5.0) / 2.0, 2)
     return f"{base:.2f}"
+
+
+# --------------------------------------------------------------------------- #
+# KOL field access — tolerant of BOTH shapes actually observed in the data
+#   * live CRM path (additional_data.nyx_kol): native list / dict values
+#   * offline fixture (kol_targets_v2.json):   values stringified AND hard-clipped
+#     at exactly 200 chars, so most are unparseable mid-literal.
+# A truncated fragment must never be emitted as a citable claim, so the string
+# branch keeps only fully-closed items and reports that it dropped a fragment.
+# --------------------------------------------------------------------------- #
+def _kol_list(kol: dict | None, key: str) -> tuple[list, bool]:
+    """-> (items, truncated). Never raises."""
+    raw = (kol or {}).get(key)
+    if raw in (None, "", [], {}):
+        return [], False
+    if isinstance(raw, (list, tuple)):
+        return list(raw), False
+    if isinstance(raw, dict):
+        return [raw], False
+    text = str(raw).strip()
+    if text in ("[]", "{}"):
+        return [], False
+    # JSON first (correct, complete payloads)
+    try:
+        val = json.loads(text)
+        return (list(val) if isinstance(val, (list, tuple)) else [val]), False
+    except Exception:
+        pass
+    # Python-repr-ish and very likely clipped: salvage only complete quoted items.
+    items = re.findall(r"'((?:[^'\\]|\\.)*)'", text)
+    items += re.findall(r'"((?:[^"\\]|\\.)*)"', text)
+    items = [i.strip() for i in items if len(i.strip()) > 15]
+    truncated = not text.rstrip().endswith(("]", "}"))
+    if not items:
+        logger.debug("plan_generator._kol_list: %s unparseable and unsalvageable", key)
+    return items, truncated
+
+
+def _kol_truncation_flags(kol: dict | None) -> dict:
+    flags = (kol or {}).get("data_flags")
+    return flags if isinstance(flags, dict) else {}
+
+
+def _kol_institution(kol: dict | None, fallback: str) -> tuple[str, str]:
+    """-> (institution, provenance). The ingest currently drops institution from the
+    nyx_kol block (it lives one level up under _match), so both are probed before
+    falling back to the CRM organization. Provenance is recorded, not guessed."""
+    k = kol or {}
+    for src_key, prov in (("institution", "kol.institution"),
+                          ("affiliation", "kol.affiliation")):
+        v = _first_nonempty(k.get(src_key))
+        if v and v != "—":
+            return v, prov
+    match = k.get("_match")
+    if isinstance(match, dict):
+        v = _first_nonempty(match.get("institution"))
+        if v and v != "—":
+            return v, "kol._match.institution"
+    return fallback, "crm.lead.organization"
+
+
+def _resolve_sender() -> str:
+    """Outreach sender: configured default -> session user's full name -> honest label.
+    Replaces the hardcoded personal name that was baked into every generated step."""
+    try:
+        from crm.api.nyx_email_brain import _get_conf
+        v = _first_nonempty(_get_conf("outreach_sender_name", "crispro_sender_name", default=""))
+        if v:
+            return v
+    except Exception:
+        logger.debug("plan_generator._resolve_sender: settings lookup failed", exc_info=True)
+    try:
+        user = getattr(frappe.session, "user", None)
+        if user and user not in ("Guest", "Administrator"):
+            full = frappe.db.get_value("User", user, "full_name")
+            if full:
+                return full
+    except Exception:
+        logger.debug("plan_generator._resolve_sender: user lookup failed", exc_info=True)
+    return "CrisPRO / Brenus Pharma"
+
+
+def _kol_evidence(kol: dict | None) -> List[dict]:
+    """KOL AACR findings as SOURCED evidence records. Source is the real AACR talk id
+    when carried; a finding with no resolvable source is dropped, not guessed."""
+    if not kol:
+        return []
+    flags = _kol_truncation_flags(kol)
+    out = []
+    findings, salvage_trunc = _kol_list(kol, "schema_a_key_findings")
+    talk_id = _first_nonempty(kol.get("schema_a_talk_id"))
+    title = _first_nonempty(kol.get("schema_a_title"))
+    source = talk_id or title
+    if findings and source:
+        clipped = bool(flags.get("key_findings_truncated")) or salvage_trunc
+        for f in findings[:3]:
+            if not isinstance(f, str) or len(f.strip()) < 16:
+                continue
+            out.append({
+                "text": f.strip(),
+                "source": f"AACR 2026 talk {source}" + (f" — {title}" if title and talk_id else ""),
+                "kind": "aacr_key_finding",
+                "truncated_upstream": clipped,
+            })
+    vulns, v_trunc = _kol_list(kol, "schema_b_vulnerability")
+    v_source = _first_nonempty(kol.get("schema_b_talk_id"))
+    for v in vulns[:2]:
+        text = v.get("mechanistic_blindspot") if isinstance(v, dict) else (v if isinstance(v, str) else "")
+        target = v.get("failing_compound_or_target") if isinstance(v, dict) else ""
+        if not text or len(str(text).strip()) < 16:
+            continue
+        if not v_source:
+            continue  # unsourced vulnerability is not citable
+        out.append({
+            "text": (f"{target}: {text}" if target else str(text)).strip(),
+            "source": f"AACR 2026 talk {v_source}",
+            "kind": "aacr_vulnerability",
+            "truncated_upstream": bool(flags.get("vulnerability_truncated")) or v_trunc,
+        })
+    return out
+
+
+def _signal_floor(kol: dict | None, n_signals: int) -> tuple[str, str]:
+    """Derive the no-direct-signal dimension score from real corpus statistics instead
+    of the flat literal '2'. axis_stats is present on 20/20 live KOL blocks.
+
+    total_records / high_fit_count / gap_score describe how much evidence exists on the
+    KOL's primary axis, so a KOL sitting on a wide, well-populated gap floors higher than
+    a lead with nothing behind it. Bounded to 1..3 so a floor can never masquerade as a
+    corroborated signal (4-5 stay reserved for live/opportunity hits).
+    """
+    stats = (kol or {}).get("axis_stats")
+    if not isinstance(stats, dict):
+        if n_signals:
+            return "2", f"No direct signal for this dimension; {n_signals} live signal(s) on the lead overall."
+        return "1", "No signal for this dimension and no live intel yet (floor, not evidence)."
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
+    total = _num(stats.get("total_records"))
+    high = _num(stats.get("high_fit_count"))
+    gap = _num(stats.get("gap_score"))
+    mean_fit = _num(stats.get("mean_fit"))
+    pts = 0
+    if total >= 5:
+        pts += 1
+    if high >= 2:
+        pts += 1
+    if gap >= 5.0:
+        pts += 1
+    if mean_fit >= 0.30:
+        pts += 1
+    score = str(max(1, min(3, 1 + pts // 2)))
+    return score, (
+        f"No direct signal for this dimension; floor derived from axis corpus "
+        f"(records={int(total)}, high-fit={int(high)}, gap={gap:g}, mean-fit={mean_fit:g})."
+    )
+
+
+def _trial_phase_from_sources(intel, narrative: dict, signals: List[dict]) -> tuple[str, str]:
+    """Best-effort trial id + phase from linked intel / live signals. Honest em-dash when
+    nothing real is available — never a plausible-looking guess."""
+    trial, phase = "", ""
+    for cand in (narrative.get("trial"), narrative.get("lead_trial"),
+                 getattr(intel, "trial", None) if intel else None):
+        v = _first_nonempty(cand)
+        if v and v != "—":
+            trial = v
+            break
+    for cand in (narrative.get("phase"), getattr(intel, "phase", None) if intel else None):
+        v = _first_nonempty(cand)
+        if v and v != "—":
+            phase = v
+            break
+    if not trial:
+        for s in signals or []:
+            m = re.search(r"\bNCT\d{6,}\b", f"{s.get('text','')} {s.get('source','')}")
+            if m:
+                trial = m.group(0)
+                break
+    if not phase:
+        for s in signals or []:
+            m = re.search(r"\bPhase\s*(?:I{1,3}|IV|[1-4])\b", str(s.get("text", "")), re.I)
+            if m:
+                phase = m.group(0)
+                break
+    return (trial or "—"), (phase or "—")
 
 
 # --------------------------------------------------------------------------- #
@@ -250,11 +454,17 @@ def _safe_to_say_from_signals(signals: List[dict]) -> List[dict]:
         text = _first_nonempty(s.get("text"))
         src = _first_nonempty(s.get("source"))
         if text and src:
+            note = f"Auto-extracted {s.get('kind','signal')} — verify wording before citing."
+            if s.get("truncated_upstream"):
+                # Upstream clipped this field; the salvaged text is complete but the
+                # finding list is not, so the claim must not be presented as exhaustive.
+                note += (" Upstream source field was truncated: this is a complete salvaged "
+                         "statement, but the finding list may be incomplete.")
             out.append({
                 "claim": _clip(text, 300),
                 "source": _clip(src, 200),
                 "evidence_status": "VERIFIED-PUBLIC",
-                "notes": f"Auto-extracted {s.get('kind','signal')} — verify wording before citing.",
+                "notes": note,
             })
     return out
 
@@ -263,51 +473,100 @@ def _safe_to_say_from_signals(signals: List[dict]) -> List[dict]:
 # message-step assembly (reuse nyx_agent ordering, render bodies from intel)
 # --------------------------------------------------------------------------- #
 def _steps_from_plan(subject_type: str, subject_key: str, ctx: dict,
-                     hook: str, angle: str, company: str, contact: str) -> dict:
-    """Produce message_options {option_a, option_b, which_option} in the curated
-    shape. Bodies are grounded in the sharpest hook + CrisPRO angle we have; if
-    none, a neutral scientific-positioning opener is used (clearly generic)."""
+                     hook: str, angle: str, company: str, contact: str,
+                     evidence: List[dict] | None = None,
+                     subject_hint: str = "", kol: dict | None = None) -> dict:
+    """Produce message_options {option_a, option_b, which_option} in the curated shape.
+
+    Bodies now go through nyx_email_brain.draft_outreach_body(), which drafts prose with
+    the configured LLM and REJECTS any output introducing a number, NCT id or drug name
+    that is not present verbatim in `evidence`. On rejection, on LLM absence, or on any
+    failure it returns a deterministic body and says so in `method`. Claims and scores are
+    never LLM-generated (governance decision), only the prose is.
+    """
     hook = hook or ""
     angle = angle or ("CrisPRO's in-silico trial-simulation and patient-stratification "
                       "platform for biomarker-defined subgroups")
+    evidence = evidence or []
+    sender = _resolve_sender()
+    open_qs = [q for q in (_kol_list(kol, "open_questions")[0] if kol else []) if isinstance(q, str)]
 
-    opener_ref = f"your AACR 2026 work" if ctx.get("aacr_topic") else "your recent work"
+    base_ctx = {
+        "display_name": contact or "",
+        "company": company or "",
+        "institution": ctx.get("institution") or "",
+        "aacr_topic": ctx.get("aacr_topic") or "",
+        "hook": hook,
+        "crispro_angle": angle,
+        "open_questions": open_qs,
+        "sender": sender,
+    }
+
+    def _draft(step_number: int, hint: str) -> dict:
+        try:
+            from crm.api.nyx_email_brain import draft_outreach_body
+            c = dict(base_ctx)
+            c["step_number"] = step_number
+            return draft_outreach_body(c, evidence, subject_hint=hint) or {}
+        except Exception:
+            # The seam is contracted never to raise; if the import itself fails we still
+            # must produce a card, so fall back locally and label it.
+            logger.warning("plan_generator: draft_outreach_body unavailable; using local fallback",
+                           exc_info=True)
+            return {}
+
+    opener_ref = "your AACR 2026 work" if ctx.get("aacr_topic") else "your recent work"
     hook_line = (f"Your finding — {_clip(hook, 220)} — is exactly the kind of "
                  f"biomarker/subgroup gap CrisPRO is built to address."
                  if hook else
                  f"{opener_ref.capitalize()} raises a subgroup/stratification question "
                  f"CrisPRO is built to address.")
+    q_line = (f"\n\nOne question your talk left open: {_clip(open_qs[0], 200)}"
+              if open_qs else "")
 
-    warm_body = (
-        f"Hi {contact or 'there'},\n\n"
-        f"{hook_line}\n\n"
+    local_warm = (
+        f"Hi {contact or 'there'},\n\n{hook_line}{q_line}\n\n"
         f"CrisPRO ({angle}) could help pressure-test the responder-enrichment "
         f"hypothesis in silico before the next trial iteration. Would a 20-minute "
-        f"scientific exchange be useful?\n\n"
-        f"— CrisPRO / Brenus Pharma"
+        f"scientific exchange be useful?\n\n— {sender}"
     )
-    direct_body = (
-        f"Hi {contact or 'there'},\n\n"
-        f"Reaching out on {opener_ref} at {company or 'your group'}. {hook_line}\n\n"
+    local_direct = (
+        f"Hi {contact or 'there'},\n\nReaching out on {opener_ref} at "
+        f"{ctx.get('institution') or company or 'your group'}. {hook_line}{q_line}\n\n"
         f"No ask beyond a short scientific conversation — happy to share how CrisPRO "
-        f"frames the stratification problem. Open to a brief call?\n\n"
-        f"— CrisPRO / Brenus Pharma"
+        f"frames the stratification problem. Open to a brief call?\n\n— {sender}"
     )
 
+    d1 = _draft(1, subject_hint)
+    d2 = _draft(2, subject_hint)
+    d1b = _draft(1, subject_hint)
+
+    def _body(d, fallback):
+        html = (d or {}).get("html")
+        return html if html else fallback
+
+    def _meta(d, fallback_label):
+        return {
+            "draft_method": (d or {}).get("method", fallback_label),
+            "claim_guard": (d or {}).get("guard", {"ok": True, "violations": []}),
+            "subject": (d or {}).get("subject", subject_hint or ""),
+        }
+
     option_a = {"steps": [
-        {"step_number": 1, "sender": "Fahad Kiani", "delay_days": 0,
+        {"step_number": 1, "sender": sender, "delay_days": 0,
          "channel_note": "LinkedIn connection + note (warm, if any shared context)",
-         "body": warm_body},
-        {"step_number": 2, "sender": "Fahad Kiani", "delay_days": 4,
+         "body": _body(d1, local_warm), **_meta(d1, "deterministic:local")},
+        {"step_number": 2, "sender": sender, "delay_days": 4,
          "channel_note": "LinkedIn follow-up if no reply",
-         "body": (f"Following up briefly — the CrisPRO angle above is specific to "
-                  f"{_clip(ctx.get('aacr_topic') or company or 'your program', 120)}. "
-                  f"Glad to send a one-pager if easier than a call.")},
+         "body": _body(d2, (f"Following up briefly — the CrisPRO angle above is specific to "
+                            f"{_clip(ctx.get('aacr_topic') or company or 'your program', 120)}. "
+                            f"Glad to send a one-pager if easier than a call.\n\n— {sender}")),
+         **_meta(d2, "deterministic:local")},
     ]}
     option_b = {"steps": [
-        {"step_number": 1, "sender": "Fahad Kiani", "delay_days": 0,
+        {"step_number": 1, "sender": sender, "delay_days": 0,
          "channel_note": "Direct LinkedIn message (no prior connection)",
-         "body": direct_body},
+         "body": _body(d1b, local_direct), **_meta(d1b, "deterministic:local")},
     ]}
     which_option = [
         {"scenario": "There is a warm intro or shared context (co-author, institution, prior contact)",
@@ -333,6 +592,10 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
         from crm.fcrm.doctype.aacr_intel.aacr_intel import get_aacr_intel
         intel = get_aacr_intel(srid) if srid else None
     except Exception:
+        # A missing AACR Intel row is normal for non-AACR leads; a real failure here
+        # silently strips the card's scientific depth, so it must be visible.
+        logger.warning("plan_generator: AACR Intel lookup failed for source_ref_id=%r", srid,
+                       exc_info=True)
         intel = None
     narrative = synthesize_narrative(intel) if intel else {}
     scoring = compute_score(intel) if intel else {"lead_score": getattr(lead, "lead_score", 0),
@@ -357,8 +620,25 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
         (kol or {}).get("brenus_angle"),
     )
 
+    # KOL AACR findings become SOURCED evidence records alongside live signals; only
+    # source-bearing items are eligible for safe_to_say / the LLM evidence set.
+    kol_evidence = _kol_evidence(kol)
+    evidence = list(signals) + kol_evidence
+
     score_table = _score_table_from_signals(fit_dims, narrative, kol)
+    # schema_b vulnerability, when the ingest carries it, sharpens a fit rationale.
+    _vulns = [e for e in kol_evidence if e.get("kind") == "aacr_vulnerability"]
+    if _vulns and score_table:
+        score_table[0] = dict(score_table[0])
+        score_table[0]["rationale"] = (
+            f"{score_table[0]['rationale']} Stated vulnerability: {_clip(_vulns[0]['text'], 200)}"
+        )
     composite = _composite(score_table, kol)
+
+    institution, institution_source = _kol_institution(kol, company)
+    subject_hint = _first_nonempty((kol or {}).get("email_subject"))
+    open_qs, _oq_trunc = _kol_list(kol, "open_questions")
+    trial, phase = _trial_phase_from_sources(intel, narrative, signals)
 
     # crispro_can / cannot — grounded, honest
     crispro_can = []
@@ -378,9 +658,11 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
         "Cannot substitute for their prospective validation.",
     ]
 
-    ctx = {"aacr_topic": narrative.get("aacr_topic"), "organization": company}
+    ctx = {"aacr_topic": narrative.get("aacr_topic"), "organization": company,
+           "institution": institution}
     contact_first = display_name.split()[0] if display_name and " " in display_name else display_name
-    steps = _steps_from_plan("Lead", lead_id, ctx, sharpest_hook, angle, company, contact_first)
+    steps = _steps_from_plan("Lead", lead_id, ctx, sharpest_hook, angle, company, contact_first,
+                             evidence=evidence, subject_hint=subject_hint, kol=kol)
 
     snapshot = _first_nonempty(
         narrative.get("aacr_topic"),
@@ -390,7 +672,13 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
     )
 
     tier = scoring.get("tier") or getattr(lead, "tier", "Tier 3")
-    rank = getattr(lead, "priority_rank", None) or {"Tier 1": 2, "Tier 2": 5, "Tier 3": 8}.get(tier, 8)
+    # Real rank first: the CRM field, then the KOL worklist rank (1-20, a genuine ordering),
+    # and only then the coarse tier table — which is a labeled placeholder, not evidence.
+    rank = getattr(lead, "priority_rank", None)
+    if not rank and isinstance((kol or {}).get("rank"), int):
+        rank = kol["rank"]
+    if not rank:
+        rank = {"Tier 1": 2, "Tier 2": 5, "Tier 3": 8}.get(tier, 8)
 
     card = {
         "slug": f"lead-{_slugify(display_name)}-{lead_id.split('-')[-1]}",
@@ -401,8 +689,8 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
             "company": company,
             "lead_drug": _first_nonempty((kol or {}).get("primary_axis"), narrative.get("current_focus"), "—"),
             "target": _first_nonempty((kol or {}).get("primary_axis"), "—"),
-            "trial": "—",
-            "phase": "—",
+            "trial": trial,
+            "phase": phase,
             # explicit indication so _seed_one does NOT default a non-CRC lead to
             # "Colorectal Cancer"; honest sentinel when it cannot be derived.
             "cancer_type": _lead_indication(lead),
@@ -417,6 +705,11 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
             ),
             "primary_contact": display_name,
             "backup_contact": "",
+            # Present only when the ingest actually carried it; absent rather than invented.
+            **({"stc1010_relevance": _first_nonempty((kol or {}).get("stc1010_relevance"))}
+               if _first_nonempty((kol or {}).get("stc1010_relevance")) else {}),
+            **({"aacr_talk_title": _first_nonempty((kol or {}).get("schema_a_title"))}
+               if _first_nonempty((kol or {}).get("schema_a_title")) else {}),
             "preferred_channel": "LinkedIn",
             "tags": ["generated", tier.replace(" ", "-").lower()] + (["kol"] if kol else []),
             "globs": [],
@@ -433,7 +726,10 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
             "primary": {
                 "name": display_name,
                 "title": "",
-                "institution": company,
+                # KOL institution when the ingest carried it, else the CRM organization.
+                # Provenance is recorded so a reader can tell which one they are looking at.
+                "institution": institution,
+                "institution_source": institution_source,
                 "linkedin": f"(search: {display_name} {company})",
                 "public_email_verified": "NO",
                 "rationale": ("Matched KOL target from AACR 2026." if kol else
@@ -444,7 +740,9 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
         },
         "message_options": steps,
         "governance": {
-            "safe_to_say": _safe_to_say_from_signals(signals),
+            # Built from live signals AND sourced KOL/AACR findings — every entry must
+            # carry a source, so unsourced items are dropped rather than softened.
+            "safe_to_say": _safe_to_say_from_signals(evidence),
             "not_safe_to_say": list(_STANDING_NOT_SAFE),
             "company_specific_constraints": list(_STANDING_CONSTRAINTS),
         },
@@ -454,7 +752,17 @@ def _build_card_for_lead(lead_id: str, enrich: dict, use_enrich: bool) -> dict:
             "sources_used": {
                 "aacr_intel": bool(intel), "kol_target": bool(kol),
                 "live_enrichment": bool(signals), "n_signals": len(signals),
+                "n_kol_evidence": len(kol_evidence),
+                "kol_open_questions": len(open_qs),
+                "institution_source": institution_source,
+                "subject_hint_used": bool(subject_hint),
+                "kol_truncation_flags": _kol_truncation_flags(kol),
             },
+            "draft_methods": sorted({
+                s.get("draft_method", "")
+                for opt in ("option_a", "option_b")
+                for s in steps.get(opt, {}).get("steps", [])
+            } - {""}),
             "score_backup_tier": tier, "score_backup_lead_score": scoring.get("lead_score"),
         },
     }
@@ -481,8 +789,9 @@ def _build_card_for_company(slug_or_name: str, enrich: dict, use_enrich: bool) -
 
     snapshot = (f"{company} — {len(signals)} live intel signal(s). Lead asset: {lead_drug}."
                 if signals else f"{company} — awaiting live enrichment.")
-    steps = _steps_from_plan("Company", slug_or_name, {"organization": company},
-                             sharpest, "", company, "")
+    steps = _steps_from_plan("Company", slug_or_name,
+                             {"organization": company, "institution": company},
+                             sharpest, "", company, "", evidence=signals)
 
     card = {
         "slug": f"company-{_slugify(company)}",
@@ -566,6 +875,8 @@ def generate_plan(subject_type: str, subject_key: str, use_enrich: int = 1) -> d
                 from crm.api.enrichment_api import enrich_engagement
                 enrich = enrich_engagement(subject_key, force=0)
         except Exception as e:  # enrich must never break plan generation
+            logger.warning("plan_generator: enrichment failed for %s %s; continuing without it",
+                           subject_type, subject_key, exc_info=True)
             enrich = {"status": "error", "error": str(e), "signals": [], "fit": {}}
 
     if subject_type == "Lead":
