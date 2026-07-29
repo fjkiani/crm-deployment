@@ -4,16 +4,15 @@ pipeline/nodes/score.py — Node 3: Informed Lead Scoring.
 Pipeline position: AFTER distill_node.
 Purpose: Score 0-100 using the full enrichment package — not a blind Tavily blob.
 
-The rubric is additive and explicit:
-  AUM > $1B    : +40 pts
-  AUM $500M-1B : +30 pts
-  PM/CIO title : +25 pts
-  Analyst title: +15 pts
-  Biotech focus: +20 pts
-  Quant mandate: +10 pts
-  Recent hire  : +15 pts
-  LinkedIn alt-data posts: +10 pts
-  Competitor confirmed  : +10 pts
+The rubric is additive and explicit, and is supplied by the active tenant pack
+(`pack.scoring_rubric`) — NOT hardcoded here. Example (CrisPRO/finance tenant):
+  primary money signal (e.g. AUM tier) : up to +40 pts
+  decision-maker title                 : +25 pts
+  industry/domain fit                  : +20 pts
+  recent hiring/intent signal          : +15 pts
+  public activity on the topic         : +10 pts
+  competitor confirmed                 : +10 pts
+A non-finance tenant supplies its own rubric and its own primary-signal label.
 
 Score thresholds:
   80-100: HOT → Challenger email → Enterprise team
@@ -35,50 +34,60 @@ from langchain_core.runnables.config import RunnableConfig
 from eaia.pipeline.state import OutreachState
 from eaia.pipeline.llm import llm_json
 from eaia.config import NyxConfig
+from eaia.tenant import TenantPack, get_active_pack
 
 logger = logging.getLogger(__name__)
 
-# ── Score Prompt ──────────────────────────────────────────────────────────────
-SCORE_PROMPT = f"""You are a B2B sales intelligence analyst for {NyxConfig.COMPANY_NAME}, {NyxConfig.COMPANY_DESCRIPTION}.
-WHAT {NyxConfig.COMPANY_NAME.upper()} SELLS: {NyxConfig.VALUE_PROP}.
+# ── Score Prompt SCAFFOLD (tenant-agnostic; ICP + rubric injected from pack) ──
+# Tenant tokens: {scoring_persona} {what_we_sell} {icp_block} {scoring_rubric}
+# {score_hot} {score_warm}. Prospect tokens filled per-call by score_node.
+SCORE_PROMPT_SCAFFOLD = """{scoring_persona}
+WHAT WE SELL: {what_we_sell}
 
-ICP: Quantitative/systematic investment firms, AUM > $500M, biotech/healthcare equities.
-Decision-makers: Portfolio Managers, CIOs, Research Directors, Heads of Alt Data.
+IDEAL CUSTOMER PROFILE (ICP):
+{icp_block}
 
 PROSPECT:
-Name: __NAME__
-Company: __COMPANY__
-Title: __TITLE__
-AUM Signal: __AUM__
-Company Strategy: __STRATEGY__
-LinkedIn Activity: __LINKEDIN_ACTIVITY__
-Enrichment Signals: __SIGNALS__
-Research Context: __RESEARCH__
+Name: {name}
+Company: {company}
+Title: {title}
+{primary_signal_label}: {aum}
+Company Strategy: {strategy}
+LinkedIn Activity: {linkedin_activity}
+Enrichment Signals: {signals}
+Research Context: {research}
 
-SCORING RUBRIC (additive):
-- AUM > $1B confirmed: +40
-- AUM $500M-$1B confirmed: +30
-- AUM unknown or < $500M: +0
-- Title = PM / CIO / Portfolio Manager / Research Director / Head of Alt Data: +25
-- Title = Analyst / Associate / VP: +15
-- Active biotech/healthcare focus confirmed: +20
-- Quant/systematic mandate confirmed: +10
-- Recent hiring signal (Head of Bio/Pharma/Genomics): +15
-- LinkedIn activity about alt data / genomics / FDA / biomarkers: +10
-- Competitor firm confirmed using similar/better data: +10
+SCORING RUBRIC:
+{scoring_rubric}
 
 Score ranges:
-- 80-100 (HOT): Enterprise — Challenger email
-- 50-79 (WARM): Mid-Market — PAS email
-- 0-49 (COLD): Marketing — AIDA email or skip
+- {score_hot}-100 (HOT): Enterprise — Challenger email
+- {score_warm}-{score_hot_minus_1} (WARM): Mid-Market — PAS email
+- 0-{score_warm_minus_1} (COLD): Marketing — AIDA email or skip
 
 Return ONLY JSON:
 {{
   "score": <integer 0-100>,
-  "reasoning": "<cite actual signals: title/AUM/strategy — no generic descriptions>",
+  "reasoning": "<cite actual signals: title/primary-signal/strategy — no generic descriptions>",
   "angle": "<one specific sales angle referencing their actual situation>",
-  "why_hot_or_cold": "<bullet points with ✅/❌ for each rubric criterion>"
+  "why_hot_or_cold": "<bullet points with check/x for each rubric criterion>"
 }}"""
+
+
+def _build_score_prompt(pack: TenantPack, **prospect_fields) -> str:
+    """Render the scoring prompt from the tenant pack + prospect fields."""
+    return SCORE_PROMPT_SCAFFOLD.format(
+        scoring_persona=pack.scoring_persona_line(),
+        what_we_sell=pack.what_we_sell,
+        icp_block=pack.icp_block(),
+        primary_signal_label=pack.primary_signal_label,
+        scoring_rubric=pack.scoring_rubric or "- Strong ICP match scores higher.",
+        score_hot=pack.score_hot,
+        score_warm=pack.score_warm,
+        score_hot_minus_1=pack.score_hot - 1,
+        score_warm_minus_1=pack.score_warm - 1,
+        **prospect_fields,
+    )
 
 
 async def score_node(state: OutreachState, config: RunnableConfig) -> OutreachState:
@@ -102,9 +111,15 @@ async def score_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
         return state
 
     logger.info("📊 SCORE: Informed scoring with full enrichment")
+
+    # Resolve the active tenant pack (per-request tenant_id supported via config).
+    # Resolved BEFORE the callback so the progress message can use pack labels.
+    tenant_id = config.get("configurable", {}).get("tenant_id")
+    pack = get_active_pack(tenant_id)
+
     if cb:
         await cb("score", "thought", {
-            "message": "Scoring: AUM + title + LinkedIn activity + strategy + competitors..."
+            "message": f"Scoring: {pack.primary_signal_label} + title + LinkedIn activity + strategy + competitors..."
         })
 
     signals   = state.get("distilled_signals", {})
@@ -112,19 +127,20 @@ async def score_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
     apollo    = state.get("apollo_data", {})
 
     try:
-        _subs = {
-            "__NAME__":              state["prospect_name"],
-            "__COMPANY__":           state["company_name"],
-            "__TITLE__":             enrichment.get("apollo_title") or apollo.get("title", "Unknown"),
-            "__AUM__":               enrichment.get("aum_signal") or "Unknown — 13F not found",
-            "__STRATEGY__":          enrichment.get("company_strategy") or "Unknown",
-            "__LINKEDIN_ACTIVITY__": " | ".join(enrichment.get("linkedin_recent_activity", [])) or "None found",
-            "__SIGNALS__":           json.dumps(signals, indent=2),
-            "__RESEARCH__":          state.get("raw_research", "")[:2000],
-        }
-        prompt = SCORE_PROMPT
-        for _k, _v in _subs.items():
-            prompt = prompt.replace(_k, str(_v))
+        prompt = _build_score_prompt(
+            pack,
+            name=state["prospect_name"],
+            company=state["company_name"],
+            title=enrichment.get("apollo_title") or apollo.get("title", "Unknown"),
+            aum=enrichment.get("aum_signal") or "Unknown — 13F not found",
+            strategy=enrichment.get("company_strategy") or "Unknown",
+            linkedin_activity=(
+                " | ".join(enrichment.get("linkedin_recent_activity", []))
+                or "None found"
+            ),
+            signals=json.dumps(signals, indent=2),
+            research=state.get("raw_research", "")[:2000],
+        )
         result = llm_json(prompt)
         score = max(0, min(100, int(result.get("score", 50))))
 
@@ -133,14 +149,16 @@ async def score_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
         state["score_angle"]     = result.get("angle", "")
         state["score_why"]       = result.get("why_hot_or_cold", "")
 
-        # ── Framework selection ───────────────────────────────────────────
+        # ── Framework selection (pack-driven; HOT→challenger/WARM→pas/COLD→aida) ─
+        # NOTE: fixes a pre-existing latent bug — score.py previously referenced
+        # NyxConfig.FRAMEWORK_HOT/WARM/COLD which were never defined (AttributeError).
         if "recommended_framework" not in signals or signals["recommended_framework"] == "UNKNOWN":
-            if score >= NyxConfig.SCORE_HOT:
-                state["framework"] = NyxConfig.FRAMEWORK_HOT
-            elif score >= NyxConfig.SCORE_WARM:
-                state["framework"] = NyxConfig.FRAMEWORK_WARM
+            if score >= pack.score_hot:
+                state["framework"] = "challenger"
+            elif score >= pack.score_warm:
+                state["framework"] = "pas"
             else:
-                state["framework"] = NyxConfig.FRAMEWORK_COLD
+                state["framework"] = "aida"
 
         # Distiller recommendation overrides in ambiguous zone
         rec = signals.get("recommended_framework", "")

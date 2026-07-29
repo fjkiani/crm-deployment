@@ -41,12 +41,13 @@ from langchain_core.runnables.config import RunnableConfig
 from eaia.pipeline.state import OutreachState
 from eaia.pipeline.llm import llm_json
 from eaia.config import NyxConfig
+from eaia.tenant import get_active_pack
 from eaia.skills.challenger_email_writer import _two_pass_generate, _generate_ab_subjects
 
 logger = logging.getLogger(__name__)
 
 
-def _build_dossier(state: OutreachState) -> str:
+def _build_dossier(state: OutreachState, pack) -> str:
     """
     Build the 10-field prospect dossier injected into the email writer.
     This is the single most important input — garbage in = generic email out.
@@ -74,7 +75,7 @@ def _build_dossier(state: OutreachState) -> str:
 Name: {name} (address as "{first_name}" only — never full name)
 Title: {enrichment.get('apollo_title') or apollo.get('title', 'Unknown')}
 Company: {company}
-AUM Signal: {enrichment.get('aum_signal') or 'Unknown — do not mention AUM if unconfirmed'}
+{pack.primary_signal_label}: {enrichment.get('aum_signal') or f'Unknown — do not mention {pack.primary_signal_label} if unconfirmed'}
 Company Investment Strategy: {enrichment.get('company_strategy') or 'Unknown'}
 LinkedIn Headline: {enrichment.get('linkedin_profile_headline') or apollo.get('headline', 'Unknown')}
 LinkedIn Recent Posts: {posts_str}
@@ -136,15 +137,19 @@ async def write_node(state: OutreachState, config: RunnableConfig) -> OutreachSt
     name    = state["prospect_name"]
     company = state["company_name"]
 
+    # Resolve the active tenant pack (per-request tenant_id supported via config).
+    tenant_id = config.get("configurable", {}).get("tenant_id")
+    pack = get_active_pack(tenant_id)
+
     # Build the 10-field dossier
-    prospect_info = _build_dossier(state)
+    prospect_info = _build_dossier(state, pack)
 
     # Inject review feedback on retry
     if state.get("review_feedback") and attempt > 1:
         signals = {**signals, "_review_feedback": state["review_feedback"]}
 
     try:
-        result = _two_pass_generate(fw, signals, prospect_info, name, company, cohere_key)
+        result = _two_pass_generate(fw, signals, prospect_info, name, company, cohere_key, pack=pack)
         state["email_draft"] = result
         # Persist the recipient email for /send-email
         state["email_draft"]["prospect_email"] = (

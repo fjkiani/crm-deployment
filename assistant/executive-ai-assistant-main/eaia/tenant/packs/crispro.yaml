@@ -1,0 +1,96 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TENANT PACK: CrisPRO (tenant #1)
+#
+# This pack reproduces the EXACT messaging that was previously hardcoded as
+# "Zeta" inside challenger_email_writer.py and lead_scoring_tool.py. The strings
+# below are lifted verbatim from that source so the de-Zeta refactor is behavior-
+# preserving (CrisPRO output is reproduced, not reinvented).
+#
+# To correct CrisPRO's actual product messaging later, edit THIS FILE — no code
+# change is needed. That is the entire point of the Tenant Pack abstraction.
+# ─────────────────────────────────────────────────────────────────────────────
+
+tenant_id: crispro
+
+# ── Identity (verbatim from prior hardcoded "Zeta" persona) ──────────────────
+company_name: "Zeta"
+company_description: "a genomic data platform"
+value_prop: "Proprietary genomic datasets that quantify biological drug response signals"
+what_we_sell: >-
+  Proprietary genomic datasets that quantify biological drug response signals.
+  Buyers are quantitative fund managers who use alternative data.
+industry: "life sciences"
+sender_signature: "— Nyx"
+data_gap_label: "biomarker data gap"
+
+# ── ICP / scoring (verbatim from lead_scoring_tool.SCORING_PROMPT_TEMPLATE) ───
+icp_criteria:
+  - "Quantitative or systematic investment firms"
+  - "AUM > $500M"
+  - "Active in biotech/healthcare equities or alternative data"
+  - "Decision-makers: PMs, CIOs, Research Directors"
+# Additive rubric (consolidated from the pipeline score_node — the richer of the
+# two original rubrics; lead_scoring_tool's simpler HOT/WARM/COLD version is
+# superseded by this single source of truth).
+scoring_rubric: |-
+  Additive points:
+  - AUM > $1B confirmed: +40
+  - AUM $500M-$1B confirmed: +30
+  - AUM unknown or < $500M: +0
+  - Title = PM / CIO / Portfolio Manager / Research Director / Head of Alt Data: +25
+  - Title = Analyst / Associate / VP: +15
+  - Active biotech/healthcare focus confirmed: +20
+  - Quant/systematic mandate confirmed: +10
+  - Recent hiring signal (Head of Bio/Pharma/Genomics): +15
+  - LinkedIn activity about alt data / genomics / FDA / biomarkers: +10
+  - Competitor firm confirmed using similar/better data: +10
+default_angle: "Pitch Zeta genomic data as an alternative data source."
+score_hot: 70
+score_warm: 40
+signal_gate_min: 2
+
+# ── Proof points (verbatim from challenger pass1 capability list) ────────────
+proof_points:
+  - key: parp
+    label: "PARP Inhibitor Resistance Signal"
+    claim: "Quantifies clinical trial failure risk 6 months before earnings. Predicted AstraZeneca Q3 miss on Lynparza."
+  - key: kelim
+    label: "KELIM Genotype Convergence"
+    claim: "Scores tumor mutational pathways to predict competitor drug synergy/failure."
+  - key: sector_rotation
+    label: "Targeted Sector Rotation"
+    claim: "Translates biological trial data into macro signals for healthcare/biotech ETFs."
+
+# ── Frameworks (tenant-specific CTA + word limits; structure stays in code) ──
+default_framework: challenger
+frameworks:
+  - key: challenger
+    name: "Challenger (Teach → Tailor → Take Control)"
+    when: "HOT leads (score ≥ 70). Decision-makers who think they have it figured out."
+    max_words: 65
+    cta: 'Open to seeing the math?'   # also allowed: "Worth a 10 min look?"
+  - key: pas
+    name: "PAS (Problem → Agitate → Solution)"
+    when: "WARM leads (score 40-69). People who know they have a problem but haven't prioritized it."
+    max_words: 70
+    cta: 'Quick question — who handles alt-data sourcing on your team?'
+  - key: aida
+    name: "AIDA (Attention → Interest → Desire → Action)"
+    when: "COLD leads (score < 40). People who haven't heard of genomic data for investing."
+    max_words: 85
+    cta: 'Wrote up how [peer firm type] is using this — want the link?'
+
+# ── Voice guide (the CrisPRO gold-standard cold-email voice) ─────────────────
+voice_guide: >-
+  Assertive, specific, no fluff. First name only. State blind spots as fact, not
+  suggestion. Tease the blind spot → deliver the insight → cite a verifiable
+  proof → one-line ask. No banned hype words. Subject under 40 chars, provocative,
+  no colons. PS = one specific proof point or stat.
+
+# ── Lead sources (verbatim from jr1 default) ─────────────────────────────────
+lead_sources:
+  - kind: clinicaltrials
+    default_query: "Ovarian Cancer"
+
+# ── Sending (empty -> falls back to NYX_SEND_DOMAINS env) ────────────────────
+send_domains: []
