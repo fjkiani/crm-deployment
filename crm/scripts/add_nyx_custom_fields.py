@@ -214,7 +214,7 @@ def execute():
         ]
     }
 
-    create_custom_fields(custom_fields)
+    create_custom_fields(custom_fields, ignore_validate=True)
     frappe.db.commit()
 
     # ── Post-migration: verify all fields exist ──────────────────────────────
