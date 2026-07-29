@@ -31,6 +31,7 @@ import re
 import json
 import logging
 import requests
+from xml.etree import ElementTree as _ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import frappe
@@ -517,15 +518,206 @@ def _pm_count(term: str) -> int:
 		return -1
 
 
+# --- real author disambiguation: efetch carries affiliations, esummary does not ---
+# Generic institution words carry no discriminating power. "Cancer Center" matches
+# hundreds of institutions; "Anderson" / "Kettering" / "Farber" identify one.
+_ORG_STOP = {
+	"university", "universite", "universitat", "college", "center", "centre",
+	"cancer", "institute", "institut", "hospital", "school", "medicine",
+	"medical", "department", "dept", "division", "unit", "clinic", "health",
+	"sciences", "science", "research", "foundation", "national", "state",
+	"the", "and", "for", "of", "inc", "llc", "ltd", "gmbh",
+}
+
+
+def _org_tokens(org: str) -> list:
+	"""Distinctive lowercase tokens for an institution string (generics dropped)."""
+	toks = [t.lower() for t in re.split(r"\W+", org or "") if len(t) > 3]
+	return [t for t in toks if t not in _ORG_STOP]
+
+
+def _pm_efetch_authors(pmids: list) -> dict:
+	"""pmid -> [{last, fore, initials, affiliations: [str], orcid: str}]
+
+	efetch (retmode=xml) is the ONLY E-utilities response that carries author
+	affiliation; esummary does not expose it at all. Never throws: returns {} on
+	any transport/parse failure so the caller degrades to PubMed's own ordering.
+	"""
+	pmids = [str(p) for p in (pmids or []) if str(p).strip()]
+	if not pmids:
+		return {}
+	try:
+		params = {"db": "pubmed", "id": ",".join(pmids), "retmode": "xml"}
+		params.update(_ncbi_common())
+		r = requests.get(f"{_EUTILS}/efetch.fcgi", params=params, timeout=_HTTP_TIMEOUT)
+		r.raise_for_status()
+		root = _ET.fromstring(r.text)
+	except Exception as e:
+		logger.warning(f"pubmed efetch affiliations failed for {len(pmids)} pmid(s): {e}")
+		return {}
+
+	out = {}
+	try:
+		for art in root.iter("PubmedArticle"):
+			pid_el = art.find(".//MedlineCitation/PMID")
+			pid = (pid_el.text or "").strip() if pid_el is not None else ""
+			if not pid:
+				continue
+			authors = []
+			for a in art.iter("Author"):
+				last = (a.findtext("LastName") or "").strip()
+				fore = (a.findtext("ForeName") or "").strip()
+				inits = (a.findtext("Initials") or "").strip()
+				if not last:
+					# collective/consortium author
+					coll = (a.findtext("CollectiveName") or "").strip()
+					if not coll:
+						continue
+					last = coll
+				affs = []
+				for ai in a.iter("Affiliation"):
+					txt = "".join(ai.itertext()).strip()
+					if txt:
+						affs.append(txt)
+				orcid = ""
+				for ident in a.iter("Identifier"):
+					if (ident.get("Source") or "").upper() == "ORCID":
+						orcid = ("".join(ident.itertext()) or "").strip()
+						break
+				authors.append({
+					"last": last, "fore": fore, "initials": inits,
+					"affiliations": affs, "orcid": orcid,
+				})
+			out[pid] = authors
+	except Exception as e:
+		logger.warning(f"pubmed efetch parse failed: {e}")
+		return out
+	return out
+
+
+def _author_is_target(a: dict, last: str, given: list) -> bool:
+	"""Surname match plus given-name agreement.
+
+	Compares against EVERY ForeName token, not just the first. Real PubMed records
+	store people who publish under a middle name in initial-first form -- e.g.
+	"Perkins R Serene" for someone we know as "Serene Perkins". Anchoring on
+	fore[0] alone silently fails those authors. Still discriminating: a genuine
+	mismatch ("Brian" vs ForeName "Scott E") matches no token and is rejected.
+	"""
+	if (a.get("last") or "").lower() != (last or "").lower():
+		return False
+	if not given:
+		return True
+	want_name = (given[0] or "").lower()
+	want = (given[0][0] or "").upper()
+	fore_toks = [t for t in re.split(r"\W+", (a.get("fore") or "")) if t]
+	inits = (a.get("initials") or "").strip().upper()
+	if fore_toks:
+		# strongest: a full given-name token matches outright
+		if any(len(t) > 1 and t.lower() == want_name for t in fore_toks):
+			return True
+		# weaker: some given-name token starts with the expected initial
+		return any(t[0].upper() == want for t in fore_toks)
+	if inits:
+		return want in inits
+	return True
+
+
+def _pm_disambiguate(articles: list, org: str, name: str = "") -> tuple:
+	"""Re-rank by REAL author affiliation from efetch. Returns (articles, meta).
+
+	Scoring per article (higher = more confident it is the same person):
+	  3  the surname-matching author's OWN affiliation contains a distinctive org token
+	  1  some other author's affiliation contains one (shared-institution signal)
+	  0  no affiliation evidence either way
+
+	Non-destructive: every article is kept, only reordered, and each gains
+	`affiliation`/`orcid`/`affiliation_match` provenance so the UI and the
+	claim-guard can cite where the attribution came from.
+	"""
+	meta = {
+		"method": "none", "n_articles": len(articles or []),
+		"n_with_affiliation": 0, "n_affiliation_matched": 0,
+		"orcids": [], "org_tokens": [], "matched_affiliations": [],
+	}
+	if not articles:
+		return articles, meta
+
+	toks = _org_tokens(org)
+	meta["org_tokens"] = toks
+	given, last = _pm_name_tokens(name)
+
+	idx = _pm_efetch_authors([a.get("pmid") for a in articles])
+	if not idx:
+		meta["method"] = "efetch_unavailable"
+		return articles, meta
+
+	orcids, matched_affs = set(), []
+	for a in articles:
+		auths = idx.get(str(a.get("pmid"))) or []
+		target = None
+		if last:
+			for au in auths:
+				if _author_is_target(au, last, given):
+					target = au
+					break
+		own_affs = (target or {}).get("affiliations") or []
+		all_affs = [s for au in auths for s in (au.get("affiliations") or [])]
+		if all_affs:
+			meta["n_with_affiliation"] += 1
+
+		if target and target.get("orcid"):
+			orcids.add(target["orcid"])
+			a["orcid"] = target["orcid"]
+		if own_affs:
+			a["affiliation"] = own_affs[0]
+
+		score, why = 0, "no_affiliation_evidence"
+		if toks:
+			hit_own = next((s for s in own_affs if any(t in s.lower() for t in toks)), "")
+			if hit_own:
+				score, why = 3, "target_author_affiliation"
+				matched_affs.append(hit_own)
+			else:
+				hit_any = next((s for s in all_affs if any(t in s.lower() for t in toks)), "")
+				if hit_any:
+					score, why = 1, "co_author_affiliation"
+					matched_affs.append(hit_any)
+				elif all_affs:
+					why = "affiliation_present_no_org_match"
+		elif all_affs:
+			why = "no_distinctive_org_tokens"
+		a["affiliation_match"] = why
+		a["_disambig_score"] = score
+		if score:
+			meta["n_affiliation_matched"] += 1
+
+	meta["orcids"] = sorted(orcids)
+	# dedupe, cap: this is provenance for a human, not a corpus
+	seen, uniq = set(), []
+	for s in matched_affs:
+		if s not in seen:
+			seen.add(s)
+			uniq.append(s)
+	meta["matched_affiliations"] = uniq[:3]
+	meta["method"] = "efetch_affiliation" if toks else "efetch_no_org_tokens"
+
+	ranked = sorted(articles, key=lambda a: a.get("_disambig_score", 0), reverse=True)
+	for a in ranked:
+		a.pop("_disambig_score", None)
+	return ranked, meta
+
+
 def _pm_soft_rerank(articles: list, org: str) -> list:
-	"""Bubble articles whose author org/affiliation tokens overlap `org` to the top.
-	esummary has no affiliation field, so we match on co-author surnames is not
-	possible; instead we score on org tokens appearing in the journal/title as a
-	weak signal, and otherwise preserve PubMed's own relevance order. Non-
-	destructive: every article is kept, only reordered."""
+	"""LAST-RESORT proxy used only when efetch is unavailable.
+
+	Scores distinctive org tokens appearing in the title/journal. This is a weak
+	signal and rarely fires — real affiliation matching lives in _pm_disambiguate,
+	which reads efetch XML. Kept as a graceful degradation path, not as the
+	primary disambiguator. Non-destructive: every article is kept, only reordered."""
 	if not org or not articles:
 		return articles
-	toks = [t.lower() for t in re.split(r"\W+", org) if len(t) > 3]
+	toks = _org_tokens(org)
 	if not toks:
 		return articles
 
@@ -564,13 +756,21 @@ def pubmed_author_search(name: str, org: str = "", retmax: int = 8) -> dict:
 	env = pubmed_search(chosen, retmax=retmax)
 	arts = (env.get("data") or {}).get("articles") or []
 	reranked = False
-	if arts and org:
-		env["data"]["articles"] = _pm_soft_rerank(arts, org)
-		reranked = True
+	disambig = {"method": "not_attempted", "n_articles": len(arts)}
+	if arts:
+		# Real disambiguation first: efetch exposes author affiliation + ORCID.
+		ranked, disambig = _pm_disambiguate(arts, org, name)
+		if disambig.get("method") in ("efetch_unavailable", "none") and org:
+			# efetch down -> fall back to the labeled title/journal proxy
+			ranked = _pm_soft_rerank(arts, org)
+			disambig["method"] = "title_proxy_fallback"
+		env["data"]["articles"] = ranked
+		reranked = bool(org) and disambig.get("method") != "not_attempted"
 	env["data"]["query_used"] = chosen
 	env["data"]["query_tier"] = tier_idx
 	env["data"]["query_probes"] = probes
 	env["data"]["org_reranked"] = reranked
+	env["data"]["disambiguation"] = disambig
 	return env
 
 
