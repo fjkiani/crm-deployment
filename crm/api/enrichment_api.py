@@ -439,17 +439,36 @@ def _framework_for_score(score: int) -> str:
 
 def _apply_enrichment_to_lead(lead_name: str, patch: dict, nyx_fields: dict) -> None:
 	lead = frappe.get_doc("CRM Lead", lead_name)
-	ad = frappe.parse_json(lead.additional_data) if lead.additional_data else {}
-	if not isinstance(ad, dict):
-		ad = {}
-	ad.update(patch)
-	lead.additional_data = json.dumps(ad)
-
 	meta = frappe.get_meta("CRM Lead")
+
+	# additional_data is on upstream CRM Lead JSON; older forks may only have
+	# nyx_enrichment_json. Write both when present so NyxTab stays populated.
+	if meta.has_field("additional_data"):
+		raw = getattr(lead, "additional_data", None)
+		ad = frappe.parse_json(raw) if raw else {}
+		if not isinstance(ad, dict):
+			ad = {}
+		ad.update(patch)
+		lead.additional_data = json.dumps(ad)
+	elif meta.has_field("nyx_enrichment_json"):
+		# fold patch into the hidden JSON blob so UI can still hydrate
+		try:
+			blob = frappe.parse_json(getattr(lead, "nyx_enrichment_json", None) or "{}")
+		except Exception:
+			blob = {}
+		if not isinstance(blob, dict):
+			blob = {}
+		blob.update(patch)
+		nyx_fields = {**nyx_fields, "nyx_enrichment_json": json.dumps(blob, default=str)[:65535]}
+
 	for field, value in nyx_fields.items():
 		if meta.has_field(field):
 			lead.set(field, value)
 
+	# Test / imported leads may carry stale Link values (Source, Status, etc.).
+	# Enrichment must not fail validation on unrelated fields.
+	lead.flags.ignore_links = True
+	lead.flags.ignore_validate = True
 	lead.save(ignore_permissions=True)
 	frappe.db.commit()
 

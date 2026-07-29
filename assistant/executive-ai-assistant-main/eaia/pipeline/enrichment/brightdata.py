@@ -44,11 +44,12 @@ def _brightdata_get(url: str, timeout: int = 20) -> str:
     if not key:
         logger.debug("BRIGHTDATA_API_KEY not set — skipping BrightData call")
         return ""
+    zone = os.getenv("BRIGHTDATA_ZONE", "mcp_unlocker")
     try:
         r = requests.post(
             "https://api.brightdata.com/request",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={"zone": "web_unlocker1", "url": url, "format": "raw"},
+            json={"zone": zone, "url": url, "format": "raw"},
             timeout=timeout,
         )
         if r.status_code == 200:

@@ -48,12 +48,17 @@ _HTTP_TIMEOUT = 15
 # ---------------------------------------------------------------------------
 def _env(source, status, data=None, sources=None):
 	"""Uniform source envelope. status ∈ ok | skipped_no_key | empty | error."""
+	try:
+		fetched = str(now_datetime())
+	except Exception:
+		from datetime import datetime
+		fetched = datetime.utcnow().isoformat()
 	return {
 		"source": source,
 		"status": status,
 		"data": data if data is not None else {},
 		"sources": sources or [],
-		"fetched_at": str(now_datetime()),
+		"fetched_at": fetched,
 	}
 
 
@@ -211,7 +216,7 @@ def _brightdata_get(url: str, timeout: int = 20) -> str:
 	# Zone name is account-specific. Configurable via `brightdata_zone`; default matches
 	# BrightData's common Web Unlocker zone. If the account uses a different zone name the
 	# API returns HTTP 400 "zone not found" — we log and degrade (never fabricate).
-	zone = _get_key("brightdata_zone") or "web_unlocker1"
+	zone = _get_key("brightdata_zone") or "mcp_unlocker"
 	try:
 		r = requests.post(
 			"https://api.brightdata.com/request",
@@ -548,8 +553,29 @@ def gather_person_intel(name: str, org: str = "", linkedin_url: str = "", title:
 
 
 def _run_parallel(jobs: dict) -> dict:
+	"""Run source jobs concurrently with a frappe.conf snapshot.
+
+	Worker threads do not inherit frappe.local, so `_get_key()` would raise
+	'object is not bound' if it touched frappe.conf. Snapshot keys into
+	os.environ before fan-out (env is process-global and thread-safe to read).
+	"""
+	import os
+
+	# Promote site_config keys into env for worker threads (non-destructive if set).
+	for name in (
+		"tavily_api_key", "apollo_api_key", "diffbot_token",
+		"brightdata_api_key", "brightdata_zone", "openrouter_api_key",
+	):
+		try:
+			val = frappe.conf.get(name)
+		except Exception:
+			val = None
+		if val and not os.getenv(name.upper()):
+			os.environ[name.upper()] = str(val)
+
 	out = {}
-	with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as ex:
+	# Keep fan-out, but isolate each job so one source failure never kills others.
+	with ThreadPoolExecutor(max_workers=min(8, max(1, len(jobs)))) as ex:
 		fut = {ex.submit(fn): key for key, fn in jobs.items()}
 		for f in as_completed(fut):
 			key = fut[f]

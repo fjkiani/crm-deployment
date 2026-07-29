@@ -88,7 +88,13 @@ def classify_email(email: str, name: str) -> str:
 def _get_key(*names):
 	import os
 	for n in names:
-		v = os.getenv(n.upper()) or frappe.conf.get(n.lower())
+		v = os.getenv(n.upper())
+		if v:
+			return v
+		try:
+			v = frappe.conf.get(n.lower())
+		except Exception:
+			v = None
 		if v:
 			return v
 	return None
