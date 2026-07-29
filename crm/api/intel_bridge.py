@@ -46,6 +46,9 @@ except Exception:  # AACR Talk API optional; synthesis works from Schema B alone
 #   presentation_type == clinical_trial_readout: +1.0
 #   data_maturity contains "mature":              +0.5
 SCORING_FORMULA_VERSION = "v2"
+# Tier cut-offs, recorded alongside every score so a historical row can be
+# re-derived even after the bands are retuned.
+TIER_BANDS = {"Tier 1": 8.0, "Tier 2": 6.0}
 
 
 def compute_score(intel: dict) -> dict:
@@ -89,8 +92,10 @@ def compute_score(intel: dict) -> dict:
 		score += 0.5
 		signals.append(f"data_maturity~mature (+0.5) [{maturity}]")
 
-	tier = "Tier 1" if score >= 8 else ("Tier 2" if score >= 6 else "Tier 3")
-	return {"lead_score": round(score, 2), "tier": tier, "signals": signals}
+	tier = ("Tier 1" if score >= TIER_BANDS["Tier 1"]
+	        else ("Tier 2" if score >= TIER_BANDS["Tier 2"] else "Tier 3"))
+	return {"lead_score": round(score, 2), "tier": tier, "signals": signals,
+	        "formula_version": SCORING_FORMULA_VERSION}
 
 
 # --------------------------------------------------------------------------- #
@@ -190,9 +195,14 @@ def synthesize_gtm_from_intel(lead_name: str, commit: bool = True) -> dict:
 			"priority_rank": lead.priority_rank,
 			"snapped_at": datetime.now(timezone.utc).isoformat(),
 		}
+	# Provenance MUST name the formula that actually ran. This previously read a
+	# hardcoded "v1_tunable" while compute_score implemented v2, so every lead the
+	# bridge touched carried a false formula label. Derive it from the constant.
 	ad["nyx_gtm"] = {
 		"source": "synthesized",
-		"formula": "v1_tunable",
+		"formula": f"{SCORING_FORMULA_VERSION}_tunable",
+		"formula_version": SCORING_FORMULA_VERSION,
+		"tier_bands": TIER_BANDS,
 		"signals": scoring["signals"],
 		"intel_synced_at": datetime.now(timezone.utc).isoformat(),
 	}

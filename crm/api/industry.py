@@ -254,6 +254,55 @@ def _email_template_name(slug: str, step_number: int) -> str:
 # ---------------------------------------------------------------------------
 # Seed endpoints  (write live rows)
 # ---------------------------------------------------------------------------
+def _step_subject(step: dict, subject_base: str) -> str:
+    """Subject for one outreach step.
+
+    A GENERATED card carries a per-step `subject` -- either the KOL's own
+    `email_subject` (present on 20/20 KOL records) or the subject drafted by
+    nyx_email_brain.draft_outreach_body. Preferring subject_base here is what made
+    the dynamic subject line dead on the seed path: the curated
+    `CrisPRO - <trial> (msg N)` label overwrote it. Curated engagements carry no
+    per-step subject, so they keep the old label unchanged.
+    """
+    s = (step.get("subject") or "").strip()
+    if s:
+        n = step.get("step_number")
+        return f"{s} (msg {n})" if (n and int(n) > 1) else s
+    return f"{subject_base} (msg {step['step_number']})"
+
+
+def _prospect_provenance(engagement: dict, slug: str, company: str, contacts: dict) -> dict:
+    """Real source/notes/ref for a seeded prospect.
+
+    Was hardcoded to source="Manual Entry" with an "Industry engagement" note even
+    for a KOL-derived, auto-generated card -- which misattributes where the record
+    came from. A generated card is identifiable by its `_generated` block.
+    """
+    gen = engagement.get("_generated") or {}
+    fm = engagement.get("front_matter", {}) or {}
+    if gen:
+        subj_type = gen.get("subject_type") or "Lead"
+        subj_key = gen.get("subject_key") or ""
+        used = gen.get("sources_used") or {}
+        bits = [k for k, v in used.items() if v is True]
+        return {
+            "source": "Existing Customer" if subj_type == "Deal" else "Campaign",
+            "source_ref_id": f"generated::{subj_type}::{subj_key}" if subj_key else f"generated::{slug}",
+            "notes": (
+                f"Auto-generated engagement card for {subj_type} {subj_key or slug} "
+                f"({company}). Evidence used: {', '.join(bits) if bits else 'none recorded'}. "
+                f"Indication: {fm.get('cancer_type') or 'unspecified'}. "
+                f"Preferred channel: {contacts.get('preferred_channel','')}."
+            ),
+        }
+    return {
+        "source": "Manual Entry",
+        "source_ref_id": f"engagement::{slug}",
+        "notes": (f"Industry engagement primary contact — {company}. "
+                  f"Preferred channel: {contacts.get('preferred_channel','')}."),
+    }
+
+
 def _seed_one(engagement: dict, option: str = "A") -> Dict[str, Any]:
     """Materialize one engagement into Email Templates + Sequence + Prospect +
     Instance + Tasks + Inbox drafts. Idempotent per (slug, option)."""
@@ -274,7 +323,7 @@ def _seed_one(engagement: dict, option: str = "A") -> Dict[str, Any]:
     subject_base = f"CrisPRO — {fm.get('trial','').split('(')[0].strip() or company}"
     for s in steps:
         et_name = _email_template_name(slug, s["step_number"])
-        subject = f"{subject_base} (msg {s['step_number']})"
+        subject = _step_subject(s, subject_base)
         html = _text_to_html(s.get("body", ""))
         if frappe.db.exists("Email Template", et_name):
             et = frappe.get_doc("Email Template", et_name)
@@ -341,11 +390,8 @@ def _seed_one(engagement: dict, option: str = "A") -> Dict[str, Any]:
                 "institution": primary.get("institution", ""),
                 "cancer_type": fm.get("cancer_type") or "Colorectal Cancer",
                 "tier": _rank_to_tier(fm.get("outreach_priority_rank")),
-                "source": "Manual Entry",
-                "source_ref_id": f"engagement::{slug}",
                 "outreach_status": "Not Contacted",
-                "notes": f"Industry engagement primary contact — {company}. "
-                         f"Preferred channel: {contacts.get('preferred_channel','')}.",
+                **_prospect_provenance(engagement, slug, company, contacts),
             })
             prospect.insert(ignore_permissions=True)
             prospect_name = prospect.name
@@ -406,7 +452,7 @@ def _seed_one(engagement: dict, option: str = "A") -> Dict[str, Any]:
         created["tasks"].append(task.name)
 
         # Inbox draft (save_draft requires to+subject+html)
-        subject = f"{subject_base} (msg {s['step_number']})"
+        subject = _step_subject(s, subject_base)
         try:
             from crm.api.email import save_draft
             comm_name = save_draft(
