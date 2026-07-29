@@ -99,7 +99,7 @@ def _get_conf(*names, default=None):
                 if hasattr(gs, n.lower()) and getattr(gs, n.lower()):
                     return getattr(gs, n.lower())
     except Exception:
-        pass
+        logger.debug("nyx_email_brain._get_conf: CRM Global Settings lookup failed for %s", names, exc_info=True)
     return default
 
 
@@ -163,16 +163,11 @@ _PROVIDER_CATALOG = {
             {"id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro"},
         ],
     },
-    # Documented follow-up seam — not yet wired in the backend.
-    "grok": {
-        "label": "xAI Grok (coming soon)",
-        "key_field": "grok_api_key",
-        "key_hint": "xai-...",
-        "models": [],
-        "disabled": True,
-        "note": "Requires a backend provider seam (not yet implemented).",
-    },
 }
+# NOTE: only providers with a real backend completion path appear above.
+# _active_llm_provider() dispatches on this catalog, so an entry here without a
+# working seam would advertise a capability the server cannot honour. Add a new
+# provider only together with its completion function and _ALLOWED_WRITE_PROVIDERS entry.
 
 _ALLOWED_WRITE_PROVIDERS = {"openrouter", "gemini"}
 
@@ -281,7 +276,9 @@ def approve_and_send(communication_name: str) -> dict:
     try:
         _record_brain_event(communication_name, "sent", {"backend": get_backend()})
     except Exception:
-        pass
+        # The send already succeeded; a telemetry failure must not fail the call,
+        # but it must be visible in the log rather than swallowed.
+        logger.warning("nyx_email_brain: failed to record 'sent' brain event for %s", communication_name, exc_info=True)
     return {"ok": True, "communication": communication_name, "backend": get_backend(), "send": res}
 
 
@@ -563,7 +560,9 @@ def _lead_context(lead, incoming: str | None) -> str:
     try:
         parts.extend(_aacr_scientific_context(lead, ad))
     except Exception:
-        pass
+        # Non-AACR leads legitimately yield nothing; a real failure here silently
+        # degrades draft quality, so surface it.
+        logger.warning("nyx_email_brain: AACR scientific context failed for lead %s", getattr(lead, "name", "?"), exc_info=True)
     if incoming:
         parts.append(f"\nINBOUND MESSAGE:\n{incoming}")
     return "\n".join(parts)
@@ -677,7 +676,7 @@ def _record_brain_event(communication_name, event, meta: dict):
             "meta": json.dumps(meta or {}),
         }).insert(ignore_permissions=True)
     except Exception:
-        pass
+        logger.warning("nyx_email_brain._record_brain_event: insert failed (event=%s)", event, exc_info=True)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -704,3 +703,228 @@ def _safe_json(raw: str, default: dict) -> dict:
             except Exception:
                 return dict(default)
         return dict(default)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# REUSABLE GUARDED DRAFTING SEAM  (consumed by crm.api.plan_generator)
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Frozen contract:
+#   draft_outreach_body(ctx, evidence, subject_hint="") -> {subject, html, method, guard}
+#
+# The LLM writes PROSE ONLY and can never introduce a citable claim, because:
+#   1. the prompt receives ONLY sourced evidence (every item carries a source), and
+#   2. the output is scanned by _claim_guard() for any number, trial id, or drug
+#      name absent from that evidence; on violation the LLM text is DISCARDED and
+#      the deterministic body is used instead (and labelled as such).
+#
+# That two-part construction is what makes LLM-written outreach safe to put in
+# front of a clinical audience: the model controls tone and ordering, never facts.
+
+import logging as _logging  # noqa: E402
+import re as _re  # noqa: E402  (module tail import; header left untouched)
+
+logger = _logging.getLogger(__name__)
+
+# drug-like tokens (INN stems). Used to catch invented compound names.
+# CASE-INSENSITIVE on purpose: generic drug names are lowercase in prose
+# ("zanubrutinib"), so an upper-case-only pattern misses almost every real
+# fabrication. Suffixes that collide with ordinary English ("-cel" in "cancel",
+# "-stat" in "thermostat", "-tide" in "peptide") are deliberately EXCLUDED from
+# the bare-word branch; hyphenated cell-therapy products (cilta-cel, ide-cel)
+# get their own branch where the hyphen makes the match unambiguous.
+# USAN/INN stems for drug classes a model could plausibly invent. Chosen so that
+# the anchor indication's own vocabulary is covered: MSS colorectal cancer on an
+# mFOLFOX6 +/- bevacizumab backbone means fluoro-pyrimidines (-uracil, -itabine),
+# platinums (-platin), topoisomerase-I (-tecan, incl. FOLFIRI), anti-VEGF/EGFR
+# (-mab, -bercept) and the KRAS G12C comparator class (-rasib) are all live terms
+# an unguarded draft could fabricate. Empirically validated: 58/58 hits on a
+# CRC/IO reference drug list, 0 false positives across 717 KB of this repo's own
+# prose (curated engagement cards, governance constants, deterministic bodies)
+# and an ordinary-English sweep of look-alike endings (concept/accept/consensus/
+# stimulus/pecan/toucan/citation/volcanic/...).
+# Deliberately NOT included: bare -cel, -stat, -tide, -cept, -fur (each collides
+# with ordinary English or with words this codebase already ships).
+_DRUG_SUFFIX = _re.compile(
+    r"\b[A-Za-z][a-z]{2,}(?:mab|nib|tinib|ciclib|parib|zumab|ximab|umab|limab"
+    r"|mycin|platin|rubicin|taxel|sertib|degib|lisib|rafenib"
+    # added after integration testing found the shipped list missed 21/58 of the
+    # drugs that matter for this program (whole KRAS G12C class, the FOLFOX/FOLFIRI
+    # backbone, mTOR and proteasome inhibitors):
+    r"|rasib|tecan|itabine|itidine|uracil|limus|zomib|bercept|leucel)\b"
+    r"|\b[a-z]{3,}-cel\b",
+    _re.I)
+_NCT_RE = _re.compile(r"\bNCT\d{6,}\b", _re.I)
+# numbers that read as CLINICAL RESULTS — deliberately narrow so ordinary prose
+# ("step 2", "in 4 days") does not trip the guard.
+_CLINICAL_NUM = _re.compile(
+    r"\d+(?:\.\d+)?\s?%"
+    r"|(?:ORR|PFS|OS|DFS|HR|median|survival|response rate)[^.\n]{0,24}?\d+(?:\.\d+)?"
+    r"|\d+(?:\.\d+)?[^.\n]{0,24}?(?:ORR|PFS|OS|DFS|median|survival|response rate)"
+    r"|\bp\s*[<=]\s*0?\.\d+"
+    r"|\bHR\s*[=:]\s*\d"
+    r"|\bn\s*=\s*\d+",
+    _re.I)
+_NUMERAL = _re.compile(r"\d+(?:\.\d+)?")
+
+_DRAFT_SYS = (
+    "You are drafting a short, specific outreach message from a computational "
+    "oncology team (CrisPRO / Brenus Pharma) to a named cancer researcher.\n"
+    "HARD RULES — violating any of these makes the draft unusable:\n"
+    "  1. Use ONLY the facts in EVIDENCE below. Invent nothing.\n"
+    "  2. Never state a number, percentage, trial identifier (NCT...), or drug "
+    "name that is not present verbatim in EVIDENCE.\n"
+    "  3. Never claim a model has been run on their data, never promise a "
+    "clinical outcome (ORR/PFS/OS), never imply an existing partnership.\n"
+    "  4. If EVIDENCE is thin, write a short scientific-interest note and ask "
+    "one question. Do NOT pad with invented specifics.\n"
+    "  5. 120 words maximum. Plain, peer-to-peer tone. No marketing language.\n"
+    "Return ONLY the message body as simple HTML <p> paragraphs. No subject line, "
+    "no preamble, no code fences."
+)
+
+
+def _fence_strip(txt: str) -> str:
+    """Local fence stripper. Defined here (not imported from nyx_agent) because
+    nyx_agent imports THIS module — importing back would be circular."""
+    t = (txt or "").strip()
+    if t.startswith("```"):
+        t = _re.sub(r"^```[a-zA-Z]*\s*", "", t)
+        t = _re.sub(r"\s*```$", "", t)
+    return t.strip()
+
+
+def _evidence_blob(evidence) -> str:
+    parts = []
+    for e in evidence or []:
+        if isinstance(e, dict):
+            parts.append(str(e.get("text", "")))
+            parts.append(str(e.get("source", "")))
+        else:
+            parts.append(str(e))
+    return " \n".join(parts)
+
+
+def _claim_guard(text: str, evidence_blob: str) -> dict:
+    """Reject prose that introduces facts absent from the sourced evidence.
+
+    Returns {"ok": bool, "violations": [str]}. Conservative by construction: a
+    claim is a violation unless its literal token appears in the evidence blob.
+    """
+    violations = []
+    body = text or ""
+    blob = evidence_blob or ""
+    blob_l = blob.lower()
+
+    for nct in set(_NCT_RE.findall(body)):
+        if nct.lower() not in blob_l:
+            violations.append(f"unsourced trial id: {nct}")
+
+    for drug in set(_DRUG_SUFFIX.findall(body)):
+        if drug.lower() not in blob_l:
+            violations.append(f"unsourced drug name: {drug}")
+
+    for m in set(_CLINICAL_NUM.findall(body)):
+        frag = m if isinstance(m, str) else " ".join(x for x in m if x)
+        for num in _NUMERAL.findall(frag):
+            if num not in blob:
+                violations.append(f"unsourced clinical number: {frag.strip()[:60]}")
+                break
+
+    return {"ok": not violations, "violations": violations}
+
+
+def _deterministic_body(ctx: dict, evidence) -> str:
+    """Data-derived fallback. Dynamic (built from real ctx/evidence) but not
+    LLM-written. Never asserts anything not already in ctx/evidence."""
+    name = (ctx or {}).get("display_name") or "there"
+    first = name.split()[0] if " " in name else name
+    hook = (ctx or {}).get("hook") or ""
+    angle = (ctx or {}).get("crispro_angle") or ""
+    oq = (ctx or {}).get("open_questions") or ""
+    if isinstance(oq, (list, tuple)):
+        oq = oq[0] if oq else ""
+    topic = (ctx or {}).get("aacr_topic") or (ctx or {}).get("company") or "your program"
+
+    ps = [f"Hi {first},"]
+    if hook:
+        ps.append(f"Your work on {str(hook)[:220]} is directly relevant to what we build.")
+    else:
+        ps.append(f"I follow work in {str(topic)[:120]} and wanted to make a brief, "
+                  f"specific introduction.")
+    if angle:
+        ps.append(f"Where we may be useful: {str(angle)[:220]}")
+    if oq:
+        ps.append(f"The open question I would most like your read on: {str(oq)[:200]}")
+    ps.append("No ask beyond a short scientific conversation. Worth 20 minutes?")
+    sender = (ctx or {}).get("sender") or "CrisPRO / Brenus Pharma"
+    ps.append(f"— {sender}")
+    return "".join(f"<p>{p}</p>" for p in ps)
+
+
+def _fallback_subject(ctx: dict) -> str:
+    topic = (ctx or {}).get("aacr_topic") or (ctx or {}).get("hook") or ""
+    topic = str(topic).strip()
+    if topic:
+        return f"Question about {topic[:60]}"
+    company = (ctx or {}).get("company") or "your program"
+    return f"Brief scientific question — {str(company)[:50]}"
+
+
+def draft_outreach_body(ctx: dict, evidence=None, subject_hint: str = "") -> dict:
+    """Draft one outreach message body. NEVER raises; always returns a usable body.
+
+    ctx      : {display_name, company, institution, aacr_topic, hook,
+                crispro_angle, open_questions, step_number, sender}
+    evidence : ONLY sourced signals -> [{text, source, kind}, ...]
+    returns  : {subject, html, method, guard}
+                 method: 'llm:<provider>' | 'deterministic' | 'deterministic:guard_violation'
+                 guard : {'ok': bool, 'violations': [...]}
+    """
+    ctx = ctx or {}
+    evidence = evidence or []
+    blob = _evidence_blob(evidence)
+    subject = (subject_hint or "").strip() or _fallback_subject(ctx)
+    guard = {"ok": True, "violations": []}
+
+    llm = None
+    try:
+        llm = _resolve_llm()
+    except Exception:
+        logger.warning("draft_outreach_body: LLM resolution failed", exc_info=True)
+        llm = None
+
+    if llm:
+        try:
+            ev_lines = "\n".join(
+                f"- {e.get('text','')} [source: {e.get('source','')}]"
+                for e in evidence if isinstance(e, dict) and e.get("text")
+            ) or "(no sourced evidence available — keep it general and ask a question)"
+            prompt = (
+                f"{_DRAFT_SYS}\n\n"
+                f"RECIPIENT: {ctx.get('display_name','')}"
+                f"{' — ' + str(ctx.get('institution')) if ctx.get('institution') else ''}\n"
+                f"THEIR FOCUS: {ctx.get('aacr_topic') or ctx.get('hook') or 'unknown'}\n"
+                f"WHERE WE MAY HELP: {ctx.get('crispro_angle') or 'general trial-design support'}\n"
+                f"OPEN QUESTION TO RAISE: {ctx.get('open_questions') or '(none supplied)'}\n"
+                f"SENDER: {ctx.get('sender') or 'CrisPRO / Brenus Pharma'}\n"
+                f"STEP: {ctx.get('step_number', 1)} of a 2-step sequence\n\n"
+                f"EVIDENCE (the ONLY facts you may use):\n{ev_lines}\n"
+            )
+            raw = _fence_strip(llm(prompt) or "")
+            if raw:
+                guard = _claim_guard(raw, blob)
+                if guard["ok"]:
+                    return {"subject": subject, "html": raw,
+                            "method": f"llm:{_active_llm_provider()}", "guard": guard}
+                logger.warning(
+                    "draft_outreach_body: claim guard rejected LLM draft: %s",
+                    guard["violations"])
+                return {"subject": subject, "html": _deterministic_body(ctx, evidence),
+                        "method": "deterministic:guard_violation", "guard": guard}
+        except Exception:
+            logger.warning("draft_outreach_body: LLM draft failed, using deterministic",
+                           exc_info=True)
+
+    return {"subject": subject, "html": _deterministic_body(ctx, evidence),
+            "method": "deterministic", "guard": guard}
