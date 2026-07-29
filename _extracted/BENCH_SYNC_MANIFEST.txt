@@ -1,0 +1,30 @@
+=== BENCH API SYNC ===
+ADDED nyx_agent.py
+ADDED nyx_campaigns.py
+ADDED nyx_email_brain.py
+ADDED nyx_inbound.py
+ADDED enrichment.py
+ADDED enrichment_api.py
+ADDED enrichment_sources.py
+ADDED tasks.py
+ADDED email.py
+ADDED industry.py
+ADDED directory.py
+ADDED intel_bridge.py
+ADDED intel_facets.py
+ADDED leadgen.py
+ADDED ai.py
+ADDED agent.py
+ADDED session_nav.py
+ADDED NYX_INBOUND_RUNBOOK.md
+ADDED doctype crispro_enrichment
+ADDED doctype lead_enrichment_log
+ADDED doctype nyx_action_log
+ADDED doctype nyx_brain_settings
+UPDATED frontend Tasks.vue
+ADDED/UPDATED NyxCampaignStudio.vue
+UPDATED NyxTab.vue
+SYNCED enrich_collector.py
+=== bench-only preserved ===
+frappe-bench/apps/crm/crm/api/nyx_inbound_hook.py
+frappe-bench/apps/crm/crm/api/sequence_manager.py

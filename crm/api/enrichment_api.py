@@ -336,6 +336,218 @@ def get_enrichment(subject_type: str, subject_key: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Full lead enrichment (multi-source intel → CRM Lead fields)
+# ---------------------------------------------------------------------------
+def _intel_sources_used(payload: dict) -> list[str]:
+	"""Map enrichment_sources payload keys to UI-friendly source labels."""
+	key_map = {
+		"tavily": "tavily",
+		"apollo_org": "apollo",
+		"apollo_person": "apollo",
+		"brightdata": "brightdata_sec",
+		"brightdata_sec": "brightdata_sec",
+		"pubmed": "pubmed",
+		"clinicaltrials": "clinicaltrials",
+		"diffbot_org": "diffbot",
+		"diffbot_person": "diffbot",
+		"linkedin": "linkedin",
+		"strategy": "strategy",
+		"competitors": "competitors",
+	}
+	used = []
+	for key, env in (payload or {}).items():
+		if isinstance(env, dict) and env.get("status") == "ok":
+			used.append(key_map.get(key, key))
+	return sorted(set(used))
+
+
+def _detect_context(payload: dict) -> list[str]:
+	ctx = []
+	if any((payload.get(k) or {}).get("status") == "ok" for k in ("clinicaltrials", "pubmed")):
+		ctx.append("clinical")
+	if any((payload.get(k) or {}).get("status") == "ok" for k in ("apollo_org", "diffbot_org", "strategy")):
+		ctx.append("financial")
+	if (payload.get("competitors") or {}).get("status") == "ok":
+		ctx.append("competitive")
+	if (payload.get("tavily") or {}).get("status") == "ok":
+		ctx.append("core")
+	return ctx or ["core"]
+
+
+def _map_distilled_signals(signals: dict, fit: dict) -> dict:
+	"""Map oncology distill output to the EAIA/NyxTab distilled_signals shape."""
+	sigs = signals.get("signals") or []
+	texts = [s.get("text", "") for s in sigs if s.get("text")]
+	by_kind: dict[str, list[str]] = {}
+	for s in sigs:
+		by_kind.setdefault(s.get("kind", "other"), []).append(s.get("text", ""))
+
+	specific_number = "UNKNOWN"
+	for t in texts:
+		if any(c.isdigit() for c in t):
+			specific_number = t[:240]
+			break
+
+	recent_event = (
+		(by_kind.get("trial") or by_kind.get("event") or by_kind.get("publication") or [""])[0]
+		or "UNKNOWN"
+	)
+	strategic_detail = (
+		signals.get("lead_drug")
+		or (by_kind.get("pipeline") or by_kind.get("strategy") or [""])[0]
+		or "UNKNOWN"
+	)
+	competitor_name = (by_kind.get("competitor") or ["UNKNOWN"])[0]
+
+	dims = (fit or {}).get("dimensions") or {}
+	weak = [code for code, meta in dims.items() if not (meta or {}).get("live_evidence")]
+	if weak:
+		blind_spot = f"Limited live evidence on fit dimensions: {', '.join(weak[:2])}"
+	else:
+		blind_spot = competitor_name if competitor_name != "UNKNOWN" else "UNKNOWN"
+
+	return {
+		"specific_number": (specific_number or "UNKNOWN")[:240],
+		"recent_event": (recent_event or "UNKNOWN")[:240],
+		"strategic_detail": (strategic_detail or "UNKNOWN")[:240],
+		"blind_spot": (blind_spot or "UNKNOWN")[:240],
+		"competitor_name": (competitor_name or "UNKNOWN")[:120],
+	}
+
+
+def _compute_nyx_score(signals: dict, distilled: dict) -> int:
+	gate = signals.get("signal_gate", "quarantine")
+	sig_list = signals.get("signals") or []
+	real = len([s for s in sig_list if len((s.get("text") or "")) > 10])
+	gate_fields = ["specific_number", "recent_event", "strategic_detail"]
+	real_distilled = sum(
+		1 for k in gate_fields
+		if distilled.get(k) and distilled.get(k) not in ("UNKNOWN", "") and len(str(distilled.get(k))) > 10
+	)
+	if gate == "quarantine" and real_distilled < 2:
+		return max(15, min(35, 10 + real * 5))
+	return max(0, min(100, 35 + real * 12 + real_distilled * 8))
+
+
+def _framework_for_score(score: int) -> str:
+	if score >= 70:
+		return "challenger"
+	if score >= 40:
+		return "pas"
+	return "aida"
+
+
+def _apply_enrichment_to_lead(lead_name: str, patch: dict, nyx_fields: dict) -> None:
+	lead = frappe.get_doc("CRM Lead", lead_name)
+	ad = frappe.parse_json(lead.additional_data) if lead.additional_data else {}
+	if not isinstance(ad, dict):
+		ad = {}
+	ad.update(patch)
+	lead.additional_data = json.dumps(ad)
+
+	meta = frappe.get_meta("CRM Lead")
+	for field, value in nyx_fields.items():
+		if meta.has_field(field):
+			lead.set(field, value)
+
+	lead.save(ignore_permissions=True)
+	frappe.db.commit()
+
+
+@frappe.whitelist()
+def enrich_lead(lead_name: str, force: int = 0, discover_email: int = 1) -> dict:
+	"""Full Nyx enrichment: multi-source intel, CRM Lead write, optional email discovery.
+
+	Unlike enrich_contact (cache-only write to CrisPRO Enrichment), this merges intel into
+	CRM Lead additional_data and Nyx custom fields so NyxTab reflects the run immediately.
+	"""
+	_guard()
+	force = int(force or 0)
+	discover_email = int(discover_email if discover_email is not None else 1)
+
+	if not frappe.db.exists("CRM Lead", lead_name):
+		frappe.throw(_("Lead not found: {0}").format(lead_name), frappe.DoesNotExistError)
+
+	enrich_out = enrich_contact(lead_name, force=force)
+	oncology = enrich_out.get("signals") or {}
+	if isinstance(oncology, list):
+		oncology = {"signals": oncology}
+	fit = enrich_out.get("fit") or {}
+	payload = enrich_out.get("payload") or {}
+
+	distilled = _map_distilled_signals(oncology, fit)
+	score = _compute_nyx_score(oncology, distilled)
+	framework = _framework_for_score(score)
+	sources_used = _intel_sources_used(payload)
+	contexts = _detect_context(payload)
+	signal_gate = oncology.get("signal_gate", "quarantine")
+	quarantined = signal_gate == "quarantine"
+	sig_list = oncology.get("signals") or []
+	score_reasoning = "; ".join((s.get("text") or "")[:80] for s in sig_list[:3])
+
+	now = str(now_datetime())
+	intel_patch = {
+		"score": score,
+		"framework": framework,
+		"score_reasoning": score_reasoning,
+		"score_angle": oncology.get("primary_indication") or oncology.get("lead_drug") or "",
+		"detected_context": contexts,
+		"enrichment_sources_used": sources_used,
+		"distilled_signals": distilled,
+		"enriched_at": now,
+		"signal_gate": signal_gate,
+		"quarantined": quarantined,
+	}
+	if quarantined:
+		intel_patch["quarantine_reason"] = (
+			f"Signal gate: {len(sig_list)} oncology signal(s); need 2+ citable facts"
+		)
+
+	nyx_fields = {
+		"nyx_enriched": 1,
+		"nyx_score": score,
+		"nyx_framework": framework,
+		"lead_score": score,
+		"nyx_signal_gate": "FAIL" if quarantined else "PASS",
+		"nyx_quarantine_reason": intel_patch.get("quarantine_reason", ""),
+		"nyx_last_pipeline_run": now,
+		"nyx_sources_used": ",".join(sources_used),
+		"nyx_detected_context": ",".join(contexts),
+	}
+	if quarantined:
+		nyx_fields["email_status"] = "Quarantined"
+
+	try:
+		nyx_fields["nyx_enrichment_json"] = json.dumps(
+			{**enrich_out, **intel_patch}, default=str
+		)[:65535]
+	except Exception:
+		nyx_fields["nyx_enrichment_json"] = ""
+
+	_apply_enrichment_to_lead(lead_name, intel_patch, nyx_fields)
+
+	email_result = None
+	if discover_email:
+		lead = frappe.get_doc("CRM Lead", lead_name)
+		if not lead.email:
+			from crm.api.enrichment import enrich_lead_email
+			email_result = enrich_lead_email(lead_name, force=False, write=True)
+
+	return {
+		"lead": lead_name,
+		"decision": "quarantined" if quarantined else "enriched",
+		"cached": bool(enrich_out.get("cached")),
+		"score": score,
+		"framework": framework,
+		"signal_gate": signal_gate,
+		"enrichment_sources_used": sources_used,
+		"distilled_signals": distilled,
+		"quarantine_reason": intel_patch.get("quarantine_reason", ""),
+		"email": email_result,
+	}
+
+
+# ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
 def _collect_sources(intel: dict) -> list:

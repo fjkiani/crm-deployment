@@ -558,8 +558,8 @@ function formatKey(key) {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 const enrichResource = createResource({
-  url: 'crm.api.enrichment.enrich_lead_email',
-  makeParams: () => ({ lead_name: props.leadId, write: true }),
+  url: 'crm.api.enrichment_api.enrich_lead',
+  makeParams: () => ({ lead_name: props.leadId, force: 0, discover_email: 1 }),
 })
 
 // Truthful brain/provider status so the user sees which model will run (and
@@ -722,31 +722,36 @@ watch(() => props.leadId, () => { loadTasks() })
 
 async function runEnrichment() {
   enriching.value = true
-  enrichStage.value = 'discovering verified email (Tavily two-gate)...'
+  enrichStage.value = 'web, Apollo, BrightData, PubMed, ClinicalTrials...'
 
   try {
-    // In-app enrichment (deployed): resolves a verified email via Tavily two-gate
-    // adjudication. Runtime-agnostic — does NOT depend on the external EAIA service.
+    // Multi-source intel (enrichment_sources fan-out) + CRM Lead write; email
+    // discovery runs as a secondary Tavily two-gate step when the lead has no email.
     const result = (await enrichResource.submit()) || {}
     const decision = result.decision
+    const sources = (result.enrichment_sources_used || []).join(', ')
+    const email = result.email || {}
 
-    if (decision === 'written') {
-      toast({ variant: 'success', title: `Email verified & saved: ${result.email}` })
+    if (decision === 'enriched') {
+      toast({
+        variant: 'success',
+        title: `Enriched — score ${result.score}/100 (${result.framework || 'n/a'})`,
+        text: sources ? `Sources: ${sources}` : undefined,
+      })
+      if (email.decision === 'written') {
+        toast({ variant: 'success', title: `Email verified & saved: ${email.email}` })
+      }
       window.location.reload()
-    } else if (decision === 'skip_has_email') {
-      toast({ variant: 'info', title: `Lead already has an email: ${result.email}` })
-    } else if (decision === 'held') {
+    } else if (decision === 'quarantined') {
       toast({
         variant: 'warning',
-        title: 'Enrichment held',
-        text: `Candidates found but none passed the verification gate: ${(result.candidates || []).join(', ') || 'n/a'}`,
+        title: 'Enrichment quarantined',
+        text: result.quarantine_reason || 'Insufficient citable signals for outreach.',
       })
-    } else if (decision === 'no_candidate') {
-      toast({
-        variant: 'warning',
-        title: 'No email candidates found',
-        text: result.error ? `Reason: ${result.error}` : 'The web scout returned no candidate emails for this lead.',
-      })
+      if (email.decision === 'written') {
+        toast({ variant: 'success', title: `Email verified & saved: ${email.email}` })
+      }
+      window.location.reload()
     } else {
       toast({ variant: 'info', title: `Enrichment result: ${decision || 'unknown'}` })
     }

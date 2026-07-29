@@ -17,3 +17,4 @@ crm.patches.v1_0.update_deal_status_probabilities
 crm.patches.v1_0.update_deal_status_type
 crm.patches.v1_0.create_default_lost_reasons
 crm.patches.v1_0.add_communication_provider_fields
+crm.patches.v1_0.add_nyx_custom_fields
