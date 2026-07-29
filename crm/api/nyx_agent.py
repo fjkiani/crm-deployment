@@ -26,7 +26,7 @@ import logging
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from crm.api.nyx_email_brain import _resolve_llm, _active_llm_provider, _get_conf
 
@@ -85,8 +85,20 @@ def _reg():
 		},
 		"seed_engagement_plan": {
 			"label": "Seed outreach plan (sequence + tasks + drafts)",
-			"writes": True, "reversible": False, "dry_run_supported": False,
+			# Reversible since undo_data now captures the rows this seeding actually
+			# created (the seeder is an upsert, so pre-existing rows are left alone).
+			"writes": True, "reversible": True, "dry_run_supported": True,
 			"params": ["slug", "option"],
+		},
+		"generate_engagement_plan": {
+			"label": "Generate engagement plan card (any lead or company)",
+			"writes": False, "reversible": True, "dry_run_supported": False,
+			"params": ["subject_type", "subject_key", "use_enrich"],
+		},
+		"generate_and_seed_engagement_plan": {
+			"label": "Generate plan card AND seed it (sequence + tasks + drafts)",
+			"writes": True, "reversible": True, "dry_run_supported": True,
+			"params": ["subject_type", "subject_key", "option", "use_enrich"],
 		},
 		"create_task": {
 			"label": "Create a CRM task",
@@ -145,9 +157,102 @@ def _h_synth_gtm(p):
 	return res, undo
 
 
+# --- reversible seeding -----------------------------------------------------
+# The seeder (industry._seed_one) is an idempotent UPSERT: it updates a row when the
+# deterministic name already exists and inserts otherwise. A correct undo must delete
+# only the rows this call actually inserted. Frappe stamps `creation` on insert only,
+# so comparing each returned row's `creation` against a timestamp taken immediately
+# before seeding cleanly separates inserted from updated rows without needing to know
+# the seeder's private naming scheme.
+
+_SEED_DOCTYPES = {
+	"email_templates": "Email Template",
+	"sequence": "CRM Outreach Sequence",
+	"prospect": "CRM Outreach Prospect",
+	"instance": "CRM Outreach Sequence Instance",
+	"tasks": "CRM Task",
+	"drafts": "Communication",
+}
+
+# Deletion order: children/dependents first so FK-ish links do not block the delete.
+_UNDO_ORDER = ["drafts", "tasks", "instance", "prospect", "sequence", "email_templates"]
+
+
+def _seed_row_pairs(created: dict):
+	"""Flatten the seeder's `created` dict into [(bucket, doctype, name), ...]."""
+	pairs = []
+	for bucket, dt in _SEED_DOCTYPES.items():
+		val = (created or {}).get(bucket)
+		if not val:
+			continue
+		names = val if isinstance(val, (list, tuple)) else [val]
+		for n in names:
+			if isinstance(n, dict):
+				n = n.get("name") or n.get("docname")
+			if n:
+				pairs.append((bucket, dt, str(n)))
+	return pairs
+
+
+def _classify_seeded_rows(created: dict, t0):
+	"""Split seeded rows into genuinely-new vs pre-existing-and-updated."""
+	new_rows, updated_rows = [], []
+	for bucket, dt, name in _seed_row_pairs(created):
+		try:
+			creation = frappe.db.get_value(dt, name, "creation")
+		except Exception:
+			logger.warning("nyx_agent: could not read creation for %s %s", dt, name, exc_info=True)
+			creation = None
+		rec = {"bucket": bucket, "doctype": dt, "name": name}
+		if creation is not None and get_datetime(creation) >= get_datetime(t0):
+			new_rows.append(rec)
+		else:
+			# Either it pre-existed (upsert) or we could not tell — in both cases
+			# deleting it would be destructive, so it is never queued for undo.
+			rec["reason"] = "pre_existing_upsert" if creation is not None else "creation_unreadable"
+			updated_rows.append(rec)
+	return new_rows, updated_rows
+
+
+def _undo_payload_for_seed(created: dict, t0, **extra):
+	new_rows, updated_rows = _classify_seeded_rows(created, t0)
+	payload = {"new_rows": new_rows, "updated_rows": updated_rows}
+	payload.update(extra)
+	return payload
+
+
 def _h_seed_plan(p):
 	from crm.api.industry import seed_engagement_plan
-	return seed_engagement_plan(p["slug"], option=p.get("option", "A")), None
+	t0 = now_datetime()
+	res = seed_engagement_plan(p["slug"], option=p.get("option", "A"))
+	undo = _undo_payload_for_seed(res.get("created", {}), t0,
+	                              slug=p.get("slug"), option=p.get("option", "A"))
+	return res, undo
+
+
+def _h_generate_plan(p):
+	"""Read-only: build an engagements.json-shape card for ANY lead or company."""
+	from crm.api.plan_generator import generate_plan
+	res = generate_plan(
+		p.get("subject_type", "Lead"), p["subject_key"],
+		use_enrich=int(p.get("use_enrich", 1)),
+	)
+	return res, None
+
+
+def _h_generate_and_seed_plan(p):
+	"""Generate the card then materialize it. Reversible via captured new rows."""
+	from crm.api.plan_generator import generate_and_seed_plan
+	t0 = now_datetime()
+	res = generate_and_seed_plan(
+		p.get("subject_type", "Lead"), p["subject_key"],
+		option=p.get("option", "A"), use_enrich=int(p.get("use_enrich", 1)),
+	)
+	undo = _undo_payload_for_seed(res.get("seeded", {}), t0,
+	                             subject_type=p.get("subject_type", "Lead"),
+	                             subject_key=p.get("subject_key"),
+	                             slug=res.get("slug"), option=p.get("option", "A"))
+	return res, undo
 
 
 def _h_create_task(p):
@@ -199,6 +304,8 @@ _HANDLERS = {
 	"gtm_outreach_reasoning": _h_gtm_reasoning,
 	"synthesize_gtm_from_intel": _h_synth_gtm,
 	"seed_engagement_plan": _h_seed_plan,
+	"generate_engagement_plan": _h_generate_plan,
+	"generate_and_seed_engagement_plan": _h_generate_and_seed_plan,
 	"create_task": _h_create_task,
 	"create_note": _h_create_note,
 	"update_lead_score": _h_update_score,
@@ -328,6 +435,12 @@ def _default_plan(subject_type, subject_key, ctx):
 		 "rationale": "Assess the best outreach move and timing right now."},
 		{"tool": "synthesize_gtm_from_intel", "params": {"lead_name": lead, "commit": 0},
 		 "rationale": "Preview a GTM narrative synced from intel (dry, no write)."},
+		{"tool": "generate_engagement_plan",
+		 "params": {"subject_type": "Lead", "subject_key": lead, "use_enrich": 1},
+		 "rationale": "Build the engagement card (fit scores, sourced claims, message options) for this lead."},
+		{"tool": "generate_and_seed_engagement_plan",
+		 "params": {"subject_type": "Lead", "subject_key": lead, "option": "A", "use_enrich": 1},
+		 "rationale": "Materialize the card into templates + tasks + inbox drafts. Reversible; nothing sends."},
 	]
 
 
@@ -411,6 +524,35 @@ def _dry_preview(tool, params):
 	if tool == "approve_and_send":
 		return {"action": "Would SEND email (irreversible)",
 		        "communication": params.get("communication_name")}
+	if tool == "seed_engagement_plan":
+		return {"action": "Would seed the curated engagement plan (templates + tasks + drafts)",
+		        "slug": params.get("slug"), "option": params.get("option", "A"),
+		        "reversible": True, "sends_email": False}
+	if tool == "generate_and_seed_engagement_plan":
+		# Read-only preview: generate the card (writes nothing) and report what
+		# seeding it WOULD create, without seeding.
+		try:
+			from crm.api.plan_generator import generate_plan
+			res = generate_plan(params.get("subject_type", "Lead"), params.get("subject_key"),
+			                    use_enrich=int(params.get("use_enrich", 1)))
+			card = res.get("card", {})
+			opt = str(params.get("option", "A")).lower()
+			steps = (card.get("message_options", {}) or {}).get(f"option_{opt}", {}).get("steps", [])
+			return {"action": "Would generate the plan card and seed it",
+			        "subject_type": params.get("subject_type", "Lead"),
+			        "subject_key": params.get("subject_key"),
+			        "slug": card.get("slug"), "option": params.get("option", "A"),
+			        "curated": res.get("curated", False),
+			        "enrich_status": res.get("enrich_status"),
+			        "would_create": {"email_templates": len(steps), "tasks": len(steps),
+			                         "drafts": len(steps), "sequence": 1},
+			        "evidence_sufficiency": (card.get("_generated", {}) or {}).get("evidence_sufficiency"),
+			        "reversible": True, "sends_email": False}
+		except Exception as e:
+			logger.warning("nyx_agent: dry-run card generation failed", exc_info=True)
+			return {"action": "Would generate the plan card and seed it",
+			        "subject_key": params.get("subject_key"),
+			        "preview_error": str(e), "reversible": True, "sends_email": False}
 	return {"action": f"Would run {tool}", "params": params}
 
 
@@ -441,6 +583,21 @@ def undo_action(action_log_name: str) -> dict:
 		elif tool == "synthesize_gtm_from_intel" and undo.get("lead"):
 			frappe.db.set_value("CRM Lead", undo["lead"],
 			                    {"lead_score": undo.get("lead_score"), "tier": undo.get("tier")})
+		elif tool in ("seed_engagement_plan", "generate_and_seed_engagement_plan"):
+			removed, failed = _undo_seeded_rows(undo)
+			frappe.db.commit()
+			log.status = "undone"
+			log.save(ignore_permissions=True)
+			frappe.db.commit()
+			out = {"status": "undone", "tool": tool, "removed": removed,
+			       "left_in_place": undo.get("updated_rows", [])}
+			if failed:
+				out["failed"] = failed
+			if undo.get("updated_rows"):
+				out["note"] = ("Rows that already existed were updated in place by the "
+				               "idempotent seeder, not created by this action, so they were "
+				               "not deleted.")
+			return out
 		else:
 			return {"status": "noop", "reason": f"No undo path for {tool}."}
 		frappe.db.commit()
@@ -451,6 +608,28 @@ def undo_action(action_log_name: str) -> dict:
 	except Exception as e:
 		logger.exception("undo failed")
 		return {"status": "error", "reason": str(e)}
+
+
+def _undo_seeded_rows(undo: dict):
+	"""Delete only the rows the seeding run actually inserted, dependents first."""
+	by_bucket = {}
+	for rec in (undo or {}).get("new_rows", []):
+		by_bucket.setdefault(rec.get("bucket"), []).append(rec)
+	removed, failed = [], []
+	for bucket in _UNDO_ORDER:
+		for rec in by_bucket.get(bucket, []):
+			dt, name = rec.get("doctype"), rec.get("name")
+			try:
+				if frappe.db.exists(dt, name):
+					frappe.delete_doc(dt, name, ignore_permissions=True, force=True,
+					                  delete_permanently=True)
+					removed.append({"doctype": dt, "name": name})
+				else:
+					removed.append({"doctype": dt, "name": name, "already_absent": True})
+			except Exception as e:
+				logger.exception("nyx_agent: undo delete failed for %s %s", dt, name)
+				failed.append({"doctype": dt, "name": name, "error": str(e)})
+	return removed, failed
 
 
 # ---------------------------------------------------------------------------
@@ -503,3 +682,78 @@ def _strip_fence(txt: str) -> str:
 	txt = re.sub(r"^```(?:json)?\s*", "", (txt or "").strip())
 	txt = re.sub(r"\s*```$", "", txt)
 	return txt.strip()
+
+
+# ---------------------------------------------------------------------------
+# ENDPOINT: run_plan — bounded autonomy
+#   Auto-executes read + reversible steps in order and HALTS at the first
+#   irreversible step, returning it for explicit human confirmation.
+#   Nothing irreversible ever runs from here: approve_and_send always stops.
+# ---------------------------------------------------------------------------
+@frappe.whitelist()
+def run_plan(subject_type: str, subject_key: str, goal: str = "",
+             max_steps: int = 8, preview_irreversible: int = 1) -> dict:
+	"""Propose a workflow, then execute the safe prefix of it.
+
+	Autonomy contract:
+	  * writes=False            -> executed automatically
+	  * writes=True, reversible -> executed automatically (undoable, audited)
+	  * writes=True, NOT reversible -> NOT executed; run halts and returns the
+	    pending step with requires_confirm=True for a human to approve via
+	    execute_step(..., confirm=1)
+
+	Honest failure modes: a step returning `blocked` (kill switch) or `error`
+	halts the run; both are reported and already recorded in Nyx Action Log.
+	"""
+	_guard()
+	reg = _reg()
+	max_steps = int(max_steps or 8)
+	plan = plan_workflow(subject_type, subject_key, goal=goal)
+	executed, pending, status = [], None, "completed"
+
+	for step in plan.get("steps", [])[:max_steps]:
+		tool = step["tool"]
+		meta = reg.get(tool, {})
+		params = step.get("params", {}) or {}
+
+		# irreversible -> stop here, hand back to a human
+		if meta.get("writes") and not meta.get("reversible"):
+			pending = dict(step)
+			pending["requires_confirm"] = True
+			if int(preview_irreversible or 0) and meta.get("dry_run_supported"):
+				try:
+					pending["would_do"] = _dry_preview(tool, params)
+				except Exception as e:
+					logger.warning("run_plan: preview failed for %s", tool, exc_info=True)
+					pending["preview_error"] = str(e)
+			status = "awaiting_confirm"
+			break
+
+		res = execute_step(subject_type, subject_key, tool, params=params,
+		                   dry_run=0, confirm=0, rationale=step.get("rationale", ""))
+		executed.append({"tool": tool, "label": meta.get("label", tool),
+		                 "status": res.get("status"), "action_log": res.get("action_log"),
+		                 "undoable": res.get("undoable", False),
+		                 "reason": res.get("reason"), "result": res.get("result")})
+		if res.get("status") == "blocked":
+			status = "blocked"
+			break
+		if res.get("status") == "error":
+			status = "error"
+			break
+
+	remaining = len(plan.get("steps", [])) - len(executed) - (1 if pending else 0)
+	out = {
+		"subject_type": subject_type, "subject_key": subject_key, "goal": goal,
+		"method": plan.get("method"), "status": status,
+		"execution_enabled": _execution_enabled(),
+		"n_proposed": len(plan.get("steps", [])),
+		"executed": executed,
+		"pending_step": pending,
+		"steps_not_reached": max(0, remaining),
+		"undo_hint": "Call undo_action(action_log) on any executed step to reverse it.",
+	}
+	_log(subject_type, subject_key, "run_plan", {"goal": goal, "max_steps": max_steps},
+	     "proposed", result={"status": status, "n_executed": len(executed),
+	                         "pending": (pending or {}).get("tool")})
+	return out
