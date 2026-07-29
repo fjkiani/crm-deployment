@@ -259,9 +259,43 @@ def _map_fit(signals: dict, engagement: dict | None) -> dict:
 # ---------------------------------------------------------------------------
 # ENDPOINTS
 # ---------------------------------------------------------------------------
+def _error_envelope(subject_type: str, subject_key: str, exc: Exception) -> dict:
+	"""Labeled failure payload returned INSTEAD of an HTTP 500, so the frontend
+	panel degrades gracefully. Full traceback goes to the Frappe error log; the
+	client gets the class + message + subject for support triage."""
+	tb = frappe.get_traceback()
+	try:
+		frappe.log_error(title=f"enrich {subject_type} {subject_key} failed", message=tb)
+	except Exception:
+		logger.error(f"enrich {subject_type} {subject_key} failed:\n{tb}")
+	return {
+		"status": "error",
+		"subject_type": subject_type,
+		"subject_key": subject_key,
+		"error_class": type(exc).__name__,
+		"error": str(exc),
+		"cached": False,
+		"signals": [],
+		"fit": {},
+		"sources": [],
+		"payload": {},
+	}
+
+
 @frappe.whitelist()
 def enrich_engagement(slug: str, force: int = 0) -> dict:
-	"""Company + primary/backup contacts intel for an industry engagement. Cache-first."""
+	"""Company + primary/backup contacts intel for an industry engagement. Cache-first.
+	Wrapped: unexpected failures return a labeled error payload, never an HTTP 500.
+	Intentional NotFound/Permission throws are re-raised (proper 404/403)."""
+	try:
+		return _do_enrich_engagement(slug, force)
+	except (frappe.DoesNotExistError, frappe.PermissionError):
+		raise
+	except Exception as e:
+		return _error_envelope("Company", slug, e)
+
+
+def _do_enrich_engagement(slug: str, force: int = 0) -> dict:
 	_guard()
 	force = int(force or 0)
 	eng = _engagement(slug)
@@ -295,7 +329,18 @@ def enrich_engagement(slug: str, force: int = 0) -> dict:
 
 @frappe.whitelist()
 def enrich_contact(lead_name: str, force: int = 0) -> dict:
-	"""Person-level intel for a CRM Lead. Cache-first."""
+	"""Person-level intel for a CRM Lead. Cache-first.
+	Wrapped: unexpected failures return a labeled error payload, never an HTTP 500.
+	Intentional NotFound/Permission throws are re-raised (proper 404/403)."""
+	try:
+		return _do_enrich_contact(lead_name, force)
+	except (frappe.DoesNotExistError, frappe.PermissionError):
+		raise
+	except Exception as e:
+		return _error_envelope("Person", lead_name, e)
+
+
+def _do_enrich_contact(lead_name: str, force: int = 0) -> dict:
 	_guard()
 	force = int(force or 0)
 	if not frappe.db.exists("CRM Lead", lead_name):

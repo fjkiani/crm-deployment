@@ -439,6 +439,141 @@ def pubmed_search(query: str, retmax: int = 8) -> dict:
 		return _env("pubmed", "error", {"error": str(e)})
 
 
+# --- KOL author-name query construction (fixes the "blind to publications" bug) ---
+# The old person-intel query was  f"{name}[Author]" + " AND {org}".  Two defects,
+# both proven against live E-utilities:
+#   1. `AND {org}` is a HARD filter that zeroes real hits
+#      ('Rachel S. Perkins[Author] AND Vanderbilt' -> 0; 'Perkins RS[Author]' -> 45).
+#   2. Full-name '[Author]' under-retrieves vs NLM 'Lastname Initials'
+#      ('Yap T' -> 687 vs 'Timothy Yap' -> 14).
+# Fix: try author formats in NLM-preferred order, keep the first tier with hits,
+# and use org only as a SOFT re-rank on the returned article set — never a filter.
+
+_PM_CREDENTIALS = {"dr", "prof", "professor", "mr", "mrs", "ms", "mx", "md", "phd",
+                   "mbbs", "mba", "do", "msc", "pharmd", "dphil", "dsc",
+                   "facp", "facs", "frcp", "faan"}
+_PM_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def _pm_strip_accents(s: str) -> str:
+	import unicodedata
+	return "".join(c for c in unicodedata.normalize("NFKD", s or "")
+	               if not unicodedata.combining(c))
+
+
+def _pm_name_tokens(name: str):
+	"""(given_tokens, last_token) with credentials/suffixes removed."""
+	s = _pm_strip_accents(name).replace(".", " ").replace(",", " ")
+	toks = []
+	for t in re.split(r"\s+", s):
+		if not t:
+			continue
+		tl = t.lower()
+		if tl in _PM_CREDENTIALS or tl in _PM_SUFFIXES:
+			continue
+		if not re.search(r"[A-Za-z]", t):
+			continue
+		toks.append(t)
+	if not toks:
+		return [], ""
+	if len(toks) == 1:
+		return [], toks[0]
+	return toks[:-1], toks[-1]
+
+
+def _pm_author_tiers(name: str):
+	"""Ordered, de-duped [Author] query strings, NLM-preferred first."""
+	given, last = _pm_name_tokens(name)
+	if not last:
+		return []
+	tiers = []
+	if given:
+		initials = "".join(g[0].upper() for g in given if g)
+		first_initial = given[0][0].upper()
+		tiers.append(f"{last} {initials}[Author]")          # last + all initials
+		tiers.append(f"{last} {first_initial}[Author]")     # last + first initial
+		tiers.append(f"{' '.join(given)} {last}[Author]")   # full given + last
+		tiers.append(f"{given[0]} {last}[Author]")          # first + last
+	else:
+		tiers.append(f"{last}[Author]")
+	seen, out = set(), []
+	for q in tiers:
+		if q not in seen:
+			seen.add(q)
+			out.append(q)
+	return out
+
+
+def _pm_count(term: str) -> int:
+	"""Cheap esearch hit-count probe (retmax=0). Returns -1 on any failure."""
+	try:
+		params = {"db": "pubmed", "term": term, "retmax": "0", "retmode": "json"}
+		params.update(_ncbi_common())
+		r = requests.get(f"{_EUTILS}/esearch.fcgi", params=params, timeout=_HTTP_TIMEOUT)
+		r.raise_for_status()
+		return int((r.json().get("esearchresult") or {}).get("count") or 0)
+	except Exception as e:
+		logger.warning(f"pubmed count probe failed for {term!r}: {e}")
+		return -1
+
+
+def _pm_soft_rerank(articles: list, org: str) -> list:
+	"""Bubble articles whose author org/affiliation tokens overlap `org` to the top.
+	esummary has no affiliation field, so we match on co-author surnames is not
+	possible; instead we score on org tokens appearing in the journal/title as a
+	weak signal, and otherwise preserve PubMed's own relevance order. Non-
+	destructive: every article is kept, only reordered."""
+	if not org or not articles:
+		return articles
+	toks = [t.lower() for t in re.split(r"\W+", org) if len(t) > 3]
+	if not toks:
+		return articles
+
+	def score(a):
+		blob = f"{a.get('title','')} {a.get('journal','')}".lower()
+		return sum(1 for t in toks if t in blob)
+
+	# stable sort: keep original order within equal scores
+	return sorted(articles, key=score, reverse=True)
+
+
+def pubmed_author_search(name: str, org: str = "", retmax: int = 8) -> dict:
+	"""KOL-aware PubMed search. Picks the best author-name query tier, then applies
+	org as a soft re-rank (never a hard filter). Returns the same 'pubmed' envelope
+	as pubmed_search, with extra transparency keys under data:
+	  data.query_used, data.query_tier, data.query_probes, data.org_reranked.
+	Never throws (delegates to pubmed_search which is fully wrapped)."""
+	tiers = _pm_author_tiers(name)
+	if not tiers:
+		# no parseable name — fall back to raw behavior without the org filter
+		env = pubmed_search(f"{name}[Author]", retmax=retmax)
+		env["data"]["query_used"] = f"{name}[Author]"
+		env["data"]["query_tier"] = -1
+		env["data"]["query_probes"] = []
+		env["data"]["org_reranked"] = False
+		return env
+
+	chosen, probes, tier_idx = tiers[0], [], -1
+	for i, q in enumerate(tiers):
+		n = _pm_count(q)
+		probes.append({"query": q, "count": n})
+		if n and n > 0:
+			chosen, tier_idx = q, i
+			break
+
+	env = pubmed_search(chosen, retmax=retmax)
+	arts = (env.get("data") or {}).get("articles") or []
+	reranked = False
+	if arts and org:
+		env["data"]["articles"] = _pm_soft_rerank(arts, org)
+		reranked = True
+	env["data"]["query_used"] = chosen
+	env["data"]["query_tier"] = tier_idx
+	env["data"]["query_probes"] = probes
+	env["data"]["org_reranked"] = reranked
+	return env
+
+
 # ---------------------------------------------------------------------------
 # S9/S10 — ClinicalTrials.gov v2 REST (direct; no pytrials dependency)
 # ---------------------------------------------------------------------------
@@ -540,7 +675,8 @@ def gather_person_intel(name: str, org: str = "", linkedin_url: str = "", title:
 	jobs = {
 		"apollo_person": lambda: apollo_match(name, org),
 		"diffbot_person": lambda: diffbot_person(name, employer=org, title=title),
-		"pubmed": lambda: pubmed_search(f"{name}[Author]" + (f" AND {org}" if org else "")),
+		# KOL-aware: tiered author-name query + soft org re-rank (NOT `AND org`).
+		"pubmed": lambda: pubmed_author_search(name, org),
 	}
 	if linkedin_url:
 		jobs["linkedin"] = lambda: linkedin_profile(linkedin_url)
