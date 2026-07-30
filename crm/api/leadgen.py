@@ -187,6 +187,7 @@ def promote_prospects(prospect_names: List[str], lead_owner: str = None) -> Dict
         frappe.throw(_("Insufficient permissions to create leads"))
     
     promoted_count = 0
+    promoted_leads = []  # WP7.3: return created lead names so the UI can deep-link
     errors = []
     
     for prospect_name in prospect_names:
@@ -227,6 +228,7 @@ def promote_prospects(prospect_names: List[str], lead_owner: str = None) -> Dict
             prospect.promoted_to_lead = lead.name
             prospect.save()
             
+            promoted_leads.append(lead.name)
             promoted_count += 1
             
         except Exception as e:
@@ -234,6 +236,8 @@ def promote_prospects(prospect_names: List[str], lead_owner: str = None) -> Dict
     
     return {
         "promoted_count": promoted_count,
+        "promoted_leads": promoted_leads,
+        "promoted_to_lead": promoted_leads[0] if len(promoted_leads) == 1 else None,
         "errors": errors,
         "message": f"Successfully promoted {promoted_count} prospects to leads"
     }

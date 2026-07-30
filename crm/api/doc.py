@@ -854,3 +854,19 @@ def delete_bulk_docs(doctype, items, delete_linked=False):
 	else:
 		delete_bulk(doctype, items)
 	return "success"
+
+
+@frappe.whitelist()
+def get_doc(doctype: str, name: str):
+	"""Return one document as a dict (whitelisted, permission-checked read).
+
+	The SPA (e.g. VoiceDashboard.vue) calls crm.api.doc.get_doc(doctype, name);
+	without a whitelisted endpoint that button raises AttributeError/500 and dies.
+	Thin wrapper over frappe.get_doc with an explicit read-permission check so it
+	is safe to expose.
+	"""
+	if not frappe.has_permission(doctype, "read"):
+		frappe.throw(_("Not permitted to read {0}").format(doctype), frappe.PermissionError)
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	return doc.as_dict()

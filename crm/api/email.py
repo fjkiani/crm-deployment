@@ -233,10 +233,20 @@ def get_inbox(doctype: str | None = None, docname: str | None = None, status: st
 		limit: Max records to return
 	"""
 	filters = {"communication_type": ["in", ["Communication", "Comment"]]}
+	# Draft intent is known early because it widens the reference_doctype set:
+	# seeded engagement drafts are linked to their CRM Task (crm.api.industry
+	# _seed_one -> save_draft(reference_doctype="CRM Task")), so a drafts query
+	# that only looks at Lead/Contact/Organization never sees them. That is the
+	# WP1 root cause of the empty approval queue.
+	_want_drafts = bool(status) and str(status).strip().lower() == "draft"
 	if doctype and docname:
 		filters.update({"reference_doctype": doctype, "reference_name": docname})
 	else:
-		filters.update({"reference_doctype": ["in", ["CRM Lead", "Contact", "CRM Organization"]]})
+		_ref_types = ["CRM Lead", "Contact", "CRM Organization"]
+		if _want_drafts:
+			# include Task-linked engagement drafts in the approval queue
+			_ref_types.append("CRM Task")
+		filters.update({"reference_doctype": ["in", _ref_types]})
 	if status:
 		# The Communication `status` Select cannot hold "Draft"/"Sent" (only
 		# Open/Replied/Closed/Linked; reference-linked comms become "Linked").

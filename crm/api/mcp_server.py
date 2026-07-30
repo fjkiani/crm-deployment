@@ -532,6 +532,13 @@ def approve_and_send(
         body: Email body text.
         sender: Sender email (optional, defaults to system).
     """
+    # WP6.1 -- deliverability parity. Every send path must refuse placeholder /
+    # .invalid addresses so the CRM never stamps a Communication "Sent" to an
+    # address that cannot receive it (a false "contacted" record). Route through
+    # the SAME guard email.send() and nyx_email_brain.approve_and_send use.
+    # Raised BEFORE any insert so nothing is created on refusal.
+    from crm.api.email import assert_deliverable
+    assert_deliverable([to_email])
     try:
         comm = frappe.get_doc({
             "doctype": "Communication",

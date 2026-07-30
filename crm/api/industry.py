@@ -178,20 +178,129 @@ def industry_dashboard() -> Dict[str, Any]:
             "seeded": bool(seq_exists),
             "sequence_name": seq_name if seq_exists else None,
             "task_count": n_tasks,
+            "generated": False,
+        })
+    # WP4.2 -- append GENERATED engagements (not one of the curated 10) so the
+    # dashboard is the FULL book -- curated + generated -- in one list, not two
+    # mental models. A generated card leaves a Lead Prospect whose source_ref_id
+    # encodes its subject (generated::Lead::CRM-LEAD-...); reverse that to rebuild
+    # a light row (deterministic regen, no enrich).
+    curated_slugs = {r["slug"] for r in rows}
+    try:
+        gen_prospects = frappe.get_all(
+            "Lead Prospect",
+            filters={"source_ref_id": ["like", "generated::%"]},
+            fields=["name", "pi_name", "institution", "source_ref_id"],
+        )
+    except Exception:
+        gen_prospects = []
+    seen_gen = set()
+    for gp in gen_prospects:
+        parts = (gp.get("source_ref_id") or "").split("::")  # generated::Lead::<key>
+        if len(parts) < 3 or not parts[2]:
+            continue
+        g_type, g_key = parts[1], parts[2]
+        if g_key in seen_gen:
+            continue
+        seen_gen.add(g_key)
+        try:
+            from crm.api.plan_generator import generate_plan
+            g_card = generate_plan(g_type, g_key, use_enrich=0).get("card", {})
+        except Exception:
+            continue
+        g_slug = g_card.get("slug")
+        if not g_slug or g_slug in curated_slugs:
+            continue
+        g_fm = g_card.get("front_matter", {})
+        g_company = g_fm.get("company", g_slug)
+        g_seq = _find_sequence(g_slug, g_company)
+        g_tasks = frappe.db.count("CRM Task", {
+            "reference_doctype": "Outreach Sequence", "reference_docname": g_seq}) if g_seq else 0
+        g_contacts = g_card.get("contacts", {}) or {}
+        g_primary = g_contacts.get("primary", {}) or {}
+        rows.append({
+            "slug": g_slug,
+            "company": g_company,
+            "lead_drug": g_fm.get("lead_drug"),
+            "target": g_fm.get("target"),
+            "trial": g_fm.get("trial"),
+            "phase": g_fm.get("phase"),
+            "priority_rank": g_fm.get("outreach_priority_rank") or 50,
+            "claim_posture": g_fm.get("claim_posture"),
+            "composite_fit": (g_card.get("fit", {}) or {}).get("composite"),
+            "tier": _rank_to_tier(g_fm.get("outreach_priority_rank")),
+            "primary_contact": g_primary.get("name") or gp.get("pi_name"),
+            "primary_institution": g_primary.get("institution") or gp.get("institution"),
+            "preferred_channel": g_contacts.get("preferred_channel"),
+            "tags": g_fm.get("tags", []),
+            "seeded": bool(g_seq),
+            "sequence_name": g_seq,
+            "task_count": g_tasks,
+            "generated": True,
         })
     # sort by priority rank asc (1 = highest)
     rows.sort(key=lambda r: int(r["priority_rank"]) if str(r["priority_rank"]).isdigit() else 99)
-    return {"count": len(rows), "engagements": rows}
+    return {"count": len(rows), "engagements": rows,
+            "curated_count": len(curated_slugs),
+            "generated_count": len(rows) - len(curated_slugs)}
+
+
+def _reconstruct_subject_from_slug(slug: str):
+    """Best-effort reverse a GENERATED slug back to (subject_type, subject_key).
+
+    A generated lead slug is 'lead-<name>-<nnnnn>' where nnnnn is the numeric
+    suffix of the CRM Lead name (CRM-LEAD-YYYY-nnnnn). This lets a direct URL or
+    bookmark to /crm/industry/<generated-slug> resolve even when the caller did
+    not pass subject params. Returns (None, None) when it cannot be resolved
+    unambiguously (never guesses)."""
+    import re as _re
+    if not slug:
+        return None, None
+    m = _re.match(r"^(lead|deal)-.+-(\d{3,})$", slug)
+    if not m:
+        return None, None
+    kind, suffix = m.group(1), m.group(2)
+    dt = "CRM Lead" if kind == "lead" else "CRM Deal"
+    try:
+        rows = frappe.get_all(dt, filters={"name": ["like", f"%{suffix}"]},
+                              fields=["name"], limit=5)
+    except Exception:
+        rows = []
+    if len(rows) == 1:
+        return ("Lead" if kind == "lead" else "Deal"), rows[0]["name"]
+    return None, None
 
 
 @frappe.whitelist()
-def engagement_detail(slug: str, option: str = "A") -> Dict[str, Any]:
-    """Full parsed strategy + rendered plan + linked live artifacts for one engagement."""
+def engagement_detail(slug: str, option: str = "A",
+                      subject_type: str = None, subject_key: str = None) -> Dict[str, Any]:
+    """Full parsed strategy + rendered plan + linked live artifacts for one engagement.
+
+    WP4.1 -- works for BOTH curated (engagements.json) and GENERATED slugs. For a
+    generated slug the card is rebuilt on the fly via plan_generator.generate_plan
+    (deterministic, no enrich) instead of throwing "Engagement not found". The
+    subject is taken from explicit subject_type/subject_key (passed by the Lead
+    'Generate outreach plan' navigation) or, failing that, reversed from the slug
+    (direct URL / bookmark). Only throws when the slug is neither curated nor a
+    resolvable generated subject."""
     e = _engagement(slug)
+    generated = False
     if not e:
-        frappe.throw(_("Engagement not found: {0}").format(slug))
+        if not (subject_type and subject_key):
+            subject_type, subject_key = _reconstruct_subject_from_slug(slug)
+        if subject_type and subject_key:
+            try:
+                from crm.api.plan_generator import generate_plan
+                res = generate_plan(subject_type, subject_key, use_enrich=0)
+                e = res.get("card")
+                generated = not res.get("curated", False)
+            except Exception:
+                e = None
+        if not e:
+            frappe.throw(_("Engagement not found: {0}").format(slug))
     company = e.get("front_matter", {}).get("company", slug)
-    seq_name = _find_sequence(slug, company)
+    eff_slug = e.get("slug") or slug
+    seq_name = _find_sequence(eff_slug, company)
     seeded = bool(seq_name)
     tasks = []
     drafts = []
@@ -212,6 +321,8 @@ def engagement_detail(slug: str, option: str = "A") -> Dict[str, Any]:
             drafts.extend(d)
     return {
         "engagement": e,
+        "slug": eff_slug,
+        "generated": generated,
         "rendered_plan_html": _render_plan_html(e, option),
         "seeded": seeded,
         "sequence_name": seq_name if seeded else None,
@@ -315,6 +426,26 @@ def _seed_one(engagement: dict, option: str = "A") -> Dict[str, Any]:
     contact_clean = _clean_name(contact_display)
     steps = engagement.get("message_options", {}).get(f"option_{option.lower()}", {}).get("steps", [])
     fit = engagement.get("fit", {})
+    # WP1.4 — the CRM Lead this engagement was generated for (if any). Generated
+    # cards carry _generated.subject_key = the lead name; curated cards do not.
+    # Used to link the seeded inbox draft back to the Lead so the Lead #emails
+    # tab and the approval queue can both find it.
+    _gen = engagement.get("_generated") or {}
+    _lead_key = _gen.get("subject_key") if _gen.get("subject_type") == "Lead" else None
+
+    # WP6.3 -- refuse to materialize a junk engagement. A blank company or a
+    # blank/dash contact name (the "\u2014 \u2014 CrisPRO Outreach" pattern) creates
+    # orphan OS-/LP-/OSI- rows that misrepresent the pipeline. Fail loudly BEFORE
+    # any insert. All 10 curated cards carry a real company + contact, so this
+    # never regresses a curated seed.
+    _DASHES = {"", "-", "\u2014", "\u2013", "--", "\u2014 \u2014"}
+    if (company or "").strip() in _DASHES:
+        frappe.throw(_("Refusing to seed engagement '{0}': company name is blank.").format(slug or "?"))
+    if (contact_clean or "").strip() in _DASHES:
+        frappe.throw(_(
+            "Refusing to seed engagement '{0}': contact name is blank/placeholder ('{1}'). "
+            "Backfill a verified contact before seeding."
+        ).format(slug or "?", contact_display or "\u2014"))
 
     created = {"email_templates": [], "sequence": None, "prospect": None,
                "instance": None, "tasks": [], "drafts": []}
@@ -462,6 +593,17 @@ def _seed_one(engagement: dict, option: str = "A") -> Dict[str, Any]:
                 subject=subject,
                 html=_text_to_html(s.get("body", "")),
             )
+            # WP1.4 — link the draft back to the originating CRM Lead so the
+            # Lead #emails tab surfaces it. The Communication stays linked to
+            # its CRM Task (the approval-queue join); we additionally stamp the
+            # lead onto a queryable field when the field exists.
+            if _lead_key and comm_name and isinstance(comm_name, str):
+                try:
+                    meta = frappe.get_meta("Communication")
+                    if meta.has_field("crm_lead"):
+                        frappe.db.set_value("Communication", comm_name, "crm_lead", _lead_key)
+                except Exception:
+                    pass
             created["drafts"].append(comm_name)
         except Exception as ex:  # noqa: BLE001
             created["drafts"].append({"error": str(ex), "task": task.name})

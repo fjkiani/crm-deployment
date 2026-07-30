@@ -85,8 +85,17 @@ def get_context(context):
 			limit=limit,
 		)
 
+	# WP1.3 — use the SAME draft contract as crm.api.email.get_inbox. The
+	# Communication `status` Select cannot hold "Draft" (only Open/Replied/
+	# Closed/Linked), so `status="Draft"` matched nothing and the approval queue
+	# was always empty. A draft is an outbound (sent_or_received="Sent") comm
+	# whose delivery_status is still empty. Seeded engagement drafts are linked
+	# to their CRM Task, so include that reference type too.
 	draft_filters = dict(filters)
-	draft_filters["status"] = "Draft"
+	draft_filters["sent_or_received"] = "Sent"
+	draft_filters["delivery_status"] = ["in", ["", None]]
+	if not (doctype and docname):
+		draft_filters["reference_doctype"] = ["in", ["CRM Lead", "Contact", "CRM Organization", "CRM Task"]]
 	ai_drafts = frappe.get_all(
 		"Communication",
 		filters=draft_filters,

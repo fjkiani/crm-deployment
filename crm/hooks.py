@@ -64,10 +64,11 @@ doctype_js = {
 # }
 
 website_route_rules = [
-	# Serve in-app Human Inbox server page explicitly before SPA catch-all
-	{"from_route": "/crm/human_inbox", "to_route": "crm/human_inbox"},
-	{"from_route": "/crm/nyx", "to_route": "crm/nyx"},
-	# SPA catch-all for the Vue app
+	# WP2.1 -- removed the /crm/human_inbox and /crm/nyx www (Jinja) hijacks so the
+	# Vue SPA serves them. HumanInbox.vue is the real two-pane approval inbox and
+	# NyxCockpit reads ?sequence=; the old server pages broke hard-refresh and the
+	# Nyx<->Industry deep-links (e.g. /crm/nyx?sequence=OS-2026-00010). Keep only
+	# the SPA catch-all. The www templates remain reachable at their bare paths.
 	{"from_route": "/crm/<path:app_path>", "to_route": "crm"},
 ]
 
