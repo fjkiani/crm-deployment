@@ -11,7 +11,9 @@
           :label="
             task.reference_doctype == 'CRM Deal'
               ? __('Open Deal')
-              : __('Open Lead')
+              : task.reference_doctype == 'Outreach Sequence'
+                ? __('Open Campaign')
+                : __('Open Lead')
           "
           :iconRight="ArrowUpRightIcon"
           @click="redirect()"
@@ -119,7 +121,7 @@ import Link from '@/components/Controls/Link.vue'
 import { taskStatusOptions, taskPriorityOptions, getFormat } from '@/utils'
 import { usersStore } from '@/stores/users'
 import { capture } from '@/telemetry'
-import { TextEditor, Dropdown, Tooltip, call, DateTimePicker } from 'frappe-ui'
+import { TextEditor, Dropdown, Tooltip, call, DateTimePicker, toast } from 'frappe-ui'
 import { useOnboarding } from 'frappe-ui/frappe'
 import { ref, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -171,13 +173,27 @@ function updateTaskPriority(priority) {
 }
 
 function redirect() {
-  if (!props.task?.reference_docname) return
-  let name = props.task.reference_doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: props.task.reference_docname }
-  if (name == 'Deal') {
-    params = { dealId: props.task.reference_docname }
+  const doctype = props.task?.reference_doctype
+  const docname = props.task?.reference_docname
+  if (!docname) return
+  // WP0.1 -- a task can reference more than Leads/Deals. Outreach Sequence
+  // campaign tasks are named OS-YYYY-NNNNN; routing them as a Lead produced
+  // /crm/leads/OS-... (404). Route by the ACTUAL reference doctype, mirroring
+  // the Tasks list redirect() so the modal and list behave identically.
+  if (doctype === 'CRM Deal') {
+    router.push({ name: 'Deal', params: { dealId: docname } })
+  } else if (doctype === 'CRM Lead') {
+    router.push({ name: 'Lead', params: { leadId: docname } })
+  } else if (doctype === 'Outreach Sequence') {
+    router.push({ name: 'Nyx', query: { sequence: docname } })
+  } else {
+    toast.error(
+      __('This task is linked to a {0} ({1}), which has no dedicated page.', [
+        doctype || __('record'),
+        docname,
+      ]),
+    )
   }
-  router.push({ name: name, params: params })
 }
 
 async function updateTask() {

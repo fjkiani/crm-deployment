@@ -328,7 +328,7 @@ function runSuggestion(s) {
   if (s.action === 'plan_campaign') {
     router.push({ name: 'Nyx', query: { plan_tier: s.action_params?.segment_tier || 'Tier 1' } })
   } else if (s.action === 'open_inbox') {
-    router.push('/human-inbox').catch(() => router.push('/crm/human-inbox'))
+    router.push({ name: 'Human Inbox' })
   } else if (s.action === 'open_campaign') {
     router.push({ name: 'Nyx', query: { sequence: s.action_params?.sequence } })
   } else {
@@ -381,8 +381,9 @@ const rows = computed(() => {
     return getKanbanRows(tasks.value.data.data, tasks.value.data.fields)
   }
 
-  openTaskFromURL()
-  return parseRows(tasks.value?.data.data, tasks.value?.data.columns)
+  const parsed = parseRows(tasks.value?.data.data, tasks.value?.data.columns)
+  openTaskFromURL(parsed)
+  return parsed
 })
 
 function getKanbanRows(data, columns) {
@@ -546,14 +547,28 @@ function redirect(doctype, docname) {
   }
 }
 
-const openTaskFromURL = () => {
+const openTaskFromURL = (parsed) => {
   const searchParams = new URLSearchParams(window.location.search)
   const taskName = searchParams.get('open')
-
-  if (taskName && rows.value?.length) {
-    showTask(parseInt(taskName))
-    searchParams.delete('open')
-    window.history.replaceState(null, '', window.location.pathname)
+  if (!taskName) return
+  // Match against the FRESH parsed list (rows.value is stale mid-recompute) and
+  // by exact string name — task.name is a string, so the old parseInt() never
+  // strict-matched row.name and the link silently did nothing.
+  const t = (parsed || []).find((r) => String(r.name) === String(taskName))
+  if (!t) return
+  searchParams.delete('open')
+  window.history.replaceState(null, '', window.location.pathname)
+  task.value = {
+    name: t.name,
+    title: t.title,
+    description: t.description,
+    assigned_to: t.assigned_to?.email || '',
+    due_date: t.due_date,
+    status: t.status,
+    priority: t.priority,
+    reference_doctype: t.reference_doctype,
+    reference_docname: t.reference_docname,
   }
+  showTaskModal.value = true
 }
 </script>

@@ -35,13 +35,22 @@
             </td>
             <td class="py-2 pr-3 text-ink-gray-7">{{ talk.speaker_name || '—' }}</td>
             <td class="py-2 pr-3">
-              <button
-                v-if="talk.lead_name"
-                class="text-ink-blue-6 hover:underline"
-                @click="openLead(talk.lead_name)"
-              >
-                {{ talk.lead_person || talk.lead_name }}
-              </button>
+              <template v-if="talk.lead_name">
+                <button
+                  class="text-ink-blue-6 hover:underline"
+                  @click="openLead(talk.lead_name)"
+                >
+                  {{ talk.lead_person || talk.lead_name }}
+                </button>
+                <button
+                  class="ml-2 inline-flex items-center gap-1 rounded border border-surface-gray-3 px-1.5 py-0.5 text-xs text-ink-gray-7 hover:bg-surface-gray-2 disabled:opacity-50"
+                  :disabled="generatingName === talk.lead_name"
+                  :title="__('Generate a CrisPRO outreach plan for this KOL')"
+                  @click.stop="generatePlanForRow(talk.lead_name)"
+                >
+                  {{ generatingName === talk.lead_name ? __('Generating…') : __('Generate plan') }}
+                </button>
+              </template>
               <span v-else class="text-ink-gray-4">—</span>
             </td>
             <td class="py-2 pr-3">
@@ -65,7 +74,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { createResource } from 'frappe-ui'
+import { createResource, call, toast } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 import AacrTalkDetail from '@/components/aacr/AacrTalkDetail.vue'
 
@@ -100,5 +109,32 @@ function openLead(leadName) {
 }
 function openTalk(talk) {
   openTalkName.value = talk.talk_id
+}
+
+// WP7.2 — discovery handoff: from an AACR talk with a linked CRM Lead, one-click
+// generate + seed a CrisPRO outreach plan and open the generated Industry card.
+// Same endpoint the Lead/Search buttons use; nothing sends (human-gated drafts).
+const generatingName = ref('')
+async function generatePlanForRow(leadName) {
+  if (!leadName || generatingName.value) return
+  generatingName.value = leadName
+  try {
+    const res = await call('crm.api.plan_generator.generate_and_seed_plan', {
+      subject_type: 'Lead', subject_key: leadName, option: 'A', use_enrich: 1,
+    })
+    const c = res?.counts || {}
+    toast.success(__('Plan seeded') + `: ${c.tasks ?? 0} ${__('tasks')}, ${c.drafts ?? 0} ${__('drafts')}`)
+    if (res?.slug) {
+      router.push({
+        name: 'Industry Engagement',
+        params: { slug: res.slug },
+        query: { subject_type: 'Lead', subject_key: leadName },
+      })
+    }
+  } catch (e) {
+    toast.error(__('Generate plan failed') + ': ' + (e?.messages?.[0] || e?.message || 'error'))
+  } finally {
+    generatingName.value = ''
+  }
 }
 </script>

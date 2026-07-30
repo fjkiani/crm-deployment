@@ -129,6 +129,7 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { call, toast, Button } from 'frappe-ui'
 import InboxIcon from '~icons/lucide/inbox'
 import RefreshIcon from '~icons/lucide/refresh-cw'
@@ -139,6 +140,7 @@ export default {
   name: 'HumanInbox',
   components: { Button, InboxIcon, RefreshIcon, SparklesIcon, InboxReader },
   setup() {
+    const route = useRoute()
     const loading = ref(false)
     const batchBusy = ref(false)
     const items = ref([])
@@ -238,7 +240,23 @@ export default {
         : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
     }
 
-    onMounted(loadInbox)
+    // WP2.4 — deep-link support: /human_inbox?comm=<name> (from an Industry plan
+    // draft, a Task, or LinkedDocs) lands on that exact Communication. Engagement
+    // drafts live under the Drafts tab; fall back to All if it is elsewhere.
+    onMounted(async () => {
+      const commName = route.query.comm ? String(route.query.comm) : ''
+      if (commName) activeFilter.value = 'drafts'
+      await loadInbox()
+      if (commName) {
+        let row = items.value.find((r) => String(r.name) === commName)
+        if (!row) {
+          activeFilter.value = 'all'
+          await loadInbox()
+          row = items.value.find((r) => String(r.name) === commName)
+        }
+        if (row) selectRow(row)
+      }
+    })
 
     return {
       loading,

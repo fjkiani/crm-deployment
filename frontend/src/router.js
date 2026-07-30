@@ -115,6 +115,12 @@ const routes = [
     component: () => import('@/pages/HumanInbox.vue'),
   },
   {
+    // WP0.5 -- hyphen alias so any legacy router.push('/human-inbox') resolves
+    // to the real underscore route instead of 404ing.
+    path: '/human-inbox',
+    redirect: { name: 'Human Inbox' },
+  },
+  {
     path: '/nyx',
     name: 'Nyx',
     component: () => import('@/pages/NyxCockpit.vue'),

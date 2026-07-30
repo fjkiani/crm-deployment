@@ -11,7 +11,9 @@
           :label="
             _note.reference_doctype == 'CRM Deal'
               ? __('Open Deal')
-              : __('Open Lead')
+              : _note.reference_doctype == 'Outreach Sequence'
+                ? __('Open Campaign')
+                : __('Open Lead')
           "
           :iconRight="ArrowUpRightIcon"
           @click="redirect()"
@@ -61,7 +63,7 @@
 <script setup>
 import ArrowUpRightIcon from '@/components/Icons/ArrowUpRightIcon.vue'
 import { capture } from '@/telemetry'
-import { TextEditor, call } from 'frappe-ui'
+import { TextEditor, call, toast } from 'frappe-ui'
 import { useOnboarding } from 'frappe-ui/frappe'
 import { ref, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -137,13 +139,25 @@ async function updateNote() {
 }
 
 function redirect() {
-  if (!props.note?.reference_docname) return
-  let name = props.note.reference_doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: props.note.reference_docname }
-  if (name == 'Deal') {
-    params = { dealId: props.note.reference_docname }
+  const doctype = props.note?.reference_doctype
+  const docname = props.note?.reference_docname
+  if (!docname) return
+  // WP0.2 -- route by the ACTUAL reference doctype (mirror TaskModal / Tasks
+  // list) so an Outreach Sequence note never navigates to /crm/leads/OS-... .
+  if (doctype === 'CRM Deal') {
+    router.push({ name: 'Deal', params: { dealId: docname } })
+  } else if (doctype === 'CRM Lead') {
+    router.push({ name: 'Lead', params: { leadId: docname } })
+  } else if (doctype === 'Outreach Sequence') {
+    router.push({ name: 'Nyx', query: { sequence: docname } })
+  } else {
+    toast.error(
+      __('This note is linked to a {0} ({1}), which has no dedicated page.', [
+        doctype || __('record'),
+        docname,
+      ]),
+    )
   }
-  router.push({ name: name, params: params })
 }
 
 watch(

@@ -529,6 +529,9 @@ export default {
 
         frappe.msgprint(response.message.message)
         this.loadData()
+        // WP7.3 — a promotion is a real step forward: land on the new CRM Lead.
+        const leadName = response.message.promoted_to_lead
+        if (leadName) this.$router.push({ name: 'Lead', params: { leadId: leadName } })
       } catch (error) {
         frappe.msgprint('Error promoting prospect: ' + error.message)
       }
@@ -567,8 +570,13 @@ export default {
           }
         })
 
-        frappe.msgprint(response.message.message)
+        const r = response.message || {}
+        frappe.msgprint(r.message)
         this.loadData()
+        // WP7.3 — jump to the Nyx campaign surface focused on this sequence.
+        if ((r.started_count || 0) > 0) {
+          this.$router.push({ name: 'Nyx', query: { sequence: sequenceName } })
+        }
       } catch (error) {
         frappe.msgprint('Error starting outreach: ' + error.message)
       }

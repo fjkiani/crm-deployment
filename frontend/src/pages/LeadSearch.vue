@@ -74,6 +74,7 @@
             <th class="py-2 pr-3 text-right">{{ __('Vulns') }}</th>
             <th class="py-2 pr-3">{{ __('Session') }}</th>
             <th class="py-2 pr-3">{{ __('Email') }}</th>
+            <th class="py-2 pr-3 text-right">{{ __('Action') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -95,6 +96,12 @@
             <td class="py-2 pr-3 text-right tabular-nums text-ink-gray-7">{{ r.n_vulnerabilities ?? 0 }}</td>
             <td class="py-2 pr-3 text-ink-gray-6" :title="r.session_slug">{{ prettySlug(r.session_slug) }}</td>
             <td class="py-2 pr-3 text-ink-gray-6">{{ r.email || '—' }}</td>
+            <td class="py-2 pr-3 text-right">
+              <Button variant="subtle" :loading="generatingName === r.name"
+                      iconLeft="target" @click.stop="generatePlanForRow(r)">
+                {{ __('Generate plan') }}
+              </Button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -113,7 +120,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { createResource, FormControl, Button } from 'frappe-ui'
+import { createResource, FormControl, Button, call, toast } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -221,5 +228,31 @@ function prettySlug(slug) {
 }
 function openLead(name) {
   router.push({ name: 'Lead', params: { leadId: name } })
+}
+
+// WP7.1 — discovery -> action in one hop: seed a Roche-depth plan for this KOL
+// and open its industry card. Search results are a starting line, not a dossier.
+const generatingName = ref('')
+async function generatePlanForRow(r) {
+  if (!r?.name) return
+  generatingName.value = r.name
+  try {
+    const res = await call('crm.api.plan_generator.generate_and_seed_plan', {
+      subject_type: 'Lead', subject_key: r.name, option: 'A', use_enrich: 1,
+    })
+    const c = res?.counts || {}
+    toast.success(__('Plan seeded') + `: ${c.tasks ?? 0} ${__('tasks')}, ${c.drafts ?? 0} ${__('drafts')}`)
+    if (res?.slug) {
+      router.push({
+        name: 'Industry Engagement',
+        params: { slug: res.slug },
+        query: { subject_type: 'Lead', subject_key: r.name },
+      })
+    }
+  } catch (e) {
+    toast.error(__('Generate plan failed') + ': ' + (e?.messages?.[0] || e?.message || 'error'))
+  } finally {
+    generatingName.value = ''
+  }
 }
 </script>

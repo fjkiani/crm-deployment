@@ -290,7 +290,7 @@ function runSuggestion(s) {
     goal.value = ''
     askPlan()
   } else if (s.action === 'open_inbox') {
-    router.push('/human-inbox').catch(() => { window.location.href = '/crm/human-inbox' })
+    router.push({ name: 'Human Inbox' })
   } else if (s.action === 'open_campaign' && s.action_params?.sequence) {
     router.push({ name: 'Nyx', query: { sequence: s.action_params.sequence } })
   }

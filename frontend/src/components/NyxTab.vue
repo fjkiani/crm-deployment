@@ -14,6 +14,14 @@
           @click="runEnrichment"
         />
         <Button
+          variant="solid"
+          theme="green"
+          :label="generating ? __('Generating...') : __('Generate outreach plan')"
+          iconLeft="target"
+          :loading="generating"
+          @click="generateOutreachPlan"
+        />
+        <Button
           variant="subtle"
           :label="triaging ? __('Drafting...') : __('Triage & Draft')"
           iconLeft="edit"
@@ -350,6 +358,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { Button, toast, createResource } from 'frappe-ui'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   doc: { type: Object, required: true },
@@ -357,6 +366,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['open-model-settings'])
+const router = useRouter()
 
 function openModelSettings() {
   emit('open-model-settings')
@@ -365,6 +375,7 @@ function openModelSettings() {
 const enriching = ref(false)
 const approving = ref(false)
 const triaging = ref(false)
+const generating = ref(false)  // WP3: one-click generate+seed outreach plan
 const draftCommName = ref(null)  // Communication name of the last brain-produced draft
 
 // ── LLM brain status (drives the active-model chip + honest 402/no-provider state) ──
@@ -557,10 +568,60 @@ function formatKey(key) {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
+// WP3 fix -- this button called crm.api.enrichment_api.enrich_lead, which does
+// NOT exist (only enrich_contact / enrich_engagement do). It 500'd on every
+// click. Repoint to the real person-level endpoint so "Enrich Lead" works.
 const enrichResource = createResource({
-  url: 'crm.api.enrichment_api.enrich_lead',
-  makeParams: () => ({ lead_name: props.leadId, force: 0, discover_email: 1 }),
+  url: 'crm.api.enrichment_api.enrich_contact',
+  makeParams: () => ({ lead_name: props.leadId, force: 0 }),
 })
+
+// WP3 -- one-click: generate a Roche-depth CrisPRO plan for THIS lead and seed
+// it (Email Templates + Outreach Sequence + Tasks + inbox drafts), then open the
+// generated Industry card. Every Lead becomes a starting line, not a dead
+// dossier. Human-gated: everything lands Draft/Todo; nothing sends.
+const generatePlanResource = createResource({
+  url: 'crm.api.plan_generator.generate_and_seed_plan',
+  makeParams: () => ({
+    subject_type: 'Lead',
+    subject_key: props.leadId,
+    option: 'A',
+    use_enrich: 1,
+  }),
+})
+
+async function generateOutreachPlan() {
+  if (generating.value) return
+  generating.value = true
+  try {
+    const res = await generatePlanResource.submit()
+    const counts = res?.counts || {}
+    toast.success(
+      __('Outreach plan seeded — {0} step template(s), {1} task(s), {2} draft(s)', [
+        counts.email_templates ?? 0,
+        counts.tasks ?? 0,
+        counts.drafts ?? 0,
+      ]),
+    )
+    if (res?.slug) {
+      // Carry subject params so the Industry card resolves deterministically
+      // (no slug-suffix guessing) even before the seed row is queried.
+      router.push({
+        name: 'Industry Engagement',
+        params: { slug: res.slug },
+        query: { subject_type: 'Lead', subject_key: props.leadId },
+      })
+    }
+  } catch (e) {
+    toast.error(
+      __('Could not generate plan: {0}', [
+        e?.messages?.[0] || e?.message || String(e),
+      ]),
+    )
+  } finally {
+    generating.value = false
+  }
+}
 
 // Truthful brain/provider status so the user sees which model will run (and
 // whether one is configured at all) before clicking Triage & Draft.

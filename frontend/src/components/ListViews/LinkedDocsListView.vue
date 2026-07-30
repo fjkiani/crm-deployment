@@ -100,6 +100,17 @@ const emit = defineEmits([
 const listViewRef = ref(null)
 
 const viewLinkedDoc = (doc) => {
+  // WP0.6 -- references whose canonical page is NOT /crm/<page>/<id>. Handle
+  // them explicitly and return, so they don't fall through to the generic
+  // builder (which produced broken /crm// links or dead ends for these types).
+  if (doc.reference_doctype === 'Outreach Sequence') {
+    window.open(`/crm/nyx?sequence=${doc.reference_docname}`)
+    return
+  }
+  if (doc.reference_doctype === 'Communication') {
+    window.open(`/crm/human_inbox?comm=${doc.reference_docname}`)
+    return
+  }
   let page = ''
   let id = ''
   switch (doc.reference_doctype) {
@@ -128,7 +139,8 @@ const viewLinkedDoc = (doc) => {
       id = `view?open=${doc.reference_docname}`
       break
     default:
-      break
+      // WP0.6 -- unknown reference type: do NOT build a broken /crm// link.
+      return
   }
   window.open(`/crm/${page}/${id}`)
 }

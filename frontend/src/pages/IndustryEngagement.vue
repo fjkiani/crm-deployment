@@ -143,7 +143,7 @@
                   </div>
                   <div class="text-xs text-ink-gray-6">{{ c.who.title }} · {{ c.who.institution }}</div>
                   <div class="mt-1 flex items-center gap-2 text-[11px]">
-                    <a v-if="c.who.linkedin" :href="c.who.linkedin" target="_blank"
+                    <a v-if="c.who.linkedin" :href="normalizeUrl(c.who.linkedin)" target="_blank"
                        class="text-ink-blue-6 hover:underline"><LucideLinkedin class="inline h-3 w-3" /> LinkedIn</a>
                     <span :class="c.who.public_email_verified === 'YES' ? 'text-ink-green-6' : 'text-ink-gray-5'">
                       {{ __('Email verified') }}: {{ c.who.public_email_verified || 'NO' }}
@@ -186,11 +186,15 @@
                   <blockquote class="mt-1 whitespace-pre-line rounded-lg bg-surface-gray-1 p-3 text-sm text-ink-gray-7">{{ s.body }}</blockquote>
                   <div v-if="activeOption === 'A' && taskForStep(i)" class="mt-1 flex items-center gap-2 text-[11px] text-ink-gray-5">
                     <LucideListTodo class="h-3.5 w-3.5" />
-                    {{ __('Task') }} #{{ taskForStep(i).name }} · {{ taskForStep(i).status }} ·
+                    <button type="button" class="text-ink-blue-6 hover:underline"
+                            @click="openTask(taskForStep(i).name)">{{ __('Task') }} #{{ taskForStep(i).name }}</button>
+                    · {{ taskForStep(i).status }} ·
                     {{ __('due') }} {{ (taskForStep(i).due_date || '').slice(0, 10) }}
-                    <span v-if="draftForTask(taskForStep(i).name)" class="text-ink-green-6">
+                    <button v-if="draftForTask(taskForStep(i).name)" type="button"
+                            class="text-ink-green-6 hover:underline"
+                            @click="openDraft(draftForTask(taskForStep(i).name))">
                       · <LucideMail class="inline h-3 w-3" /> {{ __('draft in inbox') }}
-                    </span>
+                    </button>
                   </div>
                 </li>
               </ol>
@@ -376,7 +380,15 @@ const slug = computed(() => route.params.slug)
 /* -------------------- engagement detail (existing endpoint) -------------------- */
 const detail = createResource({
   url: 'crm.api.industry.engagement_detail',
-  makeParams: () => ({ slug: slug.value, option: 'A' }),
+  // WP4.3 -- forward subject params (set by the Lead "Generate outreach plan"
+  // navigation) so a GENERATED slug resolves deterministically instead of
+  // relying on slug-suffix reversal.
+  makeParams: () => ({
+    slug: slug.value,
+    option: 'A',
+    subject_type: route.query.subject_type || undefined,
+    subject_key: route.query.subject_key || undefined,
+  }),
   auto: true,
 })
 
@@ -417,7 +429,26 @@ const seed = createResource({
   onSuccess() { toast.success(__('Outreach plan generated')); detail.reload() },
   onError(err) { toast.error(__('Seeding failed') + ': ' + (err?.messages?.[0] || err)) },
 })
-function onSeed() { seed.submit({ slug: slug.value, option: 'A' }) }
+// WP4.3 -- a GENERATED (non-curated) card cannot seed via a curated slug; it
+// seeds through the generator, which needs the subject.
+const seedGenerated = createResource({
+  url: 'crm.api.plan_generator.generate_and_seed_plan',
+  onSuccess() { toast.success(__('Outreach plan generated')); detail.reload() },
+  onError(err) { toast.error(__('Seeding failed') + ': ' + (err?.messages?.[0] || err)) },
+})
+function onSeed() {
+  const gen = detail.data?.engagement?._generated
+  if (detail.data?.generated && gen?.subject_key) {
+    seedGenerated.submit({
+      subject_type: gen.subject_type || 'Lead',
+      subject_key: gen.subject_key,
+      option: 'A',
+      use_enrich: 1,
+    })
+  } else {
+    seed.submit({ slug: slug.value, option: 'A' })
+  }
+}
 
 /* -------------------- LIVE INTEL (new) -------------------- */
 const enrich = createResource({
@@ -516,6 +547,17 @@ async function onUndo(name) {
 /* -------------------- helpers -------------------- */
 function taskForStep(i) { return tasks.value[i] || null }
 function draftForTask(taskName) { return drafts.value.find((d) => String(d.reference_name) === String(taskName)) || null }
+// WP4.4 — every reference on the plan is a real step forward, not plain text.
+function openTask(name) {
+  if (name) router.push({ name: 'Tasks', query: { open: String(name) } })
+}
+function openDraft(d) {
+  if (d && d.name) router.push({ name: 'Human Inbox', query: { comm: d.name } })
+}
+function normalizeUrl(u) {
+  if (!u) return u
+  return /^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')
+}
 function stepDotClass(s) { return s.delay_days === 0 ? 'bg-ink-blue-6 text-surface-white' : 'bg-ink-gray-7 text-surface-white' }
 function renderConstraint(c) { return (c || '').replace(/\*\*(.+?)\*\*/g, '<span class="font-medium text-ink-amber-7">$1</span>') }
 function evidenceClass(status) {

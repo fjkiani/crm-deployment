@@ -1,5 +1,14 @@
 <template>
   <div class="nyx-hub">
+    <!-- WP5.1 — sequence focus banner: one hop back to the industry card -->
+    <div v-if="focusSequence" class="mb-4 flex items-center justify-between gap-3 rounded-lg border border-ink-blue-2 bg-surface-blue-1 px-3 py-2">
+      <div class="text-sm text-ink-gray-8">
+        {{ __('Focused on outreach sequence') }} <span class="font-medium">{{ focusSequence }}</span>
+      </div>
+      <Button variant="subtle" :loading="resolvingCard" iconLeft="external-link" @click="openIndustryCard">
+        {{ __('Open industry card') }}
+      </Button>
+    </div>
     <!-- Header -->
     <div class="mb-5 flex items-start justify-between gap-4 border-b border-ink-gray-2 pb-4">
       <div>
@@ -229,7 +238,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { createResource, Button, toast } from 'frappe-ui'
+import { createResource, Button, toast, call } from 'frappe-ui'
 import { useRouter, useRoute } from 'vue-router'
 import LucideRefreshCw from '~icons/lucide/refresh-cw'
 import LucideMailPlus from '~icons/lucide/mail-plus'
@@ -249,6 +258,29 @@ const triageLimit = 10
 const studioRef = ref(null)
 const focusSequence = computed(() => route.query.sequence || '')
 const focusTier = computed(() => route.query.plan_tier || '')
+
+// WP5.1 — close the Nyx <-> Industry loop. When focused on a sequence, resolve
+// it back to its industry card (curated OR generated) via the dashboard, which
+// carries sequence_name + slug for every engagement. One hop, no dead end.
+const resolvingCard = ref(false)
+async function openIndustryCard() {
+  if (!focusSequence.value) return
+  resolvingCard.value = true
+  try {
+    const dash = await call('crm.api.industry.industry_dashboard')
+    const rows = dash?.engagements || []
+    const match = rows.find((r) => String(r.sequence_name) === String(focusSequence.value))
+    if (match && match.slug) {
+      router.push({ name: 'Industry Engagement', params: { slug: match.slug } })
+    } else {
+      toast.error(__('No industry card is linked to ') + focusSequence.value)
+    }
+  } catch (e) {
+    toast.error(__('Could not resolve industry card') + ': ' + (e?.messages?.[0] || e?.message || 'error'))
+  } finally {
+    resolvingCard.value = false
+  }
+}
 function onStudioChanged() { counts.reload() }
 
 // Model settings modal
