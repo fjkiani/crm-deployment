@@ -205,3 +205,31 @@ def search_crm_knowledge(query: str, limit: int = 10):
 
 	return {"query": q, "notes": notes, "leads": leads, "total": len(notes) + len(leads)}
 
+@frappe.whitelist()
+def get_grounding_context(lead_id=None, query=None, limit=5):
+	"""Shared knowledge-grounding bundle for email brain, Vapi, and WhatsApp.
+
+	Returns the lead dossier plus top-k CRM knowledge hits so every channel grounds
+	on the SAME verified claims (single source of truth, no per-channel drift).
+	"""
+	dossier = None
+	if lead_id:
+		try:
+			dossier = get_dossier(lead_id=lead_id)
+		except Exception:
+			dossier = None
+	knowledge = []
+	if query:
+		try:
+			knowledge = search_crm_knowledge(query, limit=limit)
+		except Exception:
+			knowledge = []
+	grounded = bool(dossier) or bool(knowledge)
+	return {
+		"grounded": grounded,
+		"dossier": dossier,
+		"knowledge": knowledge,
+		"rule": ("Ground every factual claim in the dossier/knowledge above."
+		         if grounded else
+		         "No verified background: do NOT state specific facts, figures, or claims."),
+	}

@@ -280,6 +280,51 @@ RULES:
 	}
 
 
+@frappe.whitelist()
+def execute_sequence_call_step(task_name: str, instance_name: str | None = None):
+	"""Bridge a sequence Call step to a real Vapi outbound call.
+
+	Resolves the step's lead, phone, and objective from the CRM Task + linked
+	Outreach Sequence Instance, then delegates to initiate_outbound_call (which
+	reuses the dossier grounding, call governor, and anti-hallucination guardrail).
+	This function does NOT advance the sequence — the end-of-call webhook does,
+	via sequence_engine.on_channel_event. Human/agent triggers this; never auto-call.
+
+	Args:
+		task_name: CRM Task name for the Call step (title `Step {N}: ...`).
+		instance_name: Optional Outreach Sequence Instance name (resolved if absent).
+	"""
+	if not frappe.db.exists("CRM Task", task_name):
+		frappe.throw(_("Call step task not found: {0}").format(task_name))
+	task = frappe.get_doc("CRM Task", task_name)
+
+	lead_name = task.get("lead") or None
+	if not lead_name and instance_name and frappe.db.exists("Outreach Sequence Instance", instance_name):
+		inst = frappe.get_doc("Outreach Sequence Instance", instance_name)
+		prospect = inst.get("prospect")
+		if prospect and frappe.db.exists("Lead Prospect", prospect):
+			lead_name = frappe.db.get_value("Lead Prospect", prospect, "promoted_to_lead") or None
+
+	if not lead_name:
+		frappe.throw(_("Could not resolve a CRM Lead for call step {0}").format(task_name))
+
+	phone = frappe.db.get_value("CRM Lead", lead_name, "phone") or frappe.db.get_value("CRM Lead", lead_name, "mobile_no") or ""
+	if not phone:
+		frappe.throw(_("No phone number on lead {0}; cannot place call").format(lead_name))
+
+	objective = task.get("title") or "Follow up on our research outreach"
+
+	result = initiate_outbound_call(
+		to_number=phone,
+		lead_name=lead_name,
+		objective=objective,
+		context=f"Sequence call step task {task_name}",
+	)
+	result["task_name"] = task_name
+	result["instance_name"] = instance_name
+	return result
+
+
 def _create_call_logs(
 	vapi_call_id: str,
 	from_number: str,
@@ -426,6 +471,26 @@ def _process_end_of_call_report(report: dict):
 				frappe.db.set_value("CRM Lead", lead_name, "status", crm_status)
 			except Exception:
 				pass
+
+	# Route the call outcome into the sequence engine so a sequence Call step
+	# advances (completed) or retries (no-answer/failed). The webhook only knows the
+	# lead; resolve the open sequence Call task for this lead, then route by task.
+	# Idempotent: a double-fired webhook yields already_advanced / no-op, never a
+	# double advance. Never let a routing error break webhook processing.
+	if lead_name and outcome:
+		try:
+			from crm.api import sequence_engine as _se
+			_task = frappe.db.get_value(
+				"CRM Task",
+				{"lead": lead_name, "reference_doctype": "Outreach Sequence",
+				 "status": ["in", ["Backlog", "Todo", "In Progress"]]},
+				"name",
+				order_by="due_date asc",
+			)
+			if _task:
+				_se.on_channel_event(task_name=_task, channel="Call", outcome=outcome)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "vapi sequence on_channel_event")
 
 	return {"status": "processed", "call_id": call_id, "outcome": outcome}
 

@@ -412,191 +412,150 @@ def get_draft_queue():
 
 @mcp.tool()
 def get_sequence_status(lead_name: str = ""):
-    """For each lead in active sequences: current step, days elapsed, next fire date.
+    """Real sequence status from Outreach Sequence Instance + CRM Task + Communication.
 
     Args:
-        lead_name: Optional — filter to one lead. Empty = all active.
+        lead_name: Optional — filter to one lead. Empty = all instances.
     """
-    filters = {"status": "Active"}
+    from crm.api.sequence_engine import get_sequence_state
+    filters = {}
     if lead_name:
-        # Look for the lead's sequence membership via additional_data
-        lead = frappe.get_doc("CRM Lead", lead_name)
-        intel = json.loads(lead.additional_data) if lead.additional_data else {}
-        seq_data = intel.get("sequence", {})
-        return {
-            "lead": lead_name,
-            "sequence": seq_data,
-            "lead_status": lead.status,
-        }
-
-    # Return all Outreach Sequences that are active
-    sequences = frappe.get_all(
-        "Outreach Sequence",
+        filters["lead"] = lead_name
+    instances = frappe.get_all(
+        "Outreach Sequence Instance",
         filters=filters,
-        fields=["name", "sequence_name", "channel", "status", "max_daily_sends"],
+        fields=["name", "outreach_sequence", "prospect", "status",
+                "current_step", "total_steps", "next_send_date", "emails_sent",
+                "last_email_sent"],
+        order_by="modified desc",
+        limit=100,
     )
-    return sequences
+    out = []
+    for inst in instances:
+        state = get_sequence_state(inst["name"])
+        out.append({
+            "instance": inst["name"],
+            "sequence": inst.get("outreach_sequence"),
+            "status": inst.get("status"),
+            "current_step": inst.get("current_step"),
+            "total_steps": inst.get("total_steps"),
+            "next_send_date": str(inst.get("next_send_date") or ""),
+            "emails_sent": inst.get("emails_sent"),
+            "next_step": state.get("next_step"),
+        })
+    return {"count": len(out), "instances": out}
 
 
 @mcp.tool()
-def fire_sequence_step(lead_name: str, step_index: int = -1, dry_run: bool = True):
-    """Fire the next sequence step for one lead. Reads sequence config from DocType.
+def fire_sequence_step(instance_name: str = "", task_name: str = "", dry_run: bool = True):
+    """Advance a sequence instance one step via the sequence_engine (human-gated).
+
+    The engine NEVER sends email; it only transitions state after verifying the
+    step's Communication is delivery_status=="Sent" and the recipient is
+    deliverable. dry_run returns the gate evaluation without mutating.
 
     Args:
-        lead_name: CRM Lead ID.
-        step_index: Which step to fire (-1 = auto-detect next).
-        dry_run: If True, returns what WOULD happen without sending.
+        instance_name: Outreach Sequence Instance name.
+        task_name: CRM Task name for the step (optional; resolved from instance).
+        dry_run: If True, report what WOULD happen without advancing.
     """
-    lead = frappe.get_doc("CRM Lead", lead_name)
-    intel = json.loads(lead.additional_data) if lead.additional_data else {}
-    seq_data = intel.get("sequence", {})
-
-    current_step = seq_data.get("current_step", 0)
-    if step_index >= 0:
-        current_step = step_index
-
-    # Default sequence schedule (will be replaced by DocType config)
-    steps = [
-        {"day": 0, "framework": "challenger", "label": "Day 0 — Initial Strike"},
-        {"day": 3, "framework": "challenger", "label": "Day 3 — A/B Subject Pivot"},
-        {"day": 7, "framework": "pas", "label": "Day 7 — Framework Switch (PAS)"},
-        {"day": 14, "framework": "aida", "label": "Day 14 — Framework Switch (AIDA)"},
-        {"day": 21, "framework": "breakup", "label": "Day 21 — Breakup"},
-    ]
-
-    if current_step >= len(steps):
-        return {"status": "completed", "message": f"All {len(steps)} steps exhausted for {lead_name}"}
-
-    step = steps[current_step]
-
+    from crm.api import sequence_engine as se
     if dry_run:
-        return {
-            "status": "dry_run",
-            "lead": lead_name,
-            "step": step,
-            "next_step_index": current_step,
-            "message": f"Would fire: {step['label']} using {step['framework']} framework",
-        }
-
-    # Update sequence state in lead's additional_data
-    seq_data["current_step"] = current_step + 1
-    seq_data["last_fired"] = str(frappe.utils.now())
-    seq_data["last_framework"] = step["framework"]
-    intel["sequence"] = seq_data
-    lead.additional_data = json.dumps(intel)
-    lead.save(ignore_permissions=True)
-    frappe.db.commit()
-
-    return {
-        "status": "fired",
-        "lead": lead_name,
-        "step": step,
-        "next_step_index": current_step + 1,
-    }
+        state = se.get_sequence_state(instance_name) if instance_name else {"ok": False, "reason": "no_instance"}
+        return {"status": "dry_run", "instance": instance_name, "state": state,
+                "message": "Would advance via sequence_engine.advance_sequence_instance after human send + assert_deliverable."}
+    result = se.advance_sequence_instance(instance_name=instance_name or None,
+                                          task_name=task_name or None)
+    return result
 
 
 @mcp.tool()
-def pause_sequence(lead_name: str):
-    """Pause the outreach sequence for a lead.
+def pause_sequence(instance_name: str):
+    """Pause an Outreach Sequence Instance (real status field, not additional_data).
 
     Args:
-        lead_name: CRM Lead ID.
+        instance_name: Outreach Sequence Instance name.
     """
-    lead = frappe.get_doc("CRM Lead", lead_name)
-    intel = json.loads(lead.additional_data) if lead.additional_data else {}
-    seq_data = intel.get("sequence", {})
-    seq_data["paused"] = True
-    seq_data["paused_at"] = str(frappe.utils.now())
-    intel["sequence"] = seq_data
-    lead.additional_data = json.dumps(intel)
-    lead.save(ignore_permissions=True)
+    if not frappe.db.exists("Outreach Sequence Instance", instance_name):
+        return {"ok": False, "reason": "instance_not_found", "instance": instance_name}
+    frappe.db.set_value("Outreach Sequence Instance", instance_name, "status", "Paused")
     frappe.db.commit()
-    return f"Sequence paused for {lead_name}"
+    return {"ok": True, "instance": instance_name, "status": "Paused"}
 
 
 @mcp.tool()
 def approve_and_send(
-    lead_name: str,
-    to_email: str,
-    subject: str,
-    body: str,
-    sender: str = "",
+    communication_name: str,
+    lead_name: str = "",
 ):
-    """Approve a draft email and log it as Communication on the CRM Lead.
-    Actual SMTP send happens from the EAIA side — this records the send in CRM.
+    """Approve a DRAFT Communication and send it via the real SMTP path.
+
+    Routes through crm.api.email.send, which calls assert_deliverable BEFORE
+    frappe.sendmail and only stamps delivery_status="Sent" after a real send.
+    This tool CANNOT mark a lead Contacted without a genuine SMTP send — the
+    status flip happens only on send success.
 
     Args:
-        lead_name: CRM Lead ID.
-        to_email: Recipient email.
-        subject: Email subject.
-        body: Email body text.
-        sender: Sender email (optional, defaults to system).
+        communication_name: The draft Communication to send.
+        lead_name: Optional CRM Lead to mark Contacted on success.
     """
-    # WP6.1 -- deliverability parity. Every send path must refuse placeholder /
-    # .invalid addresses so the CRM never stamps a Communication "Sent" to an
-    # address that cannot receive it (a false "contacted" record). Route through
-    # the SAME guard email.send() and nyx_email_brain.approve_and_send use.
-    # Raised BEFORE any insert so nothing is created on refusal.
-    from crm.api.email import assert_deliverable
-    assert_deliverable([to_email])
-    try:
-        comm = frappe.get_doc({
-            "doctype": "Communication",
-            "communication_type": "Communication",
-            "communication_medium": "Email",
-            "subject": subject,
-            "content": body,
-            "sender": sender or frappe.session.user,
-            "recipients": to_email,
-            "reference_doctype": "CRM Lead",
-            "reference_name": lead_name,
-            "sent_or_received": "Sent",
-            "status": "Linked",
-        })
-        comm.insert(ignore_permissions=True)
-
-        # Update lead status
+    from crm.api import email as email_api
+    comm = frappe.get_doc("Communication", communication_name)
+    if (comm.delivery_status or "") == "Sent":
+        return {"status": "already_sent", "communication": communication_name}
+    # send() raises via assert_deliverable on placeholder recipients and only
+    # sets delivery_status="Sent" after frappe.sendmail succeeds.
+    email_api.send(communication_name)
+    if lead_name and frappe.db.exists("CRM Lead", lead_name):
         frappe.db.set_value("CRM Lead", lead_name, "status", "Contacted")
         frappe.db.commit()
-
-        return {
-            "status": "sent",
-            "communication": comm.name,
-            "lead": lead_name,
-            "to": to_email,
-        }
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    return {"status": "sent", "communication": communication_name, "lead": lead_name}
 
 
 @mcp.tool()
 def create_outreach_sequence(
     sequence_name: str,
-    channel: str = "Email",
-    description: str = "",
-    max_daily_sends: int = 50,
+    tier: str = "",
+    subject_template: str = "",
+    body_template: str = "",
+    sender_email: str = "",
+    follow_up_days: int = 3,
+    max_follow_ups: int = 4,
 ):
-    """Create a new Outreach Sequence in CRM.
+    """Create an Outreach Sequence matching the REAL DocType schema.
+
+    The live Outreach Sequence has: sequence_name, tier, subject_template,
+    body_template, follow_up_days, max_follow_ups, sender_email, status, active.
+    It has NO channel / max_daily_sends / description fields — those were the
+    fake-tool landmines. Created as Draft (active=0); arm via arm_sequence.
 
     Args:
         sequence_name: Name for the sequence.
-        channel: Channel type (Email, Call, LinkedIn, Multi-Channel).
-        description: Optional description.
-        max_daily_sends: Daily send cap.
+        tier: Target tier label.
+        subject_template: Email subject template.
+        body_template: Email body template.
+        sender_email: Sender address.
+        follow_up_days: Days between follow-ups.
+        max_follow_ups: Max follow-up count.
     """
     try:
         doc = frappe.get_doc({
             "doctype": "Outreach Sequence",
             "sequence_name": sequence_name,
-            "channel": channel,
-            "description": description,
+            "tier": tier,
+            "subject_template": subject_template,
+            "body_template": body_template,
+            "sender_email": sender_email,
+            "follow_up_days": str(follow_up_days),
+            "max_follow_ups": max_follow_ups,
             "status": "Draft",
-            "max_daily_sends": max_daily_sends,
+            "active": 0,
             "owner": frappe.session.user,
         })
         doc.insert(ignore_permissions=True)
         frappe.db.commit()
-        return {"status": "created", "name": doc.name, "sequence_name": sequence_name}
+        return {"status": "created", "name": doc.name, "sequence_name": sequence_name,
+                "note": "Draft/inactive. Arm with arm_sequence to activate."}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
@@ -1187,3 +1146,152 @@ def handle_mcp():
     URL: /api/method/crm.api.mcp_server.handle_mcp
     """
     pass
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# §7.2 ORCHESTRATION TOOLS (delegate to sequence_engine — the W1 contract)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+def generate_engagement_plan(subject_type: str = "Lead", subject_key: str = "", option: str = "A"):
+    """Generate a multi-touch engagement plan for a lead/prospect (no seeding).
+
+    Args:
+        subject_type: "Lead" or "Prospect".
+        subject_key: The lead/prospect key.
+        option: Plan option label.
+    """
+    from crm.api import plan_generator as pg
+    return pg.generate_plan(subject_type=subject_type, subject_key=subject_key, option=option)
+
+
+@mcp.tool()
+def seed_engagement_plan(subject_type: str = "Lead", subject_key: str = "", option: str = "A", use_enrich: int = 0):
+    """Generate AND seed an engagement plan (creates OS + OSI + Tasks + draft Comms).
+
+    Args:
+        subject_type: "Lead" or "Prospect".
+        subject_key: The lead/prospect key.
+        option: Plan option label.
+        use_enrich: Whether to enrich before seeding.
+    """
+    from crm.api import plan_generator as pg
+    return pg.generate_and_seed_plan(subject_type=subject_type, subject_key=subject_key,
+                                     option=option, use_enrich=use_enrich)
+
+
+@mcp.tool()
+def arm_sequence(sequence_name: str):
+    """Arm a Draft Outreach Sequence: Draft->Active and rebuild step due_dates.
+
+    Args:
+        sequence_name: Outreach Sequence name.
+    """
+    from crm.api.sequence_engine import arm_sequence as _arm
+    return _arm(sequence_name)
+
+
+@mcp.tool()
+def get_today_worklist(user: str = "", channel: str = "", limit: int = 50):
+    """The 360 aggregator: due email/call/whatsapp, needs_approval, blocked, waiting.
+
+    Args:
+        user: Optional assignee filter.
+        channel: Optional channel filter (Email/Call/WhatsApp/LinkedIn).
+        limit: Max items per bucket.
+    """
+    from crm.api.sequence_engine import get_today_worklist as _wl
+    return _wl(user=user or None, channel=channel or None, limit=limit)
+
+
+@mcp.tool()
+def human_approval_queue(user: str = "", limit: int = 50):
+    """Draft Communications awaiting human approval (delivery_status empty).
+
+    Args:
+        user: Optional owner filter.
+        limit: Max items.
+    """
+    from crm.api.sequence_engine import get_today_worklist as _wl
+    wl = _wl(user=user or None, limit=limit)
+    return {"ok": True, "needs_approval": wl.get("needs_approval", []),
+            "count": len(wl.get("needs_approval", []))}
+
+
+@mcp.tool()
+def advance_sequence_step(instance_name: str = "", task_name: str = "", communication_name: str = ""):
+    """Advance a sequence instance one step (human-gated, engine-verified).
+
+    Args:
+        instance_name: Outreach Sequence Instance name.
+        task_name: CRM Task name for the step.
+        communication_name: Communication name for the step.
+    """
+    from crm.api.sequence_engine import advance_sequence_instance as _adv
+    return _adv(instance_name=instance_name or None, task_name=task_name or None,
+                communication_name=communication_name or None)
+
+
+@mcp.tool()
+def mark_step_complete(task_name: str, outcome: str = ""):
+    """Human marks a step's task done; routes to advance if the channel completed.
+
+    Args:
+        task_name: CRM Task name.
+        outcome: Optional outcome label (e.g. "sent", "completed", "no-answer").
+    """
+    from crm.api.sequence_engine import mark_step_complete as _msc
+    return _msc(task_name, outcome=outcome or None)
+
+
+@mcp.tool()
+def execute_call_step(task_name: str, call_outcome: str = "", instance_name: str = ""):
+    """Advance a Call step after a completed Vapi Call Log (never places a call).
+
+    Args:
+        task_name: CRM Task name for the call step.
+        call_outcome: Optional explicit human outcome.
+        instance_name: Optional Outreach Sequence Instance name.
+    """
+    from crm.api.sequence_engine import advance_call_step as _acs
+    return _acs(task_name=task_name, call_outcome=call_outcome or None,
+                instance_name=instance_name or None)
+
+
+@mcp.tool()
+def draft_whatsapp_message(instance_name: str = "", task_name: str = "", body: str = ""):
+    """Draft a WhatsApp message for a sequence step (gated on WA enabled + phone).
+
+    Args:
+        instance_name: Outreach Sequence Instance name.
+        task_name: CRM Task name for the WhatsApp step.
+        body: Optional message body override.
+    """
+    from crm.api.whatsapp import draft_sequence_whatsapp as _wa
+    return _wa(task_name=task_name, instance_name=instance_name or None, body=body or None)
+
+
+@mcp.tool()
+def assert_communication_deliverable(communication_name: str):
+    """Check a Communication's recipients are deliverable (raises on placeholder).
+
+    Args:
+        communication_name: The Communication to check.
+    """
+    from crm.api.email import assert_deliverable
+    comm = frappe.get_doc("Communication", communication_name)
+    recipients = [r.strip() for r in (comm.recipients or "").split(",") if r.strip()]
+    cc = [r.strip() for r in (comm.cc or "").split(",") if r.strip()]
+    bcc = [r.strip() for r in (comm.bcc or "").split(",") if r.strip()]
+    assert_deliverable(recipients, cc, bcc)
+    return {"ok": True, "communication": communication_name, "deliverable": True}
+
+
+@mcp.tool()
+def get_sequence_360(instance_name: str):
+    """Full 360 state for one sequence instance (engine read-only).
+
+    Args:
+        instance_name: Outreach Sequence Instance name.
+    """
+    from crm.api.sequence_engine import get_sequence_state as _gs
+    return _gs(instance_name)

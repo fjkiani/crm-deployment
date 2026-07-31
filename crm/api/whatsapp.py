@@ -337,3 +337,91 @@ def get_from_name(message):
 	else:
 		from_name = " ".join(filter(None, [doc.get("first_name"), doc.get("last_name")]))
 	return from_name
+
+@frappe.whitelist()
+def whatsapp_health():
+	"""Honest WhatsApp health card for the 360 dashboard.
+
+	Never silent-fails: reports installed/enabled explicitly so the UI and agents
+	show 'disabled' rather than a hidden no-op. Live truth: the WhatsApp app is
+	NOT installed on alpha-crm, so this returns installed=False, enabled=False.
+	"""
+	installed = bool(is_whatsapp_installed())
+	enabled = bool(is_whatsapp_enabled()) if installed else False
+	template_count = 0
+	if installed and frappe.db.exists("DocType", "WhatsApp Message Template"):
+		try:
+			template_count = frappe.db.count("WhatsApp Message Template")
+		except Exception:
+			template_count = 0
+	return {
+		"installed": installed,
+		"enabled": enabled,
+		"template_count": template_count,
+		"status": "ready" if (installed and enabled) else ("installed_disabled" if installed else "not_installed"),
+	}
+
+
+_PLACEHOLDER_PHONES = ("", "+10000000000", "+15555555555", "0000000000")
+
+
+def assert_deliverable_phone(phone):
+	"""Block a WhatsApp/Call send to a missing or placeholder phone number.
+
+	Parallels email.assert_deliverable: a seeded prospect with no verified phone
+	must never be stamped as contacted. Fail loudly so the operator backfills.
+	"""
+	p = (phone or "").strip()
+	digits = "".join(ch for ch in p if ch.isdigit())
+	if not p or p in _PLACEHOLDER_PHONES or len(digits) < 7:
+		frappe.throw(
+			_("Refusing to send WhatsApp: missing/placeholder phone number '{0}'. "
+			  "Backfill a verified phone on the contact first.").format(phone or "(empty)")
+		)
+	return True
+
+
+@frappe.whitelist()
+def draft_sequence_whatsapp(task_name, instance_name=None, body=None):
+	"""Draft (NOT send) a WhatsApp message for a sequence step.
+
+	Gated on WhatsApp enabled AND a deliverable phone. Returns an honest refusal
+	when disabled/not-installed so the 360 board shows the step as blocked rather
+	than silently dropping it. DRAFT ONLY — a human sends every touch.
+
+	Args:
+		task_name: CRM Task name for the WhatsApp step.
+		instance_name: Optional Outreach Sequence Instance name.
+		body: Optional message body override.
+	"""
+	health = whatsapp_health()
+	if not health["installed"]:
+		return {"ok": False, "reason": "whatsapp_not_installed", "health": health}
+	if not health["enabled"]:
+		return {"ok": False, "reason": "whatsapp_not_enabled", "health": health}
+
+	if not frappe.db.exists("CRM Task", task_name):
+		return {"ok": False, "reason": "task_not_found", "task": task_name}
+	task = frappe.get_doc("CRM Task", task_name)
+	lead_name = task.get("lead") or None
+	if not lead_name:
+		return {"ok": False, "reason": "no_lead_for_task", "task": task_name}
+
+	phone = frappe.db.get_value("CRM Lead", lead_name, "phone") or \
+		frappe.db.get_value("CRM Lead", lead_name, "mobile_no") or ""
+	try:
+		assert_deliverable_phone(phone)
+	except Exception:
+		return {"ok": False, "reason": "undeliverable_phone", "lead": lead_name}
+
+	message_body = body or task.get("description") or task.get("title") or ""
+	return {
+		"ok": True,
+		"draft": True,
+		"task": task_name,
+		"instance": instance_name,
+		"lead": lead_name,
+		"to": phone,
+		"body": message_body,
+		"note": "Draft only. Human sends via WhatsApp; advance on delivered.",
+	}
