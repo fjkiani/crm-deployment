@@ -420,7 +420,20 @@ def get_sequence_status(lead_name: str = ""):
     from crm.api.sequence_engine import get_sequence_state
     filters = {}
     if lead_name:
-        filters["lead"] = lead_name
+        # Outreach Sequence Instance has NO `lead` column; it links to a lead only
+        # indirectly via `prospect` (Lead Prospect -> promoted_to_lead). Resolve the
+        # lead's prospect(s) and filter instances by prospect, else this raises an
+        # unknown-column error on a non-empty lead_name.
+        prospects = frappe.get_all(
+            "Lead Prospect",
+            filters={"promoted_to_lead": lead_name},
+            pluck="name",
+            limit=500,
+        )
+        if not prospects:
+            return {"count": 0, "instances": [], "lead": lead_name,
+                    "note": "No Lead Prospect linked to this lead."}
+        filters["prospect"] = ["in", prospects]
     instances = frappe.get_all(
         "Outreach Sequence Instance",
         filters=filters,
