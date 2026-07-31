@@ -39,6 +39,11 @@ const routes = [
     component: () => import('@/pages/CompetitiveIntel.vue'),
   },
   {
+    path: '/outreach',
+    name: 'Outreach 360',
+    component: () => import('@/pages/Outreach360.vue'),
+  },
+  {
     alias: '/leads',
     path: '/leads/view/:viewType?',
     name: 'Leads',

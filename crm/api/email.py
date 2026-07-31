@@ -432,6 +432,38 @@ def save_draft_with_provider(reference_doctype: str, reference_name: str, to: st
 	return {"communication_name": name}
 
 
+# RFC 2606 reserves .invalid for addresses that can never resolve. industry._seed_one
+# uses `<name>@needs-backfill.invalid` when a contact has no verified email, so a
+# seeded draft is deliberately un-sendable until a human backfills the address.
+_UNDELIVERABLE_TLDS = (".invalid", ".example", ".test", ".localhost")
+_PLACEHOLDER_DOMAINS = ("needs-backfill.invalid", "example.com", "example.org", "example.net")
+
+
+def _undeliverable(addr: str) -> bool:
+	a = (addr or "").strip().lower()
+	if not a or "@" not in a:
+		return True
+	dom = a.rsplit("@", 1)[-1]
+	return dom.endswith(_UNDELIVERABLE_TLDS) or dom in _PLACEHOLDER_DOMAINS
+
+
+def assert_deliverable(recipients: list, cc: list = None, bcc: list = None):
+	"""Block a send to a placeholder address.
+
+	Without this, a seeded draft addressed to `<name>@needs-backfill.invalid` would
+	be queued and then stamped delivery_status="Sent", and Nyx Action Log would
+	record `executed` -- a false record that a KOL was contacted. Fail loudly and
+	name the offending address so the operator knows exactly what to backfill.
+	"""
+	bad = [a for a in list(recipients or []) + list(cc or []) + list(bcc or [])
+	       if _undeliverable(a)]
+	if bad:
+		raise_frappe(
+			"Refusing to send: {0} placeholder/undeliverable address(es) — {1}. "
+			"Backfill a verified email on the contact first.".format(len(bad), ", ".join(bad[:5]))
+		)
+
+
 @frappe.whitelist()
 def send(communication_name: str):
 	"""Send a Communication via email using configured Email Account."""
@@ -443,6 +475,9 @@ def send(communication_name: str):
 	recipients = [r.strip() for r in cstr(comm.recipients).split(",") if r.strip()]
 	cc_list = [r.strip() for r in cstr(comm.cc or "").split(",") if r.strip()]
 	bcc_list = [r.strip() for r in cstr(comm.bcc or "").split(",") if r.strip()]
+
+	# Gate every send: never queue/stamp a placeholder address as Sent.
+	assert_deliverable(recipients, cc_list, bcc_list)
 
 	frappe.sendmail(
 		recipients=recipients,
