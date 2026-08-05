@@ -249,8 +249,14 @@ def job_status(job_id: str) -> dict:
 
 @frappe.whitelist(allow_guest=False)
 def import_rows(payload: str) -> dict:
-    """Placeholder import endpoint. Accepts JSON string and returns stub.
-    Will enqueue background job in next iteration.
+    """Ingest endpoint: build a CRM Import Job from a JSON payload and run it.
+
+    Accepts a JSON string with source_type (CSV|GOOGLE_SHEETS), optional inline
+    filedata (persisted as a private File) or file_url / sheet_id + sheet_range,
+    a mapping_profile, and dedupe / link_organization / create_custom_fields
+    flags. Inserts a CRM Import Job, then runs process_job synchronously when
+    payload.sync is true (or during tests), else enqueues it on the long queue.
+    Returns {"accepted": True, "job_id": <job name>}.
     """
     try:
         data = json.loads(payload or "{}")

@@ -225,12 +225,41 @@ def _content(doc) -> dict:
 		order_by="creation desc",
 		limit=100,
 	)
-	engine_available = frappe.db.exists("DocType", "CRM Settings") is not None
+	# Real content-engine availability — never claim the engine is live unless a
+	# provider is actually authenticated. available_providers() is presence-only
+	# (no secret values); every provider reports live=False when creds are absent.
+	try:
+		from crm.api import notebooklm_engine as nblm
+		providers = nblm.available_providers()
+	except Exception as e:  # surfaced, never faked-live
+		engine = {
+			"available": False,
+			"providers": {},
+			"live_kinds": [],
+			"supported_kinds": [],
+			"reason": "engine_unavailable: {0}".format(e),
+		}
+	else:
+		any_live = any(p.get("live") for p in providers.values())
+		live_kinds = sorted({
+			k for p in providers.values() if p.get("live")
+			for k in (p.get("kinds") or [])
+		})
+		supported_kinds = sorted({
+			k for p in providers.values() for k in (p.get("kinds") or [])
+		})
+		engine = {
+			"available": any_live,
+			"providers": providers,
+			"live_kinds": live_kinds,
+			"supported_kinds": supported_kinds,
+			"reason": "" if any_live else "no_provider_authenticated",
+		}
 	return {
 		"ok": True,
 		"files": files,
 		"count": len(files),
-		"engine": {"available": True, "types": ["slides", "audio", "video"]},
+		"engine": engine,
 	}
 
 
