@@ -331,6 +331,51 @@ def engagement_detail(slug: str, option: str = "A",
     }
 
 
+@frappe.whitelist()
+def persist_generated_engagement(slug: str, subject_type: str, subject_key: str,
+                                 option: str = "A") -> Dict[str, Any]:
+    """Persist an on-the-fly generated engagement plan as a real record.
+
+    Closes the 'generatable but not persisted' gap: a plan rebuilt on the fly for
+    a non-curated slug is saved to the `Generated Engagement` doctype so it is
+    durable, queryable, and reusable (Strategic tab / Co-Pilot) instead of being
+    rebuilt every time. Idempotent per (slug, subject_key): re-persisting updates
+    the existing record rather than duplicating.
+
+    Args:
+        slug: The generated engagement slug.
+        subject_type: "Lead" or "Prospect".
+        subject_key: The lead/prospect key the plan was generated for.
+        option: Plan option label.
+    """
+    if not frappe.db.exists("DocType", "Generated Engagement"):
+        return {"ok": False, "reason": "doctype_not_deployed",
+                "message": "Generated Engagement doctype is not deployed yet."}
+    from crm.api.plan_generator import generate_plan
+    res = generate_plan(subject_type, subject_key, use_enrich=0)
+    card = res.get("card") or {}
+    company = card.get("front_matter", {}).get("company", slug)
+    existing = frappe.get_all(
+        "Generated Engagement",
+        filters={"slug": slug, "subject_key": subject_key},
+        fields=["name"], limit=1)
+    payload = {
+        "slug": slug, "subject_type": subject_type, "subject_key": subject_key,
+        "company": company, "option": option,
+        "plan_json": frappe.as_json(card),
+        "generated_at": frappe.now_datetime() if hasattr(frappe, "now_datetime") else None,
+    }
+    if existing:
+        doc = frappe.get_doc("Generated Engagement", existing[0]["name"])
+        for k, v in payload.items():
+            doc.set(k, v)
+        doc.save()
+        return {"ok": True, "name": doc.name, "updated": True, "company": company}
+    doc = frappe.get_doc(dict({"doctype": "Generated Engagement"}, **payload))
+    doc.insert()
+    return {"ok": True, "name": doc.name, "updated": False, "company": company}
+
+
 # ---------------------------------------------------------------------------
 # Naming
 # ---------------------------------------------------------------------------

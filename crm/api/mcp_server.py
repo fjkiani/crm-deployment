@@ -1308,3 +1308,129 @@ def get_sequence_360(instance_name: str):
     """
     from crm.api.sequence_engine import get_sequence_state as _gs
     return _gs(instance_name)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# §7.3 CO-PILOT CROSS-TAB TOOLS (delegate to the real capability backends)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+def get_strategic_brief(lead: str):
+    """The lead's GTM strategic brief: tier/score, AACR topic, focus, pain points,
+    CrisPRO fit, and the derived targeting approach. Real data via lead_tabs.
+
+    Args:
+        lead: CRM Lead name.
+    """
+    from crm.api import lead_tabs
+    return lead_tabs.get_tab_data(lead, "strategic")
+
+
+@mcp.tool()
+def get_decision_makers(lead: str):
+    """The institution decision-maker hierarchy for a lead (reporting tree).
+
+    Args:
+        lead: CRM Lead name.
+    """
+    from crm.api import decision_makers as dm
+    return dm.get_hierarchy(lead)
+
+
+@mcp.tool()
+def add_decision_maker(lead: str, contact_name: str, title: str = "", role: str = "Influencer",
+                       reports_to: str = "", influence: int = 3, warmth: str = "cold",
+                       email: str = "", phone: str = ""):
+    """Add a decision maker to a lead's committee (human-driven).
+
+    Args:
+        lead: CRM Lead name.
+        contact_name: Full name.
+        title: Job title.
+        role: Economic Buyer/Champion/Influencer/Blocker/Gatekeeper/End User.
+        reports_to: Parent Decision Maker name (optional).
+        influence: 1-5.
+        warmth: cold/warm/hot.
+        email: Email.
+        phone: Phone.
+    """
+    from crm.api import decision_makers as dm
+    return dm.add(lead=lead, contact_name=contact_name, title=title, role=role,
+                  reports_to=reports_to, influence=influence, warmth=warmth,
+                  email=email, phone=phone)
+
+
+@mcp.tool()
+def prepare_call(lead: str):
+    """Build a grounded call script + intent + talking points from the lead's intel.
+
+    Args:
+        lead: CRM Lead name.
+    """
+    from crm.api import call_orchestration as co
+    return co.prepare_call(lead)
+
+
+@mcp.tool()
+def get_outreach_plan(lead: str):
+    """The lead's outreach state: drafts + live sequence state per instance.
+
+    Args:
+        lead: CRM Lead name.
+    """
+    from crm.api import lead_tabs
+    return lead_tabs.get_tab_data(lead, "outreach")
+
+
+@mcp.tool()
+def preview_next_step(lead: str, instance_name: str):
+    """Preview the next sequence step's email with merge fields filled (a draft).
+
+    Args:
+        lead: CRM Lead name.
+        instance_name: Outreach Sequence Instance name.
+    """
+    from crm.api import outreach_steps as os_
+    return os_.next_step_preview(lead, instance_name)
+
+
+@mcp.tool()
+def generate_content(lead: str, content_type: str = "slides", funnel_stage: str = "first_touch",
+                     point_of_discussion: str = "", crispro_value: str = ""):
+    """Generate outreach content (slides/audio/video) grounded in the lead's intel.
+
+    Args:
+        lead: CRM Lead name.
+        content_type: slides/audio/video.
+        funnel_stage: first_touch/follow_up/deep_dive/proposal.
+        point_of_discussion: Optional topic override.
+        crispro_value: Optional CrisPRO value override.
+    """
+    from crm.api import content_engine as ce
+    return ce.generate_content(lead, content_type=content_type, funnel_stage=funnel_stage,
+                               point_of_discussion=point_of_discussion,
+                               crispro_value=crispro_value)
+
+
+@mcp.tool()
+def list_content(lead: str):
+    """List generated content attached to a lead.
+
+    Args:
+        lead: CRM Lead name.
+    """
+    from crm.api import content_engine as ce
+    return ce.list_content(lead)
+
+
+@mcp.tool()
+def attach_content_to_email(lead: str, file_name: str, communication: str = ""):
+    """Attach a generated file to a DRAFT Communication (never sends).
+
+    Args:
+        lead: CRM Lead name.
+        file_name: File name to attach.
+        communication: Target draft Communication (optional).
+    """
+    from crm.api import content_engine as ce
+    return ce.attach_to_email(lead, file_name, communication=communication)
