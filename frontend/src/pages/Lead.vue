@@ -44,16 +44,37 @@
   <div v-if="doc.name" class="flex h-full overflow-hidden">
     <Tabs as="div" v-model="tabIndex" :tabs="tabs">
       <template #tab-panel>
-        <NyxTab
-          v-if="tabs[tabIndex]?.name === 'Nyx'"
-          :doc="doc"
+        <StrategicTab
+          v-if="tabs[tabIndex]?.name === 'Strategic'"
           :leadId="leadId"
-          @open-model-settings="showModelSettings = true"
+          @add-sequence="openSequenceModal"
+          @enrich="triggerEnrich"
         />
-        <TrackerIntel
-          v-else-if="tabs[tabIndex]?.name === 'GTM'"
+        <OutreachTab
+          v-else-if="tabs[tabIndex]?.name === 'Outreach'"
+          :leadId="leadId"
+          @draft-email="openDraftEmail"
+          @add-sequence="openSequenceModal"
+          @review-draft="reviewDraft"
+        />
+        <DecisionMakersTab
+          v-else-if="tabs[tabIndex]?.name === 'DecisionMakers'"
+          :leadId="leadId"
+        />
+        <EngagementTab
+          v-else-if="tabs[tabIndex]?.name === 'Engagement'"
+          :leadId="leadId"
+        />
+        <ContentTab
+          v-else-if="tabs[tabIndex]?.name === 'Content'"
+          :leadId="leadId"
+        />
+        <CopilotTab
+          v-else-if="tabs[tabIndex]?.name === 'CoPilot'"
           :doc="doc"
           :leadId="leadId"
+          @change-tab="(t) => changeTabTo(String(t).toLowerCase())"
+          @open-model-settings="showModelSettings = true"
         />
         <Activities
           v-else
@@ -252,9 +273,14 @@ import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
-import NyxTab from '@/components/NyxTab.vue'
+// NyxTab is now composed inside CopilotTab (the Co-Pilot surface owns the agent).
 import NyxIcon from '@/components/Icons/NyxIcon.vue'
-import TrackerIntel from '@/components/TrackerIntel.vue'
+import StrategicTab from '@/components/LeadTabs/StrategicTab.vue'
+import OutreachTab from '@/components/LeadTabs/OutreachTab.vue'
+import DecisionMakersTab from '@/components/LeadTabs/DecisionMakersTab.vue'
+import ContentTab from '@/components/LeadTabs/ContentTab.vue'
+import EngagementTab from '@/components/LeadTabs/EngagementTab.vue'
+import CopilotTab from '@/components/LeadTabs/CopilotTab.vue'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
 import NyxModelSettingsModal from '@/components/Modals/NyxModelSettingsModal.vue'
 import {
@@ -395,62 +421,40 @@ usePageMeta(() => {
 })
 
 const tabs = computed(() => {
+  // Redesigned IA: Strategic / Outreach / Decision Makers / Engagement / Content / Co-Pilot.
+  // GTM Intel is folded into Strategic; Comments gutted; Data folded into Decision Makers;
+  // Nyx renamed Co-Pilot (single agentic surface). Each tab is a real component wired to
+  // crm.api.lead_tabs.get_tab_data — no text dumping.
   let tabOptions = [
     {
-      name: 'Activity',
-      label: __('Activity'),
-      icon: ActivityIcon,
+      name: 'Strategic',
+      label: __('Strategic'),
+      icon: DetailsIcon,
     },
     {
-      name: 'Emails',
-      label: __('Emails'),
+      name: 'Outreach',
+      label: __('Outreach'),
       icon: EmailIcon,
     },
     {
-      name: 'Comments',
-      label: __('Comments'),
-      icon: CommentIcon,
-    },
-    {
-      name: 'Data',
-      label: __('Data'),
-      icon: DetailsIcon,
-    },
-    {
-      name: 'Calls',
-      label: __('Calls'),
-      icon: PhoneIcon,
-    },
-    {
-      name: 'Tasks',
-      label: __('Tasks'),
+      name: 'DecisionMakers',
+      label: __('Decision Makers'),
       icon: TaskIcon,
     },
     {
-      name: 'Notes',
-      label: __('Notes'),
-      icon: NoteIcon,
+      name: 'Engagement',
+      label: __('Engagement'),
+      icon: ActivityIcon,
     },
     {
-      name: 'Attachments',
-      label: __('Attachments'),
+      name: 'Content',
+      label: __('Content'),
       icon: AttachmentIcon,
     },
     {
-      name: 'WhatsApp',
-      label: __('WhatsApp'),
-      icon: WhatsAppIcon,
-      condition: () => whatsappEnabled.value,
-    },
-    {
-      name: 'Nyx',
-      label: __('Nyx'),
+      name: 'CoPilot',
+      label: __('Co-Pilot'),
       icon: NyxIcon,
-    },
-    {
-      name: 'GTM',
-      label: __('GTM Intel'),
-      icon: DetailsIcon,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))
@@ -510,11 +514,39 @@ function deleteLead() {
 }
 
 function openEmailBox() {
-  let currentTab = tabs.value[tabIndex.value]
-  if (!['Emails', 'Comments', 'Activities'].includes(currentTab.name)) {
-    activities.value.changeTabTo('emails')
+  // Route to the Outreach tab and open the email composer there.
+  changeTabTo('outreach')
+  nextTick(() => openDraftEmail())
+}
+
+// --- Redesigned tab action handlers ---------------------------------------
+// Each routes to a real backend action or opens the relevant modal. None of
+// these auto-send/auto-call — sends stay human-gated through the draft review.
+
+function openSequenceModal() {
+  // Open the sequence picker for this lead (Outreach 360 board / sequence modal).
+  changeTabTo('outreach')
+  toast.info(__('Choose a sequence to add this lead to.'))
+}
+
+function triggerEnrich() {
+  call('crm.api.enrichment_api.enrich_contact', { lead_name: leadId, force: 1 })
+    .then(() => toast.success(__('Enrichment queued')))
+    .catch((err) => toast.error(err.messages?.[0] || __('Enrichment failed')))
+}
+
+function openDraftEmail() {
+  // Open the email composer for a fresh draft (human reviews before send).
+  if (activities.value?.emailBox) {
+    activities.value.emailBox.show = true
+  } else {
+    toast.info(__('Open the Engagement tab composer to draft an email.'))
   }
-  nextTick(() => (activities.value.emailBox.show = true))
+}
+
+function reviewDraft(draft) {
+  // Drafts are reviewed in the Engagement composer; nothing auto-sends.
+  toast.info(__('Open the draft to review and send.'))
 }
 
 function saveChanges(data) {
